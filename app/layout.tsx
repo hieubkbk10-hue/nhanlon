@@ -100,7 +100,6 @@ const resolveMetadataBase = (): URL => {
 export const metadata: Metadata = {
   metadataBase: resolveMetadataBase(),
 };
-
 export default function RootLayout({
   children,
 }: Readonly<{
