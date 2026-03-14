@@ -99,6 +99,12 @@ const resolveMetadataBase = (): URL => {
 
 export const metadata: Metadata = {
   metadataBase: resolveMetadataBase(),
+  verification: {
+    google: "M_4ZKEZ30LCdbEftU2mpaV9O2Pad57Mt3LuhNdvOU7U",
+    other: {
+      "msvalidate.01": "9B303080DC2D655419DD32E2EFE2D686",
+    },
+  },
 };
 export default function RootLayout({
   children,
