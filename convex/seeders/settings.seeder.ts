@@ -81,6 +81,8 @@ export class SettingsSeeder extends BaseSeeder<SettingData> {
       { group: 'seo', key: 'seo_description', value: '' },
       { group: 'seo', key: 'seo_keywords', value: '' },
       { group: 'seo', key: 'seo_og_image', value: '' },
+      { group: 'seo', key: 'seo_google_verification', value: '' },
+      { group: 'seo', key: 'seo_bing_verification', value: '' },
       { group: 'social', key: 'social_facebook', value: '' },
       { group: 'social', key: 'social_instagram', value: '' },
       { group: 'social', key: 'social_youtube', value: '' },

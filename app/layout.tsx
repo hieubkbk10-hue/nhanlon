@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { BrandColorProvider } from "@/components/providers/BrandColorProvider";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
+import { getSEOSettings } from "@/lib/get-settings";
 import {
   Be_Vietnam_Pro,
   Geist,
@@ -97,15 +98,20 @@ const resolveMetadataBase = (): URL => {
   return new URL(normalizedBaseUrl);
 };
 
-export const metadata: Metadata = {
-  metadataBase: resolveMetadataBase(),
-  verification: {
-    google: "M_4ZKEZ30LCdbEftU2mpaV9O2Pad57Mt3LuhNdvOU7U",
-    other: {
-      "msvalidate.01": "9B303080DC2D655419DD32E2EFE2D686",
+export const generateMetadata = async (): Promise<Metadata> => {
+  const seo = await getSEOSettings();
+
+  return {
+    metadataBase: resolveMetadataBase(),
+    verification: {
+      google: seo.seo_google_verification || undefined,
+      other: seo.seo_bing_verification
+        ? { "msvalidate.01": seo.seo_bing_verification }
+        : undefined,
     },
-  },
+  };
 };
+
 export default function RootLayout({
   children,
 }: Readonly<{
