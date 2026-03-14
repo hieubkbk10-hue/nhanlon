@@ -19,8 +19,6 @@ export interface SEOSettings {
   seo_description: string;
   seo_keywords: string;
   seo_og_image: string;
-  seo_google_verification: string;
-  seo_bing_verification: string;
 }
 
 export interface ContactSettings {
@@ -63,8 +61,6 @@ const SETTINGS_KEYS = {
     "seo_description",
     "seo_keywords",
     "seo_og_image",
-    "seo_google_verification",
-    "seo_bing_verification",
   ],
   social: [
     "social_facebook",
@@ -112,9 +108,7 @@ export const getSEOSettings =  async (): Promise<SEOSettings> => {
   return client.query(api.settings.getMultiple, {
     keys: SETTINGS_KEYS.seo,
   }).then((settings) => ({
-    seo_bing_verification: (settings.seo_bing_verification as string) || "",
     seo_description: (settings.seo_description as string) || "",
-    seo_google_verification: (settings.seo_google_verification as string) || "",
     seo_keywords: (settings.seo_keywords as string) || "",
     seo_og_image: (settings.seo_og_image as string) || "",
     seo_title: (settings.seo_title as string) || "",
