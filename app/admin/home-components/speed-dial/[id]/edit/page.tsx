@@ -8,12 +8,13 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Loader2, PhoneCall } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { SpeedDialForm } from '../../_components/SpeedDialForm';
 import { SpeedDialPreview } from '../../_components/SpeedDialPreview';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   DEFAULT_SPEED_DIAL_CONFIG,
   normalizeSpeedDialStyle,
@@ -303,14 +304,12 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() => { router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={!hasChanges || isSubmitting}>
-            {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() => { router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

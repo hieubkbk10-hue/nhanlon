@@ -35,7 +35,7 @@ export const seedModules = mutation({
       { category: "system" as const, description: "Cấu hình website và hệ thống", enabled: true, icon: "Settings", isCore: true, key: "settings", name: "Cài đặt hệ thống", order: 11 },
       { category: "system" as const, description: "Quản lý menu header, footer", enabled: true, icon: "Menu", isCore: false, key: "menus", name: "Menu điều hướng", order: 12 },
       { category: "system" as const, description: "Cấu hình components trang chủ", enabled: true, icon: "LayoutGrid", isCore: false, key: "homepage", name: "Trang chủ", order: 13 },
-      { category: "system" as const, dependencies: ["settings"], dependencyType: "all" as const, description: "Lưu trữ và quản lý inbox liên hệ", enabled: true, icon: "Inbox", isCore: false, key: "contactInbox", name: "Contact Inbox", order: 14 },
+      { category: "system" as const, dependencies: ["settings"], dependencyType: "all" as const, description: "Lưu trữ và quản lý tin nhắn liên hệ", enabled: true, icon: "Inbox", isCore: false, key: "contactInbox", name: "Tin nhắn liên hệ", order: 14 },
       
       { category: "marketing" as const, description: "Gửi thông báo cho người dùng", enabled: true, icon: "Bell", isCore: false, key: "notifications", name: "Thông báo", order: 15 },
       { category: "marketing" as const, dependencies: ["products", "orders"], dependencyType: "all" as const, description: "Quản lý mã giảm giá, voucher", enabled: false, icon: "Megaphone", isCore: false, key: "promotions", name: "Khuyến mãi", order: 16 },
@@ -1814,6 +1814,8 @@ export const seedSettingsModule = mutation({
         { group: "seo", key: "seo_description", value: "" },
         { group: "seo", key: "seo_keywords", value: "" },
         { group: "seo", key: "seo_og_image", value: "" },
+        { group: "seo", key: "seo_google_verification", value: "" },
+        { group: "seo", key: "seo_bing_verification", value: "" },
         
         // Social settings
         { group: "social", key: "social_facebook", value: "" },
@@ -1939,11 +1941,13 @@ export const seedSettingsModule = mutation({
         { enabled: true, fieldKey: "seo_description", group: "seo", isSystem: false, linkedFeature: "enableSEO", moduleKey: "settings", name: "Meta Description", order: 11, required: false, type: "textarea" as const },
         { enabled: true, fieldKey: "seo_keywords", group: "seo", isSystem: false, linkedFeature: "enableSEO", moduleKey: "settings", name: "Keywords", order: 12, required: false, type: "tags" as const },
         { enabled: true, fieldKey: "seo_og_image", group: "seo", isSystem: false, linkedFeature: "enableSEO", moduleKey: "settings", name: "OG Image", order: 13, required: false, type: "image" as const },
+        { enabled: true, fieldKey: "seo_google_verification", group: "seo", isSystem: false, linkedFeature: "enableSEO", moduleKey: "settings", name: "Google Verification", order: 14, required: false, type: "text" as const },
+        { enabled: true, fieldKey: "seo_bing_verification", group: "seo", isSystem: false, linkedFeature: "enableSEO", moduleKey: "settings", name: "Bing Verification", order: 15, required: false, type: "text" as const },
         // Social fields
-        { enabled: true, fieldKey: "social_facebook", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "Facebook", order: 14, required: false, type: "text" as const },
-        { enabled: true, fieldKey: "social_instagram", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "Instagram", order: 15, required: false, type: "text" as const },
-        { enabled: true, fieldKey: "social_youtube", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "Youtube", order: 16, required: false, type: "text" as const },
-        { enabled: false, fieldKey: "social_tiktok", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "TikTok", order: 17, required: false, type: "text" as const },
+        { enabled: true, fieldKey: "social_facebook", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "Facebook", order: 16, required: false, type: "text" as const },
+        { enabled: true, fieldKey: "social_instagram", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "Instagram", order: 17, required: false, type: "text" as const },
+        { enabled: true, fieldKey: "social_youtube", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "Youtube", order: 18, required: false, type: "text" as const },
+        { enabled: false, fieldKey: "social_tiktok", group: "social", isSystem: false, linkedFeature: "enableSocial", moduleKey: "settings", name: "TikTok", order: 19, required: false, type: "text" as const },
         // Mail fields
       ];
       for (const field of fields) {

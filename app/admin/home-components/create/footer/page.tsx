@@ -23,7 +23,7 @@ export default function FooterCreatePage() {
       { id: 2, links: [{ label: 'FAQ', url: '/faq' }, { label: 'Liên hệ', url: '/contact' }], title: 'Hỗ trợ' },
     ],
     copyright: '© 2024 VietAdmin. All rights reserved.',
-    description: 'Công ty TNHH ABC - Đối tác tin cậy của bạn',
+    description: 'Đối tác tin cậy cho hành trình số hóa của bạn',
     logo: '',
     showSocialLinks: true,
     socialLinks: [],

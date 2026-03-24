@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -16,6 +16,7 @@ import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOver
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { BenefitsForm } from '../../_components/BenefitsForm';
 import { BenefitsPreview } from '../../_components/BenefitsPreview';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { DEFAULT_BENEFITS_CONFIG, DEFAULT_BENEFITS_HARMONY } from '../../_lib/constants';
 import {
   buildBenefitsWarningMessages,
@@ -84,6 +85,15 @@ const toEditorState = (config: Partial<BenefitsConfig> | undefined): BenefitsEdi
   return {
     buttonLink: typeof source.buttonLink === 'string' ? source.buttonLink : (DEFAULT_BENEFITS_CONFIG.buttonLink ?? ''),
     buttonText: typeof source.buttonText === 'string' ? source.buttonText : (DEFAULT_BENEFITS_CONFIG.buttonText ?? ''),
+    gridColumnsDesktop: typeof source.gridColumnsDesktop === 'number'
+      ? (source.gridColumnsDesktop === 3 ? 3 : 4)
+      : (DEFAULT_BENEFITS_CONFIG.gridColumnsDesktop ?? 4),
+    gridColumnsMobile: typeof source.gridColumnsMobile === 'number'
+      ? (source.gridColumnsMobile === 1 ? 1 : 2)
+      : (DEFAULT_BENEFITS_CONFIG.gridColumnsMobile ?? 2),
+    headerAlign: source.headerAlign === 'center' || source.headerAlign === 'right'
+      ? source.headerAlign
+      : (DEFAULT_BENEFITS_CONFIG.headerAlign ?? 'left'),
     harmony: normalizeBenefitsHarmony(source.harmony ?? DEFAULT_BENEFITS_HARMONY),
     heading: typeof source.heading === 'string' ? source.heading : (DEFAULT_BENEFITS_CONFIG.heading ?? ''),
     items,
@@ -95,6 +105,9 @@ const toEditorState = (config: Partial<BenefitsConfig> | undefined): BenefitsEdi
 const toPersistConfig = (state: BenefitsEditorState): BenefitsConfig => ({
   buttonLink: state.buttonLink,
   buttonText: state.buttonText,
+  gridColumnsDesktop: state.gridColumnsDesktop,
+  gridColumnsMobile: state.gridColumnsMobile,
+  headerAlign: state.headerAlign,
   harmony: state.harmony,
   heading: state.heading,
   items: state.items.map(toPersistItem),
@@ -115,6 +128,9 @@ const createSnapshot = ({
   config: {
     buttonLink: state.buttonLink,
     buttonText: state.buttonText,
+    gridColumnsDesktop: state.gridColumnsDesktop,
+    gridColumnsMobile: state.gridColumnsMobile,
+    headerAlign: state.headerAlign,
     harmony: state.harmony,
     heading: state.heading,
     items: state.items.map((item) => ({
@@ -411,14 +427,12 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
           </div>
         ) : null}
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() => { router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={isSubmitting || !hasChanges}>
-            {isSubmitting ? 'Đang lưu...' : hasChanges ? 'Lưu thay đổi' : 'Đã lưu'}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() => { router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

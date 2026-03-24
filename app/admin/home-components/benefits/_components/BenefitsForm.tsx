@@ -12,8 +12,18 @@ import {
   Label,
   cn,
 } from '../../../components/ui';
-import { BENEFITS_STYLES } from '../_lib/constants';
-import type { BenefitItem, BenefitsEditorState, BenefitsStyle } from '../_types';
+import { IconPickerDialog } from '../../contact/_components/IconPickerDialog';
+import {
+  CONTACT_ICON_OPTIONS,
+  resolveContactIcon,
+} from '../../contact/_lib/iconOptions';
+import {
+  BENEFITS_GRID_COLUMNS_DESKTOP,
+  BENEFITS_GRID_COLUMNS_MOBILE,
+  BENEFITS_HEADER_ALIGN_OPTIONS,
+  BENEFITS_STYLES,
+} from '../_lib/constants';
+import type { BenefitItem, BenefitsEditorState, BenefitsHeaderAlign, BenefitsStyle } from '../_types';
 
 interface BenefitsFormProps {
   state: BenefitsEditorState;
@@ -24,30 +34,43 @@ interface BenefitsFormProps {
 const MIN_ITEMS = 1;
 const MAX_ITEMS = 8;
 
-type IconOption = {
-  label: string;
-  value: string;
-};
-
-const ICON_OPTIONS: IconOption[] = [
-  { label: 'Check', value: 'Check' },
-  { label: 'Shield', value: 'Shield' },
-  { label: 'Star', value: 'Star' },
-  { label: 'Target', value: 'Target' },
-  { label: 'Trophy', value: 'Trophy' },
-  { label: 'Zap', value: 'Zap' },
-];
-
 const createItem = (seed: number): BenefitItem => ({
   description: '',
-  icon: 'Check',
+  icon: 'check',
   id: `benefit-${seed}`,
   title: '',
 });
 
+const normalizeBenefitsIconValue = (value?: string) => {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) {return 'check';}
+
+  const legacyMap: Record<string, string> = {
+    Check: 'check',
+    Shield: 'shield',
+    Star: 'star',
+    Target: 'target',
+    Trophy: 'trophy',
+    Zap: 'zap',
+  };
+
+  if (legacyMap[trimmed]) {return legacyMap[trimmed];}
+
+  const hasUppercase = /[A-Z]/.test(trimmed);
+  if (hasUppercase) {
+    return trimmed
+      .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+      .replace(/\s+/g, '-')
+      .toLowerCase();
+  }
+
+  return trimmed;
+};
+
 export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps) {
   const [draggedId, setDraggedId] = React.useState<string | null>(null);
   const [dragOverId, setDragOverId] = React.useState<string | null>(null);
+  const [iconPickerId, setIconPickerId] = React.useState<string | null>(null);
 
   const addItem = () => {
     onChange((prev) => {
@@ -155,7 +178,7 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Style</Label>
               <select
@@ -165,6 +188,56 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
               >
                 {BENEFITS_STYLES.map((style) => (
                   <option key={style.id} value={style.id}>{style.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label>Căn badge + tiêu đề</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
+                value={state.headerAlign}
+                onChange={(event) => {
+                  const next = event.target.value as BenefitsHeaderAlign;
+                  onChange((prev) => ({ ...prev, headerAlign: next }));
+                }}
+              >
+                {BENEFITS_HEADER_ALIGN_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label>Grid desktop</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
+                value={state.gridColumnsDesktop}
+                onChange={(event) => {
+                  const next = Number(event.target.value) as 3 | 4;
+                  onChange((prev) => ({ ...prev, gridColumnsDesktop: next }));
+                }}
+              >
+                {BENEFITS_GRID_COLUMNS_DESKTOP.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Grid mobile</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
+                value={state.gridColumnsMobile}
+                onChange={(event) => {
+                  const next = Number(event.target.value) as 1 | 2;
+                  onChange((prev) => ({ ...prev, gridColumnsMobile: next }));
+                }}
+              >
+                {BENEFITS_GRID_COLUMNS_MOBILE.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </div>
@@ -217,7 +290,7 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
           </Button>
         </CardHeader>
 
-        <CardContent className="space-y-3">
+        <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
           {state.items.map((item, idx) => (
             <div
               key={item.id}
@@ -252,15 +325,38 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-1">
                   <Label className="text-xs text-slate-500">Icon</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
-                    value={item.icon}
-                    onChange={(event) => { updateItem(item.id, { icon: event.target.value }); }}
-                  >
-                    {ICON_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  {(() => {
+                    const normalizedValue = normalizeBenefitsIconValue(item.icon);
+                    const iconOption = CONTACT_ICON_OPTIONS.find((option) => option.value === normalizedValue);
+                    const Icon = resolveContactIcon(normalizedValue);
+
+                    return (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between gap-2 px-3"
+                          onClick={() => { setIconPickerId(item.id); }}
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Icon size={16} className="text-slate-600 dark:text-slate-200" />
+                            <span className="text-xs text-slate-700 dark:text-slate-200 truncate">
+                              {iconOption?.label ?? 'Chọn icon'}
+                            </span>
+                          </span>
+                          <span className="text-xs text-slate-400">▼</span>
+                        </Button>
+
+                        <IconPickerDialog
+                          open={iconPickerId === item.id}
+                          onOpenChange={(open) => { setIconPickerId(open ? item.id : null); }}
+                          value={normalizedValue}
+                          options={CONTACT_ICON_OPTIONS}
+                          onSelect={(value) => { updateItem(item.id, { icon: value }); }}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="md:col-span-2">

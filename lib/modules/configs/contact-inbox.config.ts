@@ -3,14 +3,14 @@ import { defineModuleWithRuntime } from '../define-module';
 
 export const contactInboxModule = defineModuleWithRuntime({
   key: 'contactInbox',
-  name: 'Contact Inbox',
-  description: 'Lưu trữ và quản lý tin nhắn liên hệ từ website',
+  name: 'Tin nhắn liên hệ',
+  description: 'Lưu trữ và quản lý tin nhắn khách gửi từ form liên hệ',
   icon: Inbox,
   color: 'cyan',
 
   features: [
-    { key: 'enableContactFormSubmission', label: 'Cho phép gửi form', icon: Send },
-    { key: 'enableContactInboxAdmin', label: 'Quản trị inbox', icon: Inbox },
+    { key: 'enableContactFormSubmission', label: 'Cho phép gửi form liên hệ', icon: Send },
+    { key: 'enableContactInboxAdmin', label: 'Quản trị tin nhắn liên hệ', icon: Inbox },
     { key: 'enableContactDashboardWidget', label: 'Widget dashboard', icon: LayoutDashboard },
   ],
 
@@ -20,7 +20,7 @@ export const contactInboxModule = defineModuleWithRuntime({
     { key: 'inboxRetentionDays', label: 'Số ngày lưu trữ (0 = không giới hạn)', type: 'number', default: 0 },
   ],
 
-  conventionNote: 'Inbox lưu dữ liệu inbound, không gửi email. Bật/tắt form và widget qua feature flags.',
+  conventionNote: 'Lưu tin nhắn khách gửi từ form liên hệ. Bật/tắt form và widget qua feature flags.',
 
   runtimeConfig: {
     fields: [],

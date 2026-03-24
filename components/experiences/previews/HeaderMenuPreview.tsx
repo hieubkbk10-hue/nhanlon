@@ -7,14 +7,19 @@ import { Card, CardContent, cn } from '@/app/admin/components/ui';
 import { getMenuColors, type MenuColorMode, type MenuColors } from '@/components/site/header/colors';
 
 export type HeaderLayoutStyle = 'classic' | 'topbar' | 'allbirds';
+export type LogoBackgroundStyle = 'none' | 'border' | 'shadow' | 'soft' | 'solid' | 'outline' | 'hairline' | 'inset' | 'pill';
 
 export type HeaderMenuConfig = {
   brandName: string;
   showBrandName: boolean;
   logoSizeLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
+  headerSpacingLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  logoBackgroundStyle?: LogoBackgroundStyle;
   headerBackground: 'white' | 'dots' | 'stripes';
   headerSeparator: 'none' | 'shadow' | 'border' | 'gradient';
   headerSticky: boolean;
+  headerStickyDesktop?: boolean;
+  headerStickyMobile?: boolean;
   showBrandAccent: boolean;
   cart: { show: boolean };
   cta: { show: boolean; text: string };
@@ -51,11 +56,22 @@ const buildLinearSteps = (min: number, max: number, count = 20) => {
   return Array.from({ length: count }, (_, index) => Math.round(min + step * index));
 };
 
+const clampHeaderSpacingLevel = (level?: number): NonNullable<HeaderMenuConfig['headerSpacingLevel']> => {
+  const value = Number.isFinite(level) ? Math.round(level as number) : 5;
+  return Math.min(7, Math.max(1, value)) as NonNullable<HeaderMenuConfig['headerSpacingLevel']>;
+};
+
+const resolveStickyState = (config: HeaderMenuConfig) => ({
+  desktop: config.headerStickyDesktop ?? config.headerSticky ?? true,
+  mobile: config.headerStickyMobile ?? config.headerSticky ?? true,
+});
+
 export type HeaderMenuPreviewProps = {
   brandColor: string;
   secondaryColor?: string;
   colorMode?: MenuColorMode;
   config: HeaderMenuConfig;
+  logo?: string;
   device: 'desktop' | 'tablet' | 'mobile';
   layoutStyle: HeaderLayoutStyle;
   menuItems: MenuItem[];
@@ -74,6 +90,7 @@ export function HeaderMenuPreview({
   secondaryColor,
   colorMode = 'single',
   config,
+  logo,
   device,
   layoutStyle,
   menuItems,
@@ -101,13 +118,103 @@ export function HeaderMenuPreview({
   const brandLabel = config.brandName || 'YourBrand';
   const showBrandName = config.showBrandName !== false;
   const logoSizeLevel = config.logoSizeLevel ?? 2;
+  const headerSpacingLevel = clampHeaderSpacingLevel(config.headerSpacingLevel);
   const logoSizeMap: Record<HeaderLayoutStyle, number[]> = {
     classic: buildLinearSteps(24, 96),
     topbar: buildLinearSteps(28, 108),
     allbirds: buildLinearSteps(16, 80),
   };
+  const headerSpacingMap: Record<HeaderLayoutStyle, number[]> = {
+    classic: [6, 8, 10, 12, 14, 16, 18],
+    topbar: [4, 6, 8, 10, 12, 14, 16],
+    allbirds: [6, 8, 10, 12, 14, 16, 18],
+  };
   const logoSize = logoSizeMap[layoutStyle][logoSizeLevel - 1] ?? logoSizeMap[layoutStyle][0];
+  const headerSpacingY = headerSpacingMap[layoutStyle][headerSpacingLevel - 1] ?? headerSpacingMap[layoutStyle][3];
   const logoDotSize = Math.max(2, Math.round(logoSize / 4));
+  const logoBackgroundStyle: LogoBackgroundStyle =
+    config.logoBackgroundStyle === 'border'
+    || config.logoBackgroundStyle === 'shadow'
+    || config.logoBackgroundStyle === 'soft'
+    || config.logoBackgroundStyle === 'solid'
+    || config.logoBackgroundStyle === 'outline'
+    || config.logoBackgroundStyle === 'hairline'
+    || config.logoBackgroundStyle === 'inset'
+    || config.logoBackgroundStyle === 'pill'
+      ? config.logoBackgroundStyle
+      : 'none';
+  const logoContainerSize = Math.round(logoSize + Math.max(10, logoSize * 0.28));
+  const logoBackgroundStyles: Record<LogoBackgroundStyle, React.CSSProperties> = {
+    none: {},
+    border: {
+      backgroundColor: 'rgba(255, 255, 255, 0.6)',
+      border: `1px solid ${tokens.borderStrong}`,
+      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
+    },
+    outline: {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      border: `1px solid ${tokens.borderStrong}`,
+    },
+    hairline: {
+      backgroundColor: 'transparent',
+      border: `1px solid ${tokens.border}`,
+    },
+    inset: {
+      backgroundColor: tokens.surfaceAlt,
+      border: `1px solid ${tokens.border}`,
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+    },
+    pill: {
+      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+      border: `1px solid ${tokens.border}`,
+    },
+    shadow: {
+      backgroundColor: 'rgba(255, 255, 255, 0.88)',
+      boxShadow: '0 10px 30px rgba(15, 23, 42, 0.16)',
+      border: '1px solid rgba(148, 163, 184, 0.2)',
+      backdropFilter: 'blur(10px)',
+    },
+    soft: {
+      backgroundColor: tokens.surfaceAlt,
+      border: `1px solid ${tokens.border}`,
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.7)',
+    },
+    solid: {
+      backgroundColor: tokens.textPrimary,
+      border: `1px solid ${tokens.textPrimary}`,
+      boxShadow: '0 12px 28px rgba(15, 23, 42, 0.18)',
+    },
+  };
+  const logoWrapStyle: React.CSSProperties = {
+    width: logoBackgroundStyle === 'none' ? logoSize : logoContainerSize,
+    height: logoBackgroundStyle === 'none' ? logoSize : logoContainerSize,
+    borderRadius: logoBackgroundStyle === 'pill'
+      ? logoContainerSize
+      : layoutStyle === 'allbirds'
+        ? logoContainerSize
+        : Math.max(16, Math.round(logoContainerSize * 0.24)),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    ...logoBackgroundStyles[logoBackgroundStyle],
+  };
+  const logoInnerBaseStyle: React.CSSProperties = {
+    width: logoSize,
+    height: logoSize,
+    borderRadius: layoutStyle === 'allbirds' ? logoSize : Math.max(8, Math.round(logoSize * 0.24)),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  };
+  const logoInnerStyle: React.CSSProperties = logo
+    ? logoInnerBaseStyle
+    : {
+        ...logoInnerBaseStyle,
+        backgroundColor: tokens.brandBadgeBg,
+        color: tokens.brandBadgeText,
+      };
   const ctaLabel = config.cta.text || 'Liên hệ';
   const loginLabel = config.login.text || 'Đăng nhập';
   const defaultLinks = useMemo(() => ({
@@ -347,7 +454,9 @@ export function HeaderMenuPreview({
     )
     : null;
 
-  const classicPositionClass = config.headerSticky ? 'sticky top-0 z-40' : 'relative z-40';
+  const { desktop: stickyDesktop, mobile: stickyMobile } = resolveStickyState(config);
+  const stickyEnabled = device === 'mobile' ? stickyMobile : stickyDesktop;
+  const classicPositionClass = stickyEnabled ? 'sticky top-0 z-40' : 'relative z-40';
 
   const toggleMobileItem = (id: string) => {
     setExpandedMobileItems(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
@@ -444,13 +553,21 @@ export function HeaderMenuPreview({
       {config.showBrandAccent && (
         <div className="h-0.5" style={{ backgroundColor: tokens.accentLine }} />
       )}
-      <div className="px-6 py-4 border-b" style={{ borderColor: tokens.border }}>
+      <div
+        className="px-6 border-b"
+        style={{ borderColor: tokens.border, paddingTop: headerSpacingY, paddingBottom: headerSpacingY }}
+      >
         <div ref={headerRowRef} className="flex items-center gap-4">
           <div ref={brandBlockRef} className="flex items-center gap-3 flex-shrink-0">
-            <div
-              className="rounded-lg"
-              style={{ backgroundColor: tokens.brandBadgeBg, width: logoSize, height: logoSize }}
-            ></div>
+            <div style={logoWrapStyle}>
+              {logo ? (
+                <div style={logoInnerStyle}>
+                  <img src={logo} alt={brandLabel} className="h-full w-full object-contain" />
+                </div>
+              ) : (
+                <div style={logoInnerStyle}></div>
+              )}
+            </div>
             {showBrandName && (
               <span className="font-semibold" style={{ color: tokens.textPrimary }}>{brandLabel}</span>
             )}
@@ -778,14 +895,16 @@ export function HeaderMenuPreview({
         </div>
       )}
 
-      <div className="px-4 py-3 border-b" style={{ borderColor: tokens.border }}>
+      <div
+        className="px-4 border-b"
+        style={{ borderColor: tokens.border, paddingTop: headerSpacingY, paddingBottom: headerSpacingY }}
+      >
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div
-              className="rounded-lg flex items-center justify-center font-bold"
-              style={{ backgroundColor: tokens.brandBadgeBg, color: tokens.brandBadgeText, width: logoSize, height: logoSize }}
-            >
-              {brandLabel.charAt(0)}
+            <div style={logoWrapStyle}>
+              <div style={logoInnerStyle} className="font-bold">
+                {brandLabel.charAt(0)}
+              </div>
             </div>
             {showBrandName && (
               <span className="font-bold text-lg" style={{ color: tokens.textPrimary }}>{brandLabel}</span>
@@ -1021,14 +1140,19 @@ export function HeaderMenuPreview({
       {config.showBrandAccent && (
         <div className="h-0.5" style={{ backgroundColor: tokens.accentLine }} />
       )}
-      <div className={cn('px-6 py-4', !isDesktop && 'border-b')} style={{ borderColor: tokens.border }}>
+      <div
+        className={cn('px-6', !isDesktop && 'border-b')}
+        style={{ borderColor: tokens.border, paddingTop: headerSpacingY, paddingBottom: headerSpacingY }}
+      >
         {device !== 'mobile' ? (
           <div className="flex items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <div
-                className="rounded-full"
-                style={{ backgroundColor: tokens.allbirdsAccentDot, width: logoDotSize, height: logoDotSize }}
-              ></div>
+              <div style={logoWrapStyle}>
+                <div
+                  className="rounded-full"
+                  style={{ backgroundColor: tokens.allbirdsAccentDot, width: logoDotSize, height: logoDotSize }}
+                ></div>
+              </div>
               {showBrandName && (
                 <span className="text-base font-semibold" style={{ color: tokens.textPrimary }}>{brandLabel}</span>
               )}
@@ -1168,10 +1292,12 @@ export function HeaderMenuPreview({
         ) : (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div
-                className="rounded-full"
-                style={{ backgroundColor: tokens.allbirdsAccentDot, width: logoDotSize, height: logoDotSize }}
-              ></div>
+              <div style={logoWrapStyle}>
+                <div
+                  className="rounded-full"
+                  style={{ backgroundColor: tokens.allbirdsAccentDot, width: logoDotSize, height: logoDotSize }}
+                ></div>
+              </div>
               {showBrandName && (
                 <span className="text-base font-semibold" style={{ color: tokens.textPrimary }}>{brandLabel}</span>
               )}

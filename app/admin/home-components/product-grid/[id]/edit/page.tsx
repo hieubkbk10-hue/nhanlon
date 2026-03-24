@@ -8,7 +8,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { api } from '@/convex/_generated/api';
 import { Loader2, Package } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -19,6 +19,7 @@ import { ProductGridForm } from '../../_components/ProductGridForm';
 import type { ProductGridProductItem } from '../../_components/ProductGridForm';
 import { ProductGridPreview } from '../../_components/ProductGridPreview';
 import { DEFAULT_PRODUCT_GRID_CONFIG } from '../../_lib/constants';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import type { ProductGridStyle } from '../../_types';
 import type { ProductListPreviewItem } from '../../../product-list/_types';
 
@@ -424,14 +425,12 @@ export default function ProductGridEditPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={isSubmitting || !hasChanges}>
-            {isSubmitting ? 'Đang lưu...' : (hasChanges ? 'Lưu thay đổi' : 'Đã lưu')}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() =>{  router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

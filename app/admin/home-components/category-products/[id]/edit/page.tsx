@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Package, Loader2, AlertTriangle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -17,6 +17,7 @@ import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/
 import { CategoryProductsForm } from '../../_components/CategoryProductsForm';
 import { CategoryProductsPreview } from '../../_components/CategoryProductsPreview';
 import { DEFAULT_CATEGORY_PRODUCTS_CONFIG } from '../../_lib/constants';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   getCategoryProductsValidationResult,
   normalizeCategoryProductsHarmony,
@@ -389,14 +390,12 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={isSubmitting || !hasChanges}>
-            {isSubmitting ? 'Đang lưu...' : (hasChanges ? 'Lưu thay đổi' : 'Đã lưu')}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() =>{  router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

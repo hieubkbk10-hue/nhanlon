@@ -55,6 +55,23 @@ const SiteLayout = ({
     const headerItems = headerMenu
       ? await client.query(api.menus.listActiveMenuItems, { menuId: headerMenu._id })
       : [];
+    const headerSettings = await client.query(api.settings.getMultiple, {
+      keys: ['header_style', 'header_config'],
+    });
+    const initialHeaderData = {
+      contact: {
+        contact_email: contact.contact_email,
+        contact_phone: contact.contact_phone,
+      },
+      headerConfig: headerSettings.header_config as Record<string, unknown> | null,
+      headerStyle: headerSettings.header_style as string | null,
+      menuData: headerMenu ? { menu: headerMenu, items: headerItems } : null,
+      site: {
+        site_logo: site.site_logo,
+        site_name: site.site_name,
+        site_tagline: site.site_tagline,
+      },
+    };
 
     // Zero-config: schema engine tự quyết định Organization vs LocalBusiness
     const siteSchemas = buildSiteSchemas({ contact, seo, site, social });
@@ -70,7 +87,7 @@ const SiteLayout = ({
 
     return (
       <div data-theme="light" style={{ colorScheme: 'light' }}>
-        <SiteShell>
+        <SiteShell initialHeaderData={initialHeaderData}>
           {siteSchemas.map((schema, index) => (
             <JsonLd key={index} data={schema} />
           ))}

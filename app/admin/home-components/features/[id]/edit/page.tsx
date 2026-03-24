@@ -15,6 +15,7 @@ import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOv
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { FeaturesPreview } from '../../_components/FeaturesPreview';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   createFeatureItem,
   FEATURE_ICON_OPTIONS,
@@ -393,14 +394,12 @@ export default function FeaturesEditPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() => { router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={isSubmitting || !hasChanges}>
-            {isSubmitting ? 'Đang lưu...' : (hasChanges ? 'Lưu thay đổi' : 'Đã lưu')}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() => { router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

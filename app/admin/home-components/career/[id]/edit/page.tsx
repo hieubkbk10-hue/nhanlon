@@ -15,6 +15,7 @@ import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOv
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { CareerPreview } from '../../_components/CareerPreview';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   createCareerJob,
   DEFAULT_CAREER_TEXTS,
@@ -489,14 +490,12 @@ export default function CareerEditPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() => { router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={!hasChanges || isSubmitting}>
-            {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() => { router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

@@ -31,9 +31,13 @@ const DEFAULT_CONFIG: HeaderMenuConfig = {
   brandName: 'YourBrand',
   showBrandName: true,
   logoSizeLevel: 2,
+  headerSpacingLevel: 5,
+  logoBackgroundStyle: 'none',
   headerBackground: 'white',
   headerSeparator: 'none',
   headerSticky: true,
+  headerStickyDesktop: true,
+  headerStickyMobile: true,
   showBrandAccent: false,
   cart: { show: true },
   cta: { show: true, text: 'Liên hệ' },
@@ -73,6 +77,11 @@ const clampLogoSizeLevel = (level?: number): HeaderMenuConfig['logoSizeLevel'] =
   return Math.min(20, Math.max(1, value)) as HeaderMenuConfig['logoSizeLevel'];
 };
 
+const clampHeaderSpacingLevel = (level?: number): HeaderMenuConfig['headerSpacingLevel'] => {
+  const value = Number.isFinite(level) ? Math.round(level as number) : 5;
+  return Math.min(7, Math.max(1, value)) as HeaderMenuConfig['headerSpacingLevel'];
+};
+
 function ModuleFeatureStatus({ label, enabled, href, moduleName }: { label: string; enabled: boolean; href: string; moduleName: string }) {
   return (
     <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -96,6 +105,7 @@ export default function HeaderMenuExperiencePage() {
   const headerStyleSetting = useQuery(api.settings.getByKey, { key: 'header_style' });
   const headerConfigSetting = useQuery(api.settings.getByKey, { key: 'header_config' });
   const siteNameSetting = useQuery(api.settings.getByKey, { key: 'site_name' });
+  const siteLogoSetting = useQuery(api.settings.getByKey, { key: 'site_logo' });
   const topbarSloganSetting = useQuery(api.settings.getByKey, { key: 'site_tagline' });
   const brandColors = useBrandColors();
   const [brandColor, setBrandColor] = useState(brandColors.primary);
@@ -139,12 +149,16 @@ export default function HeaderMenuExperiencePage() {
 
   const serverConfig = useMemo<HeaderMenuConfig>(() => {
     const raw = headerConfigSetting?.value as Partial<HeaderMenuConfig> | undefined;
+    const resolvedHeaderSticky = raw?.headerSticky ?? DEFAULT_CONFIG.headerSticky;
     return {
       ...DEFAULT_CONFIG,
       ...raw,
       brandName: resolvedBrandName,
       showBrandName: raw?.showBrandName ?? true,
       logoSizeLevel: clampLogoSizeLevel(raw?.logoSizeLevel ?? 2),
+      headerSpacingLevel: clampHeaderSpacingLevel(raw?.headerSpacingLevel ?? DEFAULT_CONFIG.headerSpacingLevel),
+      headerStickyDesktop: raw?.headerStickyDesktop ?? resolvedHeaderSticky,
+      headerStickyMobile: raw?.headerStickyMobile ?? resolvedHeaderSticky,
       topbar: { ...DEFAULT_CONFIG.topbar, ...raw?.topbar },
       search: { ...DEFAULT_CONFIG.search, ...raw?.search },
       cta: { ...DEFAULT_CONFIG.cta, ...raw?.cta, text: 'Liên hệ' },
@@ -157,6 +171,7 @@ export default function HeaderMenuExperiencePage() {
   const isLoading = headerStyleSetting === undefined
     || headerConfigSetting === undefined
     || siteNameSetting === undefined
+    || siteLogoSetting === undefined
     || topbarSloganSetting === undefined
     || menuData === undefined
     || contactSettings === undefined
@@ -172,6 +187,7 @@ export default function HeaderMenuExperiencePage() {
   const resolvedBrandColor = brandColor || brandColors.primary || '#f97316';
 
   const menuItems = menuData?.items ?? [];
+  const siteLogo = typeof siteLogoSetting?.value === 'string' ? siteLogoSetting.value.trim() : '';
   const settingsPhone = contactSettings?.find(s => s.key === 'contact_phone')?.value as string | undefined;
   const settingsEmail = contactSettings?.find(s => s.key === 'contact_email')?.value as string | undefined;
   const resolvedTopbarSlogan = typeof topbarSloganSetting?.value === 'string' ? topbarSloganSetting.value.trim() : '';
@@ -216,8 +232,12 @@ export default function HeaderMenuExperiencePage() {
     setConfig(prev => ({ ...prev, showBrandAccent: value }));
   };
 
-  const updateHeaderSticky = (value: boolean) => {
-    setConfig(prev => ({ ...prev, headerSticky: value }));
+  const updateHeaderStickyDesktop = (value: boolean) => {
+    setConfig(prev => ({ ...prev, headerStickyDesktop: value }));
+  };
+
+  const updateHeaderStickyMobile = (value: boolean) => {
+    setConfig(prev => ({ ...prev, headerStickyMobile: value }));
   };
 
   const updateShowBrandName = (value: boolean) => {
@@ -226,6 +246,14 @@ export default function HeaderMenuExperiencePage() {
 
   const updateLogoSizeLevel = (value: HeaderMenuConfig['logoSizeLevel']) => {
     setConfig(prev => ({ ...prev, logoSizeLevel: value }));
+  };
+
+  const updateHeaderSpacingLevel = (value: HeaderMenuConfig['headerSpacingLevel']) => {
+    setConfig(prev => ({ ...prev, headerSpacingLevel: value }));
+  };
+
+  const updateLogoBackgroundStyle = (value: NonNullable<HeaderMenuConfig['logoBackgroundStyle']>) => {
+    setConfig(prev => ({ ...prev, logoBackgroundStyle: value }));
   };
 
   const normalizedConfig = useMemo(() => ({
@@ -293,6 +321,19 @@ export default function HeaderMenuExperiencePage() {
     []
   );
   const logoSizeLabel = logoSizeOptions[(config.logoSizeLevel ?? 2) - 1]?.label ?? 'Mặc định';
+  const headerSpacingOptions = useMemo(
+    () => ([
+      { value: 1, label: 'Siêu gọn' },
+      { value: 2, label: 'Rất gọn' },
+      { value: 3, label: 'Gọn' },
+      { value: 4, label: 'Hơi gọn' },
+      { value: 5, label: 'Cân bằng' },
+      { value: 6, label: 'Hơi thoáng' },
+      { value: 7, label: 'Trung bình' },
+    ] as const),
+    []
+  );
+  const headerSpacingLabel = headerSpacingOptions[(config.headerSpacingLevel ?? 5) - 1]?.label ?? 'Cân bằng';
   const cartEnabled = cartModule?.enabled ?? false;
   const wishlistEnabled = wishlistModule?.enabled ?? false;
   const productsEnabled = productsModule?.enabled ?? false;
@@ -317,6 +358,7 @@ export default function HeaderMenuExperiencePage() {
       const { slogan: _topbarSlogan, ...topbarRest } = normalizedConfig.topbar;
       const configToSave = {
         ...normalizedConfig,
+        headerSticky: normalizedConfig.headerStickyDesktop ?? normalizedConfig.headerSticky ?? true,
         search: {
           ...normalizedConfig.search,
           searchProducts: productsEnabled ? normalizedConfig.search.searchProducts : false,
@@ -450,6 +492,64 @@ export default function HeaderMenuExperiencePage() {
                 ))}
               </select>
               <div className="text-xs font-medium text-slate-600">Đang chọn: {logoSizeLabel}</div>
+            </div>
+            <div className="space-y-2 pt-1">
+              <Label className="text-xs">Độ thoáng header</Label>
+              <select
+                value={config.headerSpacingLevel ?? 5}
+                onChange={(event) => updateHeaderSpacingLevel(Number(event.target.value) as HeaderMenuConfig['headerSpacingLevel'])}
+                className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700"
+              >
+                {headerSpacingOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <div className="text-xs font-medium text-slate-600">Đang chọn: {headerSpacingLabel}</div>
+            </div>
+            <ToggleRow
+              label="Sticky desktop"
+              checked={config.headerStickyDesktop ?? config.headerSticky}
+              onChange={updateHeaderStickyDesktop}
+              accentColor={resolvedBrandColor}
+            />
+            <ToggleRow
+              label="Sticky mobile"
+              checked={config.headerStickyMobile ?? config.headerSticky}
+              onChange={updateHeaderStickyMobile}
+              accentColor={resolvedBrandColor}
+            />
+            <div className="space-y-2 pt-1">
+              <Label className="text-xs">Nền logo</Label>
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                {([
+                  { id: 'none', label: 'None' },
+                  { id: 'border', label: 'Border' },
+                  { id: 'outline', label: 'Outline sạch' },
+                  { id: 'hairline', label: 'Hairline nhẹ' },
+                  { id: 'inset', label: 'Inset panel' },
+                  { id: 'pill', label: 'Pill badge' },
+                  { id: 'shadow', label: 'Shadow' },
+                  { id: 'soft', label: 'Soft card' },
+                  { id: 'solid', label: 'Solid contrast' },
+                ] as const).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => updateLogoBackgroundStyle(option.id)}
+                    className={cn(
+                      'h-8 rounded-md border text-xs font-medium transition-colors',
+                      (config.logoBackgroundStyle ?? 'none') === option.id
+                        ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] leading-5 text-slate-500">
+                Outline/Hairline cho cảm giác flat rất nhẹ; Inset/Pill mềm hơn nhưng vẫn tinh tế. Border/Shadow/Soft/Solid giữ phong cách nổi bật hơn khi cần.
+              </p>
             </div>
             <ToggleRow
               label="CTA"
@@ -592,12 +692,6 @@ export default function HeaderMenuExperiencePage() {
                     ))}
                   </div>
                 </div>
-                <ToggleRow
-                  label="Sticky header"
-                  checked={config.headerSticky}
-                  onChange={updateHeaderSticky}
-                  accentColor={resolvedBrandColor}
-                />
               </div>
             </ControlCard>
           )}
@@ -736,6 +830,7 @@ export default function HeaderMenuExperiencePage() {
                 secondaryColor={secondaryColor}
                 colorMode={colorMode}
                 config={previewConfig}
+                logo={siteLogo}
                 device={previewDevice}
                 layoutStyle={previewStyle}
                 menuItems={menuItems}

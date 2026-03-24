@@ -47,7 +47,7 @@ const LAYOUT_STYLES: LayoutOption<ContactLayoutStyle>[] = [
 const HINTS = [
   'Preview mock giúp xem thay đổi ngay, không cần lưu mới thấy.',
   'Thông tin liên hệ và social phụ thuộc module Settings.',
-  'Gửi form liên hệ phụ thuộc module Contact Inbox.',
+  'Gửi form liên hệ phụ thuộc module Tin nhắn liên hệ.',
   'Nếu feature Settings bị tắt, block tương ứng sẽ không hiển thị ở preview.',
   'Các khối hiển thị dùng chung giữa các layout.',
 ];
@@ -240,7 +240,7 @@ export default function ContactExperiencePage() {
               enabled={contactInboxEnabled}
               href="/system/modules/contactInbox"
               icon={Mail}
-              title="Contact Inbox"
+              title="Tin nhắn liên hệ"
               colorScheme="green"
             />
             <ModuleFeatureStatus
@@ -253,7 +253,7 @@ export default function ContactExperiencePage() {
               label="Gửi form liên hệ"
               enabled={formEnabled}
               href="/system/modules/contactInbox"
-              moduleName="Module Contact Inbox"
+              moduleName="Module Tin nhắn liên hệ"
             />
             <ModuleFeatureStatus
               label="Mạng xã hội"

@@ -46,7 +46,7 @@ export class AdminModulesSeeder extends BaseSeeder<AdminModuleData> {
       { category: 'system', description: 'Cấu hình website và hệ thống', enabled: true, icon: 'Settings', isCore: true, key: 'settings', name: 'Cài đặt hệ thống', order: 11 },
       { category: 'system', description: 'Quản lý menu header, footer', enabled: true, icon: 'Menu', isCore: false, key: 'menus', name: 'Menu điều hướng', order: 12 },
       { category: 'system', description: 'Cấu hình components trang chủ', enabled: true, icon: 'LayoutGrid', isCore: false, key: 'homepage', name: 'Trang chủ', order: 13 },
-      { category: 'system', dependencies: ['settings'], dependencyType: 'all', description: 'Lưu trữ và quản lý inbox liên hệ', enabled: true, icon: 'Inbox', isCore: false, key: 'contactInbox', name: 'Contact Inbox', order: 14 },
+      { category: 'system', dependencies: ['settings'], dependencyType: 'all', description: 'Lưu trữ và quản lý tin nhắn liên hệ', enabled: true, icon: 'Inbox', isCore: false, key: 'contactInbox', name: 'Tin nhắn liên hệ', order: 14 },
       { category: 'marketing', description: 'Gửi thông báo cho người dùng', enabled: true, icon: 'Bell', isCore: false, key: 'notifications', name: 'Thông báo', order: 15 },
       { category: 'marketing', dependencies: ['products', 'orders'], dependencyType: 'all', description: 'Quản lý mã giảm giá, voucher', enabled: false, icon: 'Megaphone', isCore: false, key: 'promotions', name: 'Khuyến mãi', order: 16 },
       { category: 'marketing', description: 'Báo cáo và phân tích dữ liệu', enabled: true, icon: 'BarChart3', isCore: false, key: 'analytics', name: 'Thống kê', order: 17 },

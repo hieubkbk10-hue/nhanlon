@@ -29,6 +29,14 @@ interface MenuItemWithChildren extends MenuItem {
   children: MenuItemWithChildren[];
 }
 
+export type HeaderInitialData = {
+  menuData?: { menu: { _creationTime: number; _id: Id<'menus'>; location: string; name: string }; items: MenuItem[] } | null;
+  headerStyle?: string | null;
+  headerConfig?: HeaderConfig | null;
+  contact?: { contact_phone?: string; contact_email?: string };
+  site?: { site_name?: string; site_logo?: string; site_tagline?: string };
+};
+
 type HeaderStyle = 'classic' | 'topbar' | 'allbirds';
 
 interface TopbarConfig {
@@ -50,13 +58,19 @@ interface SearchConfig {
   searchServices?: boolean;
 }
 
+type LogoBackgroundStyle = 'none' | 'border' | 'shadow' | 'soft' | 'solid' | 'outline' | 'hairline' | 'inset' | 'pill';
+
 interface HeaderConfig {
   brandName?: string;
   showBrandName?: boolean;
   logoSizeLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
+  headerSpacingLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  logoBackgroundStyle?: LogoBackgroundStyle;
   headerBackground?: 'white' | 'dots' | 'stripes';
   headerSeparator?: 'none' | 'shadow' | 'border' | 'gradient';
   headerSticky?: boolean;
+  headerStickyDesktop?: boolean;
+  headerStickyMobile?: boolean;
   showBrandAccent?: boolean;
   cta?: { show?: boolean; text?: string };
   topbar?: TopbarConfig;
@@ -70,9 +84,13 @@ const DEFAULT_CONFIG: HeaderConfig = {
   brandName: 'YourBrand',
   showBrandName: true,
   logoSizeLevel: 2,
+  headerSpacingLevel: 5,
+  logoBackgroundStyle: 'none',
   headerBackground: 'white',
   headerSeparator: 'none',
   headerSticky: true,
+  headerStickyDesktop: true,
+  headerStickyMobile: true,
   showBrandAccent: false,
   cart: { show: true },
   cta: { show: true, text: 'Liên hệ' },
@@ -107,19 +125,42 @@ const clampLogoSizeLevel = (level?: number): NonNullable<HeaderConfig['logoSizeL
   return Math.min(20, Math.max(1, value)) as NonNullable<HeaderConfig['logoSizeLevel']>;
 };
 
+const clampHeaderSpacingLevel = (level?: number): NonNullable<HeaderConfig['headerSpacingLevel']> => {
+  const value = Number.isFinite(level) ? Math.round(level as number) : 5;
+  return Math.min(7, Math.max(1, value)) as NonNullable<HeaderConfig['headerSpacingLevel']>;
+};
+
 const buildLinearSteps = (min: number, max: number, count = 20) => {
   const step = (max - min) / (count - 1);
   return Array.from({ length: count }, (_, index) => Math.round(min + step * index));
+};
+
+const resolveStickyState = (config: HeaderConfig) => ({
+  desktop: config.headerStickyDesktop ?? config.headerSticky ?? true,
+  mobile: config.headerStickyMobile ?? config.headerSticky ?? true,
+});
+
+const getStickyClass = (desktop: boolean, mobile: boolean) => {
+  if (desktop && mobile) {
+    return 'sticky top-0 z-50';
+  }
+  if (desktop && !mobile) {
+    return 'relative z-50 lg:sticky lg:top-0';
+  }
+  if (!desktop && mobile) {
+    return 'sticky top-0 z-50 lg:relative lg:top-auto';
+  }
+  return 'relative z-50';
 };
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-export function Header() {
+export function Header({ initialData }: { initialData?: HeaderInitialData }) {
   const brandColors = useBrandColors();
-  const { siteName, logo, settings } = useSiteSettings();
-  const menuData = useQuery(api.menus.getFullMenu, { location: 'header' });
+  const siteSettings = useSiteSettings();
+  const menuDataQuery = useQuery(api.menus.getFullMenu, { location: 'header' });
   const headerStyleSetting = useQuery(api.settings.getByKey, { key: 'header_style' });
   const headerConfigSetting = useQuery(api.settings.getByKey, { key: 'header_config' });
   const contactSettings = useQuery(api.settings.listByGroup, { group: 'contact' });
@@ -134,13 +175,15 @@ export function Header() {
   const router = useRouter();
   const { customer, isAuthenticated, logout } = useCustomerAuth();
   
-  const headerStyleRaw = headerStyleSetting?.value as string | undefined;
+  const menuData = menuDataQuery ?? initialData?.menuData;
+  const headerStyleRaw = (headerStyleSetting?.value ?? initialData?.headerStyle) as string | undefined;
   const headerStyle: HeaderStyle = (headerStyleRaw === 'transparent' || headerStyleRaw === 'centered' ? 'allbirds' : headerStyleRaw as HeaderStyle) || 'classic';
-  const savedConfig = (headerConfigSetting?.value as HeaderConfig) || {};
+  const savedConfig = ((headerConfigSetting?.value ?? initialData?.headerConfig) as HeaderConfig) || {};
   const config: HeaderConfig = {
     ...DEFAULT_CONFIG,
     ...savedConfig,
     logoSizeLevel: clampLogoSizeLevel(savedConfig.logoSizeLevel ?? DEFAULT_CONFIG.logoSizeLevel),
+    headerSpacingLevel: clampHeaderSpacingLevel(savedConfig.headerSpacingLevel ?? DEFAULT_CONFIG.headerSpacingLevel),
     topbar: { ...DEFAULT_CONFIG.topbar, ...savedConfig.topbar },
     search: { ...DEFAULT_CONFIG.search, ...savedConfig.search },
     cta: { ...DEFAULT_CONFIG.cta, ...savedConfig.cta },
@@ -149,8 +192,10 @@ export function Header() {
     login: { ...DEFAULT_CONFIG.login, ...savedConfig.login },
   };
   
-  const settingsPhone = contactSettings?.find(s => s.key === 'contact_phone')?.value as string | undefined;
-  const settingsEmail = contactSettings?.find(s => s.key === 'contact_email')?.value as string | undefined;
+  const settingsPhone = contactSettings?.find(s => s.key === 'contact_phone')?.value as string
+    ?? initialData?.contact?.contact_phone;
+  const settingsEmail = contactSettings?.find(s => s.key === 'contact_email')?.value as string
+    ?? initialData?.contact?.contact_email;
   
   const topbarConfig = useMemo(() => {
     const base = config.topbar ?? {};
@@ -174,16 +219,46 @@ export function Header() {
   const showCart = Boolean(config.cart?.show && (cartModule?.enabled ?? false));
   const showWishlist = Boolean(config.wishlist?.show && (wishlistModule?.enabled ?? false));
   
-  const displayName = (siteName ?? config.brandName) ?? 'YourBrand';
+  const resolvedSiteName = siteSettings.isLoading
+    ? (initialData?.site?.site_name ?? 'Website')
+    : siteSettings.siteName;
+  const resolvedLogo = siteSettings.isLoading
+    ? (initialData?.site?.site_logo ?? '')
+    : siteSettings.logo;
+  const resolvedTagline = siteSettings.isLoading
+    ? (initialData?.site?.site_tagline ?? '')
+    : (siteSettings.settings.site_tagline as string | undefined) ?? '';
+
+  const displayName = (resolvedSiteName ?? config.brandName) ?? 'YourBrand';
+  const logo = resolvedLogo;
   const showBrandName = config.showBrandName !== false;
   const logoSizeLevel = config.logoSizeLevel ?? 2;
+  const headerSpacingLevel = clampHeaderSpacingLevel(config.headerSpacingLevel);
   const logoSizeMap: Record<HeaderStyle, number[]> = {
     classic: buildLinearSteps(24, 96),
     topbar: buildLinearSteps(28, 108),
     allbirds: buildLinearSteps(16, 80),
   };
+  const headerSpacingMap: Record<HeaderStyle, number[]> = {
+    classic: [6, 8, 10, 12, 14, 16, 18],
+    topbar: [4, 6, 8, 10, 12, 14, 16],
+    allbirds: [6, 8, 10, 12, 14, 16, 18],
+  };
   const logoSize = logoSizeMap[headerStyle][logoSizeLevel - 1] ?? logoSizeMap[headerStyle][0];
+  const headerSpacingY = headerSpacingMap[headerStyle][headerSpacingLevel - 1] ?? headerSpacingMap[headerStyle][3];
   const logoDotSize = Math.max(2, Math.round(logoSize / 4));
+  const logoBackgroundStyle: LogoBackgroundStyle =
+    config.logoBackgroundStyle === 'border'
+    || config.logoBackgroundStyle === 'shadow'
+    || config.logoBackgroundStyle === 'soft'
+    || config.logoBackgroundStyle === 'solid'
+    || config.logoBackgroundStyle === 'outline'
+    || config.logoBackgroundStyle === 'hairline'
+    || config.logoBackgroundStyle === 'inset'
+    || config.logoBackgroundStyle === 'pill'
+      ? config.logoBackgroundStyle
+      : 'none';
+  const logoContainerSize = Math.round(logoSize + Math.max(10, logoSize * 0.28));
 
   const tokens = useMemo<MenuColors>(
     () => getMenuColors(brandColors.primary, brandColors.secondary, brandColors.mode),
@@ -197,6 +272,77 @@ export function Header() {
     '--menu-dropdown-sub-hover-text': tokens.dropdownSubItemHoverText,
     '--menu-icon-hover': tokens.iconButtonHoverText,
   } as React.CSSProperties;
+  const logoBackgroundStyles: Record<LogoBackgroundStyle, React.CSSProperties> = {
+    none: {},
+    border: {
+      backgroundColor: 'rgba(255, 255, 255, 0.6)',
+      border: `1px solid ${tokens.borderStrong}`,
+      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
+    },
+    outline: {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      border: `1px solid ${tokens.borderStrong}`,
+    },
+    hairline: {
+      backgroundColor: 'transparent',
+      border: `1px solid ${tokens.border}`,
+    },
+    inset: {
+      backgroundColor: tokens.surfaceAlt,
+      border: `1px solid ${tokens.border}`,
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+    },
+    pill: {
+      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+      border: `1px solid ${tokens.border}`,
+    },
+    shadow: {
+      backgroundColor: 'rgba(255, 255, 255, 0.88)',
+      boxShadow: '0 10px 30px rgba(15, 23, 42, 0.16)',
+      border: '1px solid rgba(148, 163, 184, 0.2)',
+      backdropFilter: 'blur(10px)',
+    },
+    soft: {
+      backgroundColor: tokens.surfaceAlt,
+      border: `1px solid ${tokens.border}`,
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.7)',
+    },
+    solid: {
+      backgroundColor: tokens.textPrimary,
+      border: `1px solid ${tokens.textPrimary}`,
+      boxShadow: '0 12px 28px rgba(15, 23, 42, 0.18)',
+    },
+  };
+  const logoWrapStyle: React.CSSProperties = {
+    width: logoBackgroundStyle === 'none' ? logoSize : logoContainerSize,
+    height: logoBackgroundStyle === 'none' ? logoSize : logoContainerSize,
+    borderRadius: logoBackgroundStyle === 'pill'
+      ? logoContainerSize
+      : headerStyle === 'allbirds'
+        ? logoContainerSize
+        : Math.max(16, Math.round(logoContainerSize * 0.24)),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    ...logoBackgroundStyles[logoBackgroundStyle],
+  };
+  const logoInnerBaseStyle: React.CSSProperties = {
+    width: logoSize,
+    height: logoSize,
+    borderRadius: headerStyle === 'allbirds' ? logoSize : Math.max(8, Math.round(logoSize * 0.24)),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  };
+  const logoInnerStyle: React.CSSProperties = logo
+    ? logoInnerBaseStyle
+    : {
+        ...logoInnerBaseStyle,
+        backgroundColor: tokens.brandBadgeBg,
+        color: tokens.brandBadgeText,
+      };
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -268,7 +414,8 @@ export function Header() {
     )
     : null;
 
-  const classicPositionClass = (config.headerSticky ?? true) ? 'sticky top-0 z-50' : 'relative z-50';
+  const { desktop: stickyDesktop, mobile: stickyMobile } = resolveStickyState(config);
+  const classicPositionClass = getStickyClass(stickyDesktop, stickyMobile);
   const menuTree = useMemo((): MenuItemWithChildren[] => {
     if (!menuItems) {return [];}
     
@@ -374,7 +521,7 @@ export function Header() {
     return () => resizeObserver.disconnect();
   }, [rootItems.length, logoSizeLevel, showBrandName, headerStyle, config.cta?.show, showSearch, showCart, showWishlist, showLogin]);
 
-  const topbarSlogan = typeof settings.site_tagline === 'string' ? settings.site_tagline.trim() : '';
+  const topbarSlogan = resolvedTagline ? resolvedTagline.trim() : '';
   const topbarSloganEnabled = (topbarConfig.sloganEnabled ?? true) !== false;
   const showTopbarSlogan = Boolean(topbarConfig.show !== false && topbarSloganEnabled && topbarSlogan);
   const showTopbarHotline = Boolean(topbarConfig.show !== false && (topbarConfig.showHotline ?? true) && topbarConfig.hotline);
@@ -469,7 +616,7 @@ export function Header() {
   if (menuData === undefined) {
     return (
       <header style={{ backgroundColor: tokens.surface }}>
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="max-w-7xl mx-auto px-4" style={{ paddingTop: headerSpacingY, paddingBottom: headerSpacingY }}>
           <div className="h-8 w-32 animate-pulse rounded" style={{ backgroundColor: tokens.placeholderBg }}></div>
         </div>
       </header>
@@ -551,15 +698,22 @@ export function Header() {
         {config.showBrandAccent && (
           <div className="h-0.5" style={{ backgroundColor: tokens.accentLine }} />
         )}
-        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4">
+        <div
+          className="max-w-7xl mx-auto px-4 lg:px-6"
+          style={{ paddingTop: headerSpacingY, paddingBottom: headerSpacingY }}
+        >
           <div ref={headerRowRef} className="flex items-center gap-4">
             {/* Logo */}
             <Link ref={brandBlockRef} href="/" className="flex items-center gap-3 flex-shrink-0">
-              {logo ? (
-                <Image src={logo} alt={displayName} width={logoSize} height={logoSize} className="h-auto w-auto" />
-              ) : (
-                <div className="rounded-lg" style={{ backgroundColor: tokens.brandBadgeBg, width: logoSize, height: logoSize }}></div>
-              )}
+              <div style={logoWrapStyle}>
+                {logo ? (
+                  <div style={logoInnerStyle}>
+                    <Image src={logo} alt={displayName} width={logoSize} height={logoSize} className="h-auto w-auto" />
+                  </div>
+                ) : (
+                  <div style={logoInnerStyle}></div>
+                )}
+              </div>
               {showBrandName && (
                 <span className="font-semibold" style={{ color: tokens.textPrimary }}>{displayName}</span>
               )}
@@ -818,18 +972,48 @@ export function Header() {
           <div className="lg:hidden border-t" style={{ borderColor: tokens.border, backgroundColor: tokens.mobileMenuBg }}>
             {menuTree.map((item) => (
               <div key={item._id}>
-                <button
-                  onClick={() => item.children.length > 0 && toggleMobileItem(item._id)}
-                  className="w-full px-6 py-3 text-left flex items-center justify-between text-sm font-medium transition-colors hover:bg-[var(--menu-dropdown-hover-bg)]"
-                  style={{ color: tokens.mobileMenuItemText, ...menuVars }}
-                >
-                  {item.label}
-                  {item.children.length > 0 && (
-                    <ChevronDown size={16} className={cn("transition-transform", expandedMobileItems.includes(item._id) && "rotate-180")} />
-                  )}
-                </button>
+                {item.children.length > 0 ? (
+                  <div className="w-full px-6 py-3 text-left flex items-center justify-between text-sm font-medium transition-colors hover:bg-[var(--menu-dropdown-hover-bg)]">
+                    <Link
+                      href={item.url}
+                      target={item.openInNewTab ? '_blank' : undefined}
+                      rel={item.openInNewTab ? 'noreferrer' : undefined}
+                      onClick={() => { setMobileMenuOpen(false); }}
+                      className="flex-1 transition-colors hover:text-[var(--menu-hover-text)]"
+                      style={{ color: tokens.mobileMenuItemText, ...menuVars }}
+                    >
+                      {item.label}
+                    </Link>
+                    <button
+                      type="button"
+                      aria-label={`Mở menu con ${item.label}`}
+                      aria-expanded={expandedMobileItems.includes(item._id)}
+                      aria-controls={`mobile-menu-${item._id}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleMobileItem(item._id);
+                      }}
+                      className="ml-3 flex items-center justify-center"
+                      style={{ color: tokens.mobileMenuItemText, ...menuVars }}
+                    >
+                      <ChevronDown size={16} className={cn("transition-transform", expandedMobileItems.includes(item._id) && "rotate-180")} />
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href={item.url}
+                    target={item.openInNewTab ? '_blank' : undefined}
+                    rel={item.openInNewTab ? 'noreferrer' : undefined}
+                    onClick={() => { setMobileMenuOpen(false); }}
+                    className="block w-full px-6 py-3 text-left text-sm font-medium transition-colors hover:bg-[var(--menu-dropdown-hover-bg)] hover:text-[var(--menu-hover-text)]"
+                    style={{ color: tokens.mobileMenuItemText, ...menuVars }}
+                  >
+                    {item.label}
+                  </Link>
+                )}
                 {item.children.length > 0 && expandedMobileItems.includes(item._id) && (
-                  <div style={{ backgroundColor: tokens.surface }}>
+                  <div id={`mobile-menu-${item._id}`} style={{ backgroundColor: tokens.surface }}>
                     {item.children.map((child) => (
                       <Link 
                         key={child._id} 
@@ -912,20 +1096,24 @@ export function Header() {
         )}
 
         {/* Main Header */}
-        <div className="px-4 py-3 border-b" style={{ borderColor: tokens.border }}>
+        <div
+          className="px-4 border-b"
+          style={{ borderColor: tokens.border, paddingTop: headerSpacingY, paddingBottom: headerSpacingY }}
+        >
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-              {logo ? (
-                <Image src={logo} alt={displayName} width={logoSize} height={logoSize} className="h-auto w-auto" />
-              ) : (
-                <div 
-                  className="rounded-lg flex items-center justify-center font-bold" 
-                  style={{ backgroundColor: tokens.brandBadgeBg, color: tokens.brandBadgeText, width: logoSize, height: logoSize }}
-                >
-                  {displayName.charAt(0)}
-                </div>
-              )}
+              <div style={logoWrapStyle}>
+                {logo ? (
+                  <div style={logoInnerStyle}>
+                    <Image src={logo} alt={displayName} width={logoSize} height={logoSize} className="h-auto w-auto" />
+                  </div>
+                ) : (
+                  <div style={logoInnerStyle} className="font-bold">
+                    {displayName.charAt(0)}
+                  </div>
+                )}
+              </div>
               {showBrandName && (
                 <span className="font-bold text-lg" style={{ color: tokens.textPrimary }}>{displayName}</span>
               )}
@@ -1080,18 +1268,48 @@ export function Header() {
           <div className="lg:hidden border-t" style={{ borderColor: tokens.border, backgroundColor: tokens.surface }}>
             {menuTree.map((item) => (
               <div key={item._id} className="border-b" style={{ borderColor: tokens.border }}>
-                <button
-                  onClick={() => item.children.length > 0 && toggleMobileItem(item._id)}
-                  className="w-full px-4 py-3 text-left flex items-center justify-between text-sm font-medium"
-                  style={{ color: tokens.mobileMenuItemText }}
-                >
-                  {item.label}
-                  {item.children.length > 0 && (
-                    <ChevronDown size={16} className={cn("transition-transform", expandedMobileItems.includes(item._id) && "rotate-180")} />
-                  )}
-                </button>
+                {item.children.length > 0 ? (
+                  <div className="w-full px-4 py-3 text-left flex items-center justify-between text-sm font-medium">
+                    <Link
+                      href={item.url}
+                      target={item.openInNewTab ? '_blank' : undefined}
+                      rel={item.openInNewTab ? 'noreferrer' : undefined}
+                      onClick={() => { setMobileMenuOpen(false); }}
+                      className="flex-1"
+                      style={{ color: tokens.mobileMenuItemText }}
+                    >
+                      {item.label}
+                    </Link>
+                    <button
+                      type="button"
+                      aria-label={`Mở menu con ${item.label}`}
+                      aria-expanded={expandedMobileItems.includes(item._id)}
+                      aria-controls={`mobile-menu-${item._id}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleMobileItem(item._id);
+                      }}
+                      className="ml-3 flex items-center justify-center"
+                      style={{ color: tokens.mobileMenuItemText }}
+                    >
+                      <ChevronDown size={16} className={cn("transition-transform", expandedMobileItems.includes(item._id) && "rotate-180")} />
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href={item.url}
+                    target={item.openInNewTab ? '_blank' : undefined}
+                    rel={item.openInNewTab ? 'noreferrer' : undefined}
+                    onClick={() => { setMobileMenuOpen(false); }}
+                    className="block w-full px-4 py-3 text-left text-sm font-medium"
+                    style={{ color: tokens.mobileMenuItemText }}
+                  >
+                    {item.label}
+                  </Link>
+                )}
                 {item.children.length > 0 && expandedMobileItems.includes(item._id) && (
-                  <div className="pb-2" style={{ backgroundColor: tokens.mobileMenuBg }}>
+                  <div id={`mobile-menu-${item._id}`} className="pb-2" style={{ backgroundColor: tokens.mobileMenuBg }}>
                     {item.children.map((child) => (
                       <Link 
                         key={child._id} 
@@ -1172,14 +1390,21 @@ export function Header() {
         {config.showBrandAccent && (
           <div className="h-0.5" style={{ backgroundColor: tokens.accentLine }} />
         )}
-        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 border-b" style={{ borderColor: tokens.border }}>
+        <div
+          className="max-w-7xl mx-auto px-4 lg:px-6 border-b"
+          style={{ borderColor: tokens.border, paddingTop: headerSpacingY, paddingBottom: headerSpacingY }}
+        >
           <div className="flex items-center justify-between gap-6">
             <Link href="/" className="flex items-center gap-2">
-              {logo ? (
-                <Image src={logo} alt={displayName} width={logoSize} height={logoSize} className="h-auto w-auto" />
-              ) : (
-                <div className="rounded-full" style={{ backgroundColor: tokens.allbirdsAccentDot, width: logoDotSize, height: logoDotSize }}></div>
-              )}
+              <div style={logoWrapStyle}>
+                {logo ? (
+                  <div style={logoInnerStyle}>
+                    <Image src={logo} alt={displayName} width={logoSize} height={logoSize} className="h-auto w-auto" />
+                  </div>
+                ) : (
+                  <div className="rounded-full" style={{ backgroundColor: tokens.allbirdsAccentDot, width: logoDotSize, height: logoDotSize }}></div>
+                )}
+              </div>
               {showBrandName && (
                 <span className="text-base font-semibold" style={{ color: tokens.textPrimary }}>
                   {displayName}
@@ -1370,18 +1595,48 @@ export function Header() {
           <div className="lg:hidden border-t" style={{ borderColor: tokens.border, backgroundColor: tokens.mobileMenuBg }}>
             {menuTree.map((item) => (
               <div key={item._id}>
-                <button
-                  onClick={() => item.children.length > 0 && toggleMobileItem(item._id)}
-                  className="w-full px-6 py-3 text-left flex items-center justify-between text-sm font-medium transition-colors hover:bg-[var(--menu-dropdown-hover-bg)]"
-                  style={{ color: tokens.mobileMenuItemText, ...menuVars }}
-                >
-                  {item.label}
-                  {item.children.length > 0 && (
-                    <ChevronDown size={16} className={cn("transition-transform", expandedMobileItems.includes(item._id) && "rotate-180")} />
-                  )}
-                </button>
+                {item.children.length > 0 ? (
+                  <div className="w-full px-6 py-3 text-left flex items-center justify-between text-sm font-medium transition-colors hover:bg-[var(--menu-dropdown-hover-bg)]">
+                    <Link
+                      href={item.url}
+                      target={item.openInNewTab ? '_blank' : undefined}
+                      rel={item.openInNewTab ? 'noreferrer' : undefined}
+                      onClick={() => { setMobileMenuOpen(false); }}
+                      className="flex-1 transition-colors hover:text-[var(--menu-hover-text)]"
+                      style={{ color: tokens.mobileMenuItemText, ...menuVars }}
+                    >
+                      {item.label}
+                    </Link>
+                    <button
+                      type="button"
+                      aria-label={`Mở menu con ${item.label}`}
+                      aria-expanded={expandedMobileItems.includes(item._id)}
+                      aria-controls={`mobile-menu-${item._id}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleMobileItem(item._id);
+                      }}
+                      className="ml-3 flex items-center justify-center"
+                      style={{ color: tokens.mobileMenuItemText, ...menuVars }}
+                    >
+                      <ChevronDown size={16} className={cn("transition-transform", expandedMobileItems.includes(item._id) && "rotate-180")} />
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href={item.url}
+                    target={item.openInNewTab ? '_blank' : undefined}
+                    rel={item.openInNewTab ? 'noreferrer' : undefined}
+                    onClick={() => { setMobileMenuOpen(false); }}
+                    className="block w-full px-6 py-3 text-left text-sm font-medium transition-colors hover:bg-[var(--menu-dropdown-hover-bg)] hover:text-[var(--menu-hover-text)]"
+                    style={{ color: tokens.mobileMenuItemText, ...menuVars }}
+                  >
+                    {item.label}
+                  </Link>
+                )}
                 {item.children.length > 0 && expandedMobileItems.includes(item._id) && (
-                  <div style={{ backgroundColor: tokens.surface }}>
+                  <div id={`mobile-menu-${item._id}`} style={{ backgroundColor: tokens.surface }}>
                     {item.children.map((child) => (
                       <Link
                         key={child._id}

@@ -153,6 +153,8 @@ export interface SpeedDialColorTokens {
   minimalBarBg: string;
   minimalIconColor: string;
   minimalHoverBg: string;
+  glassSurface: string;
+  glassBorder: string;
   pageMockTitle: string;
   pageMockLine: string;
   pageMockCard: string;
@@ -295,6 +297,8 @@ export const getSpeedDialColorTokens = ({
   const mainButtonBg = primaryResolved;
   const mainButtonText = getAPCATextColor(mainButtonBg, 16, 700);
   const mainButtonRing = getSolidTint(primaryResolved, 0.42);
+  const glassSurface = 'rgba(255,255,255,0.65)';
+  const glassBorder = 'rgba(148,163,184,0.45)';
 
   return {
     primary: primaryResolved,
@@ -344,6 +348,8 @@ export const getSpeedDialColorTokens = ({
     minimalBarBg: neutralSurface,
     minimalIconColor: ensureAPCATextColor(secondaryResolved, neutralSurface, 14, 600),
     minimalHoverBg: getSolidTint(secondaryResolved, 0.5),
+    glassSurface,
+    glassBorder,
     pageMockTitle: bodyText,
     pageMockLine: neutralBorder,
     pageMockCard: neutralSurface,

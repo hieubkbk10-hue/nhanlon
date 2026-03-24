@@ -53,8 +53,8 @@ export const SEED_MODULE_METADATA: Record<string, SeedModuleMetadata> = {
   contactInbox: {
     category: 'system',
     defaultQuantity: 0,
-    description: 'Hộp thư liên hệ từ website',
-    name: 'Contact Inbox',
+    description: 'Tin nhắn liên hệ từ website',
+    name: 'Tin nhắn liên hệ',
   },
   customers: {
     category: 'user',

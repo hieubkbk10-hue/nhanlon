@@ -6,24 +6,31 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Shield,
-  Star,
-  Target,
-  Trophy,
-  Zap,
 } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import type { BenefitsColorTokens } from '../_lib/colors';
-import type { BenefitItem, BenefitsBrandMode, BenefitsConfig, BenefitsStyle } from '../_types';
+import type { PreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import { resolveContactIcon } from '../../contact/_lib/iconOptions';
+import type {
+  BenefitItem,
+  BenefitsBrandMode,
+  BenefitsConfig,
+  BenefitsHeaderAlign,
+  BenefitsStyle,
+} from '../_types';
 
 interface BenefitsSectionSharedProps {
   items: BenefitItem[];
   style: BenefitsStyle;
   title?: string;
-  config: Pick<BenefitsConfig, 'subHeading' | 'heading' | 'buttonText' | 'buttonLink'>;
+  config: Pick<
+    BenefitsConfig,
+    'subHeading' | 'heading' | 'buttonText' | 'buttonLink' | 'headerAlign' | 'gridColumnsDesktop' | 'gridColumnsMobile'
+  >;
   tokens: BenefitsColorTokens;
   mode: BenefitsBrandMode;
   context: 'preview' | 'site';
+  previewDevice?: PreviewDevice;
   maxVisible?: number;
 }
 
@@ -34,33 +41,75 @@ const BENEFITS_FALLBACKS = {
   title: 'Lợi ích nổi bật',
 };
 
-const iconMap = {
-  Check,
-  Shield,
-  Star,
-  Target,
-  Trophy,
-  Zap,
-} as const;
+const normalizeBenefitsIconValue = (value?: string) => {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) {return 'check';}
 
-type IconName = keyof typeof iconMap;
+  const legacyMap: Record<string, string> = {
+    Check: 'check',
+    Shield: 'shield',
+    Star: 'star',
+    Target: 'target',
+    Trophy: 'trophy',
+    Zap: 'zap',
+  };
 
-const toIconName = (value?: string): IconName => {
-  if (value && value in iconMap) {
-    return value as IconName;
+  if (legacyMap[trimmed]) {return legacyMap[trimmed];}
+
+  const hasUppercase = /[A-Z]/.test(trimmed);
+  if (hasUppercase) {
+    return trimmed
+      .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+      .replace(/\s+/g, '-')
+      .toLowerCase();
   }
-  return 'Check';
+
+  return trimmed;
 };
+
+const resolveBenefitsIcon = (value?: string) => resolveContactIcon(normalizeBenefitsIconValue(value));
 
 const toText = (value: unknown, fallback: string) => {
   const trimmed = typeof value === 'string' ? value.trim() : '';
   return trimmed.length > 0 ? trimmed : fallback;
 };
 
+const toDescription = (value?: string) => (value ?? '').trim();
+
 const toSectionTitle = (title?: string, heading?: string) => {
   const headingText = toText(heading, '');
   if (headingText) {return headingText;}
   return toText(title, BENEFITS_FALLBACKS.title);
+};
+
+const toHeaderAlign = (value?: string): BenefitsHeaderAlign => (
+  value === 'center' || value === 'right' || value === 'left'
+    ? value
+    : 'left'
+);
+
+const toGridColumnsDesktop = (value?: number): 3 | 4 => (
+  value === 3 ? 3 : 4
+);
+
+const toGridColumnsMobile = (value?: number): 1 | 2 => (
+  value === 1 ? 1 : 2
+);
+
+const toPreviewGridClass = (
+  previewDevice: PreviewDevice,
+  mobileColumns: 1 | 2,
+  desktopColumns: 3 | 4,
+) => {
+  if (previewDevice === 'mobile') {
+    return mobileColumns === 1 ? 'grid-cols-1' : 'grid-cols-2';
+  }
+
+  if (previewDevice === 'tablet') {
+    return 'grid-cols-2';
+  }
+
+  return desktopColumns === 3 ? 'grid-cols-3' : 'grid-cols-4';
 };
 
 const toKeySeed = (item: BenefitItem, idx: number) => `${item.icon}|${item.title}|${item.description}|${idx}`;
@@ -114,14 +163,39 @@ export function BenefitsSectionShared({
   tokens,
   mode,
   context,
+  previewDevice,
   maxVisible,
 }: BenefitsSectionSharedProps) {
   const HeadingTag = context === 'site' ? 'h2' : 'h3';
 
   const sectionHeading = toSectionTitle(title, config.heading ?? BENEFITS_FALLBACKS.heading);
-  const sectionSubheading = toText(config.subHeading, BENEFITS_FALLBACKS.subHeading);
+  const rawSubheading = typeof config.subHeading === 'string' ? config.subHeading.trim() : '';
+  const sectionSubheading = rawSubheading;
   const buttonText = (config.buttonText ?? '').trim();
   const buttonLink = sanitizeLink(config.buttonLink);
+  const headerAlign = toHeaderAlign(config.headerAlign);
+  const headerAlignClass = headerAlign === 'center'
+    ? 'items-center text-center'
+    : headerAlign === 'right'
+      ? 'items-end text-right'
+      : 'items-start text-left';
+
+  const isPreview = context === 'preview';
+  const isPreviewMobile = isPreview && previewDevice === 'mobile';
+  const sectionPaddingClass = isPreviewMobile ? 'py-8' : 'py-12 md:py-16';
+
+  const gridColumnsDesktop = toGridColumnsDesktop(config.gridColumnsDesktop);
+  const gridColumnsMobile = toGridColumnsMobile(config.gridColumnsMobile);
+  const gridBaseClass = gridColumnsMobile === 1 ? 'grid-cols-1' : 'grid-cols-2';
+  const gridDesktopClass = gridColumnsDesktop === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4';
+  const resolvedPreviewDevice = previewDevice ?? 'desktop';
+  const previewGridClass = toPreviewGridClass(resolvedPreviewDevice, gridColumnsMobile, gridColumnsDesktop);
+  const gridCardsClass = isPreview
+    ? cn('grid', previewGridClass, isPreviewMobile ? 'gap-3' : 'gap-4')
+    : cn('grid', gridBaseClass, 'md:grid-cols-2', gridDesktopClass, 'gap-4 md:gap-6');
+  const gridRowClass = isPreview
+    ? cn('grid', previewGridClass, 'divide-y', resolvedPreviewDevice === 'mobile' ? '' : 'divide-x')
+    : cn('grid', gridBaseClass, 'md:grid-cols-2', gridDesktopClass, 'divide-y md:divide-y-0 md:divide-x');
 
   const displayedItems = React.useMemo(
     () => (typeof maxVisible === 'number' ? items.slice(0, maxVisible) : items),
@@ -137,22 +211,30 @@ export function BenefitsSectionShared({
 
   const carouselId = React.useId().replaceAll(':', '');
 
+  const headerContainerClass = headerAlign === 'center'
+    ? 'flex flex-col items-center text-center'
+    : headerAlign === 'right'
+      ? 'flex flex-col items-end text-right'
+      : 'flex flex-col md:flex-row md:items-end md:justify-between';
+
   const renderHeader = () => (
     <div
-      className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 pb-4 border-b"
+      className={cn(headerContainerClass, 'gap-4 pb-4 border-b')}
       style={{ borderColor: tokens.neutralBorder }}
     >
-      <div className="space-y-2">
-        <span
-          className="inline-flex items-center px-3 py-1 rounded-full border text-xs font-semibold uppercase tracking-wide"
-          style={{
-            backgroundColor: tokens.badgeBackground,
-            borderColor: tokens.neutralBorder,
-            color: tokens.badgeText,
-          }}
-        >
-          {sectionSubheading}
-        </span>
+      <div className={cn('space-y-2', headerAlignClass)}>
+        {sectionSubheading ? (
+          <span
+            className="inline-flex items-center px-3 py-1 rounded-full border text-xs font-semibold uppercase tracking-wide"
+            style={{
+              backgroundColor: tokens.badgeBackground,
+              borderColor: tokens.neutralBorder,
+              color: tokens.badgeText,
+            }}
+          >
+            {sectionSubheading}
+          </span>
+        ) : null}
         <HeadingTag className="text-2xl md:text-3xl font-bold tracking-tight" style={{ color: tokens.heading }}>
           {sectionHeading}
         </HeadingTag>
@@ -181,35 +263,38 @@ export function BenefitsSectionShared({
 
   if (style === 'cards') {
     return (
-      <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.neutralBackground }}>
+      <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="max-w-6xl mx-auto space-y-8">
           {renderHeader()}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className={gridCardsClass}>
             {displayedItems.map((item, idx) => {
-              const Icon = iconMap[toIconName(item.icon)];
+              const Icon = resolveBenefitsIcon(item.icon);
+              const description = toDescription(item.description);
               return (
                 <article
                   key={itemKeys[idx]}
-                  className="rounded-xl p-5 md:p-6 shadow-sm flex flex-col items-start border"
+                  className={cn('rounded-xl shadow-sm flex flex-col items-start border', isPreviewMobile ? 'p-4' : 'p-5 md:p-6')}
                   style={{
                     backgroundColor: tokens.cardBackground,
                     borderColor: tokens.cardBorder,
                   }}
                 >
                   <div
-                    className="w-11 h-11 md:w-12 md:h-12 rounded-lg flex items-center justify-center mb-4"
+                    className={cn('rounded-lg flex items-center justify-center mb-3', isPreviewMobile ? 'w-9 h-9' : 'w-11 h-11 md:w-12 md:h-12')}
                     style={{ backgroundColor: tokens.iconSurfaceStrong, color: tokens.iconTextStrong }}
                   >
-                    <Icon size={18} strokeWidth={2.6} />
+                    <Icon size={18} />
                   </div>
 
-                  <h3 className="font-bold text-base md:text-lg mb-2 line-clamp-2" style={{ color: tokens.heading }}>
+                  <h3 className={cn('font-bold mb-2 line-clamp-2', isPreviewMobile ? 'text-base' : 'text-base md:text-lg')} style={{ color: tokens.heading }}>
                     {toText(item.title, 'Tiêu đề')}
                   </h3>
 
-                  <p className="text-sm leading-relaxed line-clamp-3 min-h-[3.75rem]" style={{ color: tokens.mutedText }}>
-                    {toText(item.description, BENEFITS_FALLBACKS.description)}
-                  </p>
+                  {description ? (
+                    <p className="text-sm leading-relaxed line-clamp-3 min-h-[3.75rem]" style={{ color: tokens.mutedText }}>
+                      {description}
+                    </p>
+                  ) : null}
                 </article>
               );
             })}
@@ -235,7 +320,7 @@ export function BenefitsSectionShared({
 
   if (style === 'list') {
     return (
-      <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.neutralBackground }}>
+      <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="max-w-5xl mx-auto space-y-6">
           {renderHeader()}
 
@@ -243,7 +328,7 @@ export function BenefitsSectionShared({
             {displayedItems.map((item, idx) => (
               <article
                 key={itemKeys[idx]}
-                className="relative rounded-lg p-4 md:p-5 pl-5 md:pl-6 overflow-hidden shadow-sm border"
+                className={cn('relative rounded-lg overflow-hidden shadow-sm border', isPreviewMobile ? 'p-3 pl-4' : 'p-4 md:p-5 pl-5 md:pl-6')}
                 style={{
                   backgroundColor: tokens.neutralSurface,
                   borderColor: tokens.neutralBorder,
@@ -258,24 +343,26 @@ export function BenefitsSectionShared({
                   <div className="flex items-start gap-3 md:gap-4">
                     <div className="flex-shrink-0 mt-0.5">
                       <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center border"
+                        className={cn('rounded-full flex items-center justify-center border', isPreviewMobile ? 'w-5 h-5' : 'w-6 h-6')}
                         style={{
                           backgroundColor: tokens.iconSurface,
                           borderColor: tokens.neutralBorder,
                           color: tokens.iconTextStrong,
                         }}
                       >
-                        <span className="text-[11px] font-bold">{idx + 1}</span>
+                        <span className={cn('font-bold', isPreviewMobile ? 'text-[10px]' : 'text-[11px]')}>{idx + 1}</span>
                       </div>
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-sm md:text-base line-clamp-1" style={{ color: tokens.neutralText }}>
+                      <h3 className={cn('font-bold line-clamp-1', isPreviewMobile ? 'text-sm' : 'text-sm md:text-base')} style={{ color: tokens.neutralText }}>
                         {toText(item.title, 'Tiêu đề')}
                       </h3>
-                      <p className="text-xs md:text-sm mt-1 md:mt-1.5 leading-normal line-clamp-2" style={{ color: tokens.mutedText }}>
-                        {toText(item.description, BENEFITS_FALLBACKS.description)}
-                      </p>
+                      {toDescription(item.description) ? (
+                        <p className={cn('leading-normal line-clamp-2', isPreviewMobile ? 'text-xs mt-0.5' : 'text-xs md:text-sm mt-1 md:mt-1.5')} style={{ color: tokens.mutedText }}>
+                          {toDescription(item.description)}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -303,7 +390,7 @@ export function BenefitsSectionShared({
     const bentoItems = displayedItems.slice(0, 4);
 
     return (
-      <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.neutralBackground }}>
+      <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="max-w-6xl mx-auto space-y-8">
           {renderHeader()}
 
@@ -311,14 +398,16 @@ export function BenefitsSectionShared({
             {bentoItems.map((item, idx) => {
               const isWide = idx === 0 || idx === 3;
               const isPrimary = idx === 0;
+              const description = toDescription(item.description);
 
               return (
                 <article
                   key={itemKeys[idx]}
-                  className={cn(
-                    'flex flex-col justify-between p-5 md:p-6 lg:p-8 rounded-2xl min-h-[160px] md:min-h-[180px] border',
-                    isWide ? 'md:col-span-2' : 'md:col-span-1',
-                  )}
+                className={cn(
+                  'flex flex-col justify-between rounded-2xl border',
+                  isPreviewMobile ? 'p-4 min-h-[140px]' : 'p-5 md:p-6 lg:p-8 min-h-[160px] md:min-h-[180px]',
+                  isWide ? 'md:col-span-2' : 'md:col-span-1',
+                )}
                   style={
                     isPrimary
                       ? {
@@ -352,17 +441,22 @@ export function BenefitsSectionShared({
 
                   <div>
                     <h3
-                      className="font-bold text-lg md:text-xl lg:text-2xl mb-2 md:mb-3 tracking-tight line-clamp-2"
+                      className={cn(
+                        'font-bold mb-2 md:mb-3 tracking-tight line-clamp-2',
+                        isPreviewMobile ? 'text-lg' : 'text-lg md:text-xl lg:text-2xl',
+                      )}
                       style={{ color: isPrimary ? '#ffffff' : tokens.neutralText }}
                     >
                       {toText(item.title, 'Tiêu đề')}
                     </h3>
-                    <p
-                      className="text-sm md:text-base leading-relaxed font-medium line-clamp-3"
-                      style={{ color: isPrimary ? 'rgba(255,255,255,0.9)' : tokens.mutedText }}
-                    >
-                      {toText(item.description, BENEFITS_FALLBACKS.description)}
-                    </p>
+                    {description ? (
+                      <p
+                        className="text-sm md:text-base leading-relaxed font-medium line-clamp-3"
+                        style={{ color: isPrimary ? 'rgba(255,255,255,0.9)' : tokens.mutedText }}
+                      >
+                        {description}
+                      </p>
+                    ) : null}
                   </div>
                 </article>
               );
@@ -377,37 +471,53 @@ export function BenefitsSectionShared({
     const rowItems = displayedItems.slice(0, 4);
 
     return (
-      <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.neutralBackground }}>
+      <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="max-w-6xl mx-auto space-y-8">
           {renderHeader()}
 
           <div className="rounded-lg overflow-hidden border-y" style={{ borderColor: tokens.rowDivider }}>
-            <div
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x"
-              style={{ borderColor: tokens.rowDivider }}
-            >
+            <div className={gridRowClass} style={{ borderColor: tokens.rowDivider }}>
               {rowItems.map((item, idx) => {
-                const Icon = iconMap[toIconName(item.icon)];
+                const Icon = resolveBenefitsIcon(item.icon);
+                const description = toDescription(item.description);
 
                 return (
-                  <article key={itemKeys[idx]} className="p-5 md:p-6 lg:p-8 flex flex-col items-center text-center" style={{ backgroundColor: tokens.neutralSurface }}>
+                  <article
+                    key={itemKeys[idx]}
+                    className={cn(
+                      'flex flex-col items-center text-center',
+                      isPreviewMobile ? 'p-4' : 'p-5 md:p-6 lg:p-8',
+                    )}
+                    style={{ backgroundColor: tokens.neutralSurface }}
+                  >
                     <div
-                      className="mb-3 md:mb-4 p-3 rounded-full"
+                      className={cn('rounded-full', isPreviewMobile ? 'mb-2 p-2.5' : 'mb-3 md:mb-4 p-3')}
                       style={{
                         backgroundColor: tokens.iconSurface,
                         color: tokens.iconText,
                         border: `1px solid ${tokens.neutralBorder}`,
                       }}
                     >
-                      <Icon size={22} strokeWidth={2.6} />
+                      <Icon size={22} />
                     </div>
 
-                    <h3 className="font-bold mb-1.5 md:mb-2 text-sm md:text-base line-clamp-2 min-h-[2.5rem]" style={{ color: tokens.neutralText }}>
+                    <h3
+                      className={cn(
+                        'font-bold line-clamp-2 min-h-[2.5rem]',
+                        isPreviewMobile ? 'mb-1 text-sm' : 'mb-1.5 md:mb-2 text-sm md:text-base',
+                      )}
+                      style={{ color: tokens.neutralText }}
+                    >
                       {toText(item.title, 'Tiêu đề')}
                     </h3>
-                    <p className="text-xs md:text-sm leading-relaxed line-clamp-3" style={{ color: tokens.mutedText }}>
-                      {toText(item.description, BENEFITS_FALLBACKS.description)}
-                    </p>
+                    {description ? (
+                      <p
+                        className={cn('leading-relaxed line-clamp-3', isPreviewMobile ? 'text-xs' : 'text-xs md:text-sm')}
+                        style={{ color: tokens.mutedText }}
+                      >
+                        {description}
+                      </p>
+                    ) : null}
                   </article>
                 );
               })}
@@ -419,12 +529,12 @@ export function BenefitsSectionShared({
   }
 
   if (style === 'carousel') {
-    const cardWidth = 320;
+    const cardWidth = isPreviewMobile ? 260 : 320;
     const gap = 16;
     const showArrowsDesktop = displayedItems.length > 3;
 
     return (
-      <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.neutralBackground }}>
+      <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="flex-1">{renderHeader()}</div>
@@ -490,13 +600,17 @@ export function BenefitsSectionShared({
               }}
             >
               {displayedItems.map((item, idx) => {
-                const Icon = iconMap[toIconName(item.icon)];
+                const Icon = resolveBenefitsIcon(item.icon);
                 const isHighlighted = mode === 'dual' ? idx % 3 === 0 : idx === 0;
+                const description = toDescription(item.description);
 
                 return (
                   <article
                     key={itemKeys[idx]}
-                    className="snap-start w-[280px] md:w-[320px] flex-shrink-0 rounded-xl p-5 md:p-6 border shadow-sm"
+                    className={cn(
+                      'snap-start flex-shrink-0 rounded-xl border shadow-sm',
+                      isPreviewMobile ? 'w-[260px] p-4' : 'w-[280px] md:w-[320px] p-5 md:p-6',
+                    )}
                     style={
                       isHighlighted
                         ? {
@@ -518,7 +632,7 @@ export function BenefitsSectionShared({
                           : { backgroundColor: tokens.iconSurfaceStrong, color: tokens.iconTextStrong }
                       }
                     >
-                      <Icon size={18} strokeWidth={2.6} />
+                      <Icon size={18} />
                     </div>
 
                     <h3
@@ -527,12 +641,14 @@ export function BenefitsSectionShared({
                     >
                       {toText(item.title, 'Tiêu đề')}
                     </h3>
-                    <p
-                      className="text-sm leading-relaxed line-clamp-3"
-                      style={{ color: isHighlighted ? 'rgba(255,255,255,0.85)' : tokens.mutedText }}
-                    >
-                      {toText(item.description, BENEFITS_FALLBACKS.description)}
-                    </p>
+                    {description ? (
+                      <p
+                        className="text-sm leading-relaxed line-clamp-3"
+                        style={{ color: isHighlighted ? 'rgba(255,255,255,0.85)' : tokens.mutedText }}
+                      >
+                        {description}
+                      </p>
+                    ) : null}
                   </article>
                 );
               })}
@@ -549,7 +665,7 @@ export function BenefitsSectionShared({
 
   // timeline (default)
   return (
-    <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.neutralBackground }}>
+    <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
       <div className="max-w-3xl mx-auto space-y-8">
         {renderHeader()}
 
@@ -589,9 +705,11 @@ export function BenefitsSectionShared({
                   <h3 className="font-bold mb-2 line-clamp-2" style={{ color: tokens.neutralText }}>
                     {toText(item.title, 'Tiêu đề')}
                   </h3>
-                  <p className="text-sm leading-relaxed line-clamp-3" style={{ color: tokens.mutedText }}>
-                    {toText(item.description, BENEFITS_FALLBACKS.description)}
-                  </p>
+                  {toDescription(item.description) ? (
+                    <p className="text-sm leading-relaxed line-clamp-3" style={{ color: tokens.mutedText }}>
+                      {toDescription(item.description)}
+                    </p>
+                  ) : null}
                 </div>
               </article>
             ))}

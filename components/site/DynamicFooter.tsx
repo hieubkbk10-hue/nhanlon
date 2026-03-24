@@ -7,7 +7,7 @@ import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useBrandColors, useSiteSettings, useSocialLinks } from './hooks';
 import { getFooterLayoutColors } from '@/app/admin/home-components/footer/_lib/colors';
-import { getFooterLogoSize } from '@/app/admin/home-components/footer/_lib/constants';
+import { getFooterLogoSize, getFooterMaxWidthClass } from '@/app/admin/home-components/footer/_lib/constants';
 import type { FooterBrandMode, FooterStyle } from '@/app/admin/home-components/footer/_types';
 import { resolveTypeOverrideColors } from '@/app/admin/home-components/_shared/lib/typeColorOverride';
 import { resolveTypeOverrideFont } from '@/app/admin/home-components/_shared/lib/typeFontOverride';
@@ -17,6 +17,7 @@ interface SocialLinkItem { id: number; platform: string; url: string; icon: stri
 interface FooterConfig {
   logo?: string;
   description?: string;
+  maxWidth?: '6xl' | '7xl' | '8xl' | '9xl';
   logoSizeLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   columns?: { id: number; title: string; links: { label: string; url: string }[] }[];
   socialLinks?: SocialLinkItem[];
@@ -173,11 +174,12 @@ export function DynamicFooter() {
   const columns = getColumns(config);
   const colors = getFooterLayoutColors(style, brandColor, secondary, mode as FooterBrandMode);
   const useOriginalSocialIconColors = config.useOriginalSocialIconColors !== false;
+  const maxWidthClass = getFooterMaxWidthClass(config.maxWidth);
   const showBctLogo = config.showBctLogo === true;
   const bctLogoType = config.bctLogoType ?? 'thong-bao';
   const bctLogoLink = typeof config.bctLogoLink === 'string' ? config.bctLogoLink.trim() : '';
   const bctLogoSrc = bctLogoType === 'dang-ky'
-    ? '/images/bct/logo-da-dang-ky-bct.png'
+    ? '/images/bct/logo-da-dang-ky-bct.webp'
     : '/images/bct/logo-da-thong-bao-bct.png';
   const renderBctLogo = (className = 'h-14') => {
     if (!showBctLogo) {return null;}
@@ -214,7 +216,7 @@ export function DynamicFooter() {
   if (style === 'classic') {
     return wrapWithFont(
       <footer className="w-full py-8 md:py-10" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
-        <div className="container max-w-7xl mx-auto px-4 md:px-6">
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 lg:gap-6">
             
             {/* Brand Column */}
@@ -306,7 +308,7 @@ export function DynamicFooter() {
   if (style === 'modern') {
     return wrapWithFont(
       <footer className="w-full py-8 md:py-10" style={{ backgroundColor: colors.bg }}>
-        <div className="container max-w-5xl mx-auto px-4 md:px-6 flex flex-col items-center text-center space-y-5 md:space-y-6">
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 flex flex-col items-center text-center space-y-5 md:space-y-6`}>
           
           {/* Brand */}
           <div className="flex flex-col items-center gap-2">
@@ -390,7 +392,7 @@ export function DynamicFooter() {
   if (style === 'corporate') {
     return wrapWithFont(
       <footer className="w-full py-8 md:py-10" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
-        <div className="container max-w-7xl mx-auto px-4 md:px-6">
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6`}>
           
           {/* Top Row: Logo & Socials */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 pb-6" style={{ borderBottom: `1px solid ${colors.border}` }}>
@@ -484,7 +486,7 @@ export function DynamicFooter() {
   if (style === 'minimal') {
     return wrapWithFont(
       <footer className="w-full py-4 md:py-5" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
-        <div className="container max-w-7xl mx-auto px-4 md:px-6">
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6`}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-3">
             
             {/* Left: Logo & Copy */}
@@ -545,7 +547,7 @@ export function DynamicFooter() {
   if (style === 'centered') {
     return wrapWithFont(
       <footer className="w-full py-8 md:py-10" style={{ backgroundColor: colors.bg }}>
-        <div className="container max-w-6xl mx-auto px-4 md:px-6 text-center">
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 text-center`}>
           
           {/* Brand Center */}
           <div className="flex flex-col items-center gap-2 mb-6">
@@ -641,7 +643,7 @@ export function DynamicFooter() {
   // Style 6: Stacked - Tất cả elements xếp chồng vertical, mobile-first compact (default)
   return wrapWithFont(
     <footer className="w-full py-6" style={{ backgroundColor: colors.bg, borderTop: `3px solid ${colors.stackedTopBorder}` }}>
-      <div className="container max-w-4xl mx-auto px-4 md:px-6">
+      <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6`}>
         
         {/* Logo + Description */}
         <div className="flex flex-col md:flex-row items-center md:items-start gap-2 mb-5 text-center md:text-left">

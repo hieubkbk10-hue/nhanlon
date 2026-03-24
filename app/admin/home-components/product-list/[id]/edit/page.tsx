@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Package, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -19,6 +19,7 @@ import { ProductListForm } from '../../_components/ProductListForm';
 import { ProductListPreview } from '../../_components/ProductListPreview';
 import { DEFAULT_PRODUCT_LIST_CONFIG, DEFAULT_PRODUCT_LIST_TEXT } from '../../_lib/constants';
 import type { ProductListConfig, ProductListStyle, ProductSelectionMode } from '../../_types';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 
 const COMPONENT_TYPE = 'ProductList';
 
@@ -394,19 +395,12 @@ export default function ProductListEditPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button
-            type="submit"
-            variant="accent"
-            disabled={!hasChanges || isSubmitting}
-            className={!hasChanges ? 'bg-slate-300 hover:bg-slate-300 text-slate-600' : undefined}
-          >
-            {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() =>{  router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

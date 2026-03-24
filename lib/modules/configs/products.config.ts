@@ -12,11 +12,11 @@ export const productsModule = defineModuleWithRuntime({
    features: [
      { key: 'enableSalePrice', label: 'Giá khuyến mãi', icon: DollarSign, linkedField: 'salePrice' },
      { key: 'enableGallery', label: 'Thư viện ảnh', icon: Image, linkedField: 'images' },
-     { key: 'enableSKU', label: 'Mã SKU', icon: Tag, linkedField: 'sku' },
+     { key: 'enableSKU', label: 'Mã SKU', icon: Tag, linkedField: 'sku', enabled: false },
     { key: 'enableBarcode', label: 'Mã vạch phiên bản', icon: Tag, linkedField: 'barcode', enabled: false },
      { key: 'enableStock', label: 'Quản lý kho', icon: Box, linkedField: 'stock' },
-     { key: 'enableMarkdownRender', label: 'Markdown render', icon: FileText, linkedField: 'markdownRender' },
-     { key: 'enableHtmlRender', label: 'HTML render', icon: Code, linkedField: 'htmlRender' },
+     { key: 'enableMarkdownRender', label: 'Markdown render', icon: FileText, linkedField: 'markdownRender', enabled: false },
+     { key: 'enableHtmlRender', label: 'HTML render', icon: Code, linkedField: 'htmlRender', enabled: false },
      {
        key: 'enableCategoryHierarchy',
        label: 'Danh mục cha - con',
@@ -55,6 +55,12 @@ export const productsModule = defineModuleWithRuntime({
       label: 'Bật Import/Export Excel',
       type: 'toggle',
       default: true,
+    },
+    {
+      key: 'enableImageCrop',
+      label: 'Bật cắt ảnh vuông 1:1 khi upload',
+      type: 'toggle',
+      default: false,
     },
     { key: 'lowStockThreshold', label: 'Ngưỡng tồn kho thấp', type: 'number', default: 10 },
     {
@@ -166,7 +172,7 @@ export const productsModule = defineModuleWithRuntime({
     fields: [
       { enabled: true, fieldKey: 'name', isSystem: true, name: 'Tên sản phẩm', order: 0, required: true, type: 'text' },
       { enabled: true, fieldKey: 'slug', isSystem: true, name: 'Slug', order: 1, required: true, type: 'text' },
-      { enabled: true, fieldKey: 'sku', isSystem: false, linkedFeature: 'enableSKU', name: 'Mã SKU', order: 2, required: true, type: 'text' },
+      { enabled: false, fieldKey: 'sku', isSystem: false, linkedFeature: 'enableSKU', name: 'Mã SKU', order: 2, required: true, type: 'text' },
       { enabled: false, fieldKey: 'barcode', isSystem: false, linkedFeature: 'enableBarcode', name: 'Mã vạch phiên bản', order: 3, required: false, type: 'text' },
       { enabled: true, fieldKey: 'price', isSystem: true, name: 'Giá bán', order: 4, required: true, type: 'price' },
       { enabled: true, fieldKey: 'salePrice', isSystem: false, linkedFeature: 'enableSalePrice', name: 'Giá khuyến mãi', order: 5, required: false, type: 'price' },
@@ -179,8 +185,8 @@ export const productsModule = defineModuleWithRuntime({
       { enabled: true, fieldKey: 'metaTitle', group: 'seo', isSystem: false, name: 'Meta Title', order: 12, required: false, type: 'text' },
       { enabled: true, fieldKey: 'metaDescription', group: 'seo', isSystem: false, name: 'Meta Description', order: 13, required: false, type: 'textarea' },
       { enabled: true, fieldKey: 'renderType', isSystem: false, name: 'Kiểu render', order: 14, required: false, type: 'select' },
-      { enabled: true, fieldKey: 'markdownRender', isSystem: false, linkedFeature: 'enableMarkdownRender', name: 'Markdown render', order: 15, required: false, type: 'textarea' },
-      { enabled: true, fieldKey: 'htmlRender', isSystem: false, linkedFeature: 'enableHtmlRender', name: 'HTML render', order: 16, required: false, type: 'textarea' },
+      { enabled: false, fieldKey: 'markdownRender', isSystem: false, linkedFeature: 'enableMarkdownRender', name: 'Markdown render', order: 15, required: false, type: 'textarea' },
+      { enabled: false, fieldKey: 'htmlRender', isSystem: false, linkedFeature: 'enableHtmlRender', name: 'HTML render', order: 16, required: false, type: 'textarea' },
     ],
   },
 

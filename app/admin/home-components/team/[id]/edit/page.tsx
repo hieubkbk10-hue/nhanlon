@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -16,6 +16,7 @@ import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOver
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { TeamForm } from '../../_components/TeamForm';
 import { TeamPreview } from '../../_components/TeamPreview';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   normalizeTeamConfig,
   toTeamEditorMembers,
@@ -371,21 +372,14 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
           />
         </div>
 
-        <div className="mt-6 flex justify-end gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={isSubmitting}
-            onClick={() => {
-              router.push('/admin/home-components');
-            }}
-          >
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={isSubmitting || !hasChanges}>
-            {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() => {
+            router.push('/admin/home-components');
+          }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

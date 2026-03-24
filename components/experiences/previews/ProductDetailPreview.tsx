@@ -8,7 +8,10 @@ import {
   Camera,
   CheckCircle2,
   Clock,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CreditCard,
   Gift,
   Globe,
@@ -83,6 +86,11 @@ const PREVIEW_IMAGES = [
   '/seed_mau/tech/products/1.webp',
   '/seed_mau/tech/products/2.webp',
   '/seed_mau/tech/products/3.webp',
+  '/seed_mau/tech/products/4.webp',
+  '/seed_mau/tech/products/5.webp',
+  '/seed_mau/tech/products/6.webp',
+  '/seed_mau/tech/products/7.webp',
+  '/seed_mau/tech/products/8.webp',
 ];
 
 const PREVIEW_DESCRIPTION = 'Thiết kế sang trọng, hiệu năng bền bỉ và trải nghiệm màn hình sắc nét phù hợp nhu cầu cao cấp. Pin tối ưu cho cả ngày dài, camera linh hoạt và chất liệu hoàn thiện tinh tế.';
@@ -154,6 +162,183 @@ function ExpandablePreviewText({ text, className, style, buttonStyle }: { text: 
   );
 }
 
+function PreviewMobileCarousel({
+  images,
+  alt,
+  activeIndex,
+  onActiveIndexChange,
+}: {
+  images: string[];
+  alt: string;
+  activeIndex: number;
+  onActiveIndexChange: (index: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const width = container.clientWidth;
+    if (!width) {
+      return;
+    }
+    const targetLeft = activeIndex * width;
+    if (Math.abs(container.scrollLeft - targetLeft) > 2) {
+      container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    }
+  }, [activeIndex]);
+
+  useEffect(() => () => {
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  }, []);
+
+  const handleScroll = () => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      const width = container.clientWidth;
+      if (!width) {
+        return;
+      }
+      const nextIndex = Math.round(container.scrollLeft / width);
+      if (nextIndex !== activeIndex) {
+        onActiveIndexChange(nextIndex);
+      }
+    }, 120);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex h-full w-full snap-x snap-mandatory overflow-x-auto no-scrollbar scroll-smooth"
+    >
+      {images.map((image, index) => (
+        <div key={`${image}-${index}`} className="relative h-full w-full shrink-0 snap-center overflow-hidden">
+          <BlurredPreviewImage src={image} alt={`${alt} ${index + 1}`} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type PreviewThumbnailRailProps = {
+  images: string[];
+  activeIndex?: number;
+  orientation: 'horizontal' | 'vertical';
+  visibleSlots: number;
+  tokens: ReturnType<typeof getProductDetailColors>;
+  className?: string;
+  listClassName?: string;
+  itemClassName?: string;
+};
+
+function PreviewThumbnailRail({
+  images,
+  activeIndex = 0,
+  orientation,
+  visibleSlots,
+  tokens,
+  className,
+  listClassName,
+  itemClassName,
+}: PreviewThumbnailRailProps) {
+  const [startIndex, setStartIndex] = useState(0);
+  const hasOverflow = images.length > visibleSlots;
+  const maxStartIndex = Math.max(0, images.length - visibleSlots);
+  const isVertical = orientation === 'vertical';
+
+  useEffect(() => {
+    if (!hasOverflow) {
+      if (startIndex !== 0) {
+        setStartIndex(0);
+      }
+      return;
+    }
+    if (startIndex > maxStartIndex) {
+      setStartIndex(maxStartIndex);
+    }
+  }, [hasOverflow, maxStartIndex, startIndex]);
+
+  useEffect(() => {
+    if (!hasOverflow) {
+      return;
+    }
+    if (activeIndex < startIndex) {
+      setStartIndex(activeIndex);
+      return;
+    }
+    if (activeIndex >= startIndex + visibleSlots) {
+      setStartIndex(Math.max(0, activeIndex - visibleSlots + 1));
+    }
+  }, [activeIndex, hasOverflow, startIndex, visibleSlots]);
+
+  if (images.length <= 1) {
+    return null;
+  }
+
+  const visibleImages = hasOverflow ? images.slice(startIndex, startIndex + visibleSlots) : images;
+  const canScrollPrev = hasOverflow && startIndex > 0;
+  const canScrollNext = hasOverflow && startIndex < maxStartIndex;
+  const railClassName = `${isVertical ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2'} ${className ?? ''}`.trim();
+  const listClass = `${isVertical ? 'flex flex-col gap-2' : 'flex gap-2'} ${listClassName ?? ''}`.trim();
+  const arrowClassName = 'h-8 w-8 rounded-full border flex items-center justify-center transition-colors disabled:opacity-40';
+
+  return (
+    <div className={railClassName}>
+      {hasOverflow && (
+        <button
+          type="button"
+          aria-label={isVertical ? 'Ảnh trước' : 'Ảnh trước'}
+          disabled={!canScrollPrev}
+          onClick={() => setStartIndex((prev) => Math.max(0, prev - 1))}
+          className={arrowClassName}
+          style={{ borderColor: tokens.thumbnailBorder, color: tokens.thumbnailBorderActive, backgroundColor: tokens.surface }}
+        >
+          {isVertical ? <ChevronUp size={14} /> : <ChevronLeft size={14} />}
+        </button>
+      )}
+      <div className={listClass}>
+        {visibleImages.map((img, index) => {
+          const actualIndex = hasOverflow ? startIndex + index : index;
+          const isActive = actualIndex === activeIndex;
+          return (
+            <div
+              key={`${img}-${actualIndex}`}
+              className={`${itemClassName ?? 'aspect-square w-20 rounded-lg'} overflow-hidden border-2`}
+              style={{ borderColor: isActive ? tokens.thumbnailBorderActive : tokens.thumbnailBorder, backgroundColor: tokens.surfaceMuted }}
+            >
+              <img src={img} alt="" className="h-full w-full object-contain" />
+            </div>
+          );
+        })}
+      </div>
+      {hasOverflow && (
+        <button
+          type="button"
+          aria-label={isVertical ? 'Ảnh kế tiếp' : 'Ảnh kế tiếp'}
+          disabled={!canScrollNext}
+          onClick={() => setStartIndex((prev) => Math.min(maxStartIndex, prev + 1))}
+          className={arrowClassName}
+          style={{ borderColor: tokens.thumbnailBorder, color: tokens.thumbnailBorderActive, backgroundColor: tokens.surface }}
+        >
+          {isVertical ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function VariantPreview({ tokens }: { tokens: ReturnType<typeof getProductDetailColors> }) {
   return (
     <div className="space-y-3">
@@ -214,6 +399,9 @@ export function ProductDetailPreview({
 }: ProductDetailPreviewProps) {
   const tokens = getProductDetailColors(brandColor, secondaryColor, colorMode);
   const isMobile = device === 'mobile';
+  const isDesktop = device === 'desktop';
+  const isTablet = device === 'tablet';
+  const [mobileCarouselIndex, setMobileCarouselIndex] = useState(0);
   const productName = 'iPhone 15 Pro Max 256GB';
   const categoryName = 'Điện thoại';
   const sku = 'IP15PM-256';
@@ -224,6 +412,11 @@ export function ProductDetailPreview({
   const reviews = 234;
   const hasRatingData = reviews > 0 && rating > 0;
   const discountPercent = Math.round((1 - price / originalPrice) * 100);
+  const stockStatus = stock > 10
+    ? { label: 'Còn hàng', color: tokens.stockSuccessText }
+    : stock > 0
+      ? { label: `Chỉ còn ${stock} sản phẩm`, color: tokens.stockWarningText }
+      : { label: 'Hết hàng', color: tokens.stockDangerText };
   const fallbackHighlights = [
     { icon: 'Star', text: 'Chip A17 Pro mạnh mẽ' },
     { icon: 'Star', text: 'Camera 48MP chuyên nghiệp' },
@@ -273,7 +466,23 @@ export function ProductDetailPreview({
             <div className="space-y-3">
               <div className="relative aspect-square rounded-xl overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
                 {PREVIEW_IMAGES.length > 0 ? (
-                  <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
+                  <>
+                    {isMobile ? (
+                      <PreviewMobileCarousel
+                        images={PREVIEW_IMAGES}
+                        alt={productName}
+                        activeIndex={mobileCarouselIndex}
+                        onActiveIndexChange={setMobileCarouselIndex}
+                      />
+                    ) : (
+                      <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
+                    )}
+                    {isMobile && PREVIEW_IMAGES.length > 1 && (
+                      <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                        {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
@@ -281,25 +490,56 @@ export function ProductDetailPreview({
                 )}
               </div>
               {PREVIEW_IMAGES.length > 1 && (
-                <div className="grid grid-cols-4 gap-2">
-                  {PREVIEW_IMAGES.slice(0, 4).map((img, index) => (
-                    <div
-                      key={img}
-                      className="aspect-square rounded-lg border-2 overflow-hidden relative"
-                      style={{
-                        borderColor: index === 0 ? tokens.thumbnailBorderActive : tokens.thumbnailBorder,
-                        backgroundColor: tokens.surfaceMuted,
-                      }}
-                    >
-                      <img src={img} alt="" className="h-full w-full object-contain" />
+                <>
+                  {isTablet && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {PREVIEW_IMAGES.slice(0, 4).map((img, index) => (
+                        <div
+                          key={img}
+                          className="aspect-square rounded-lg border-2 overflow-hidden relative"
+                          style={{
+                            borderColor: index === 0 ? tokens.thumbnailBorderActive : tokens.thumbnailBorder,
+                            backgroundColor: tokens.surfaceMuted,
+                          }}
+                        >
+                          <img src={img} alt="" className="h-full w-full object-contain" />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                  {isDesktop && (
+                    <PreviewThumbnailRail
+                      images={PREVIEW_IMAGES}
+                      activeIndex={0}
+                      orientation="horizontal"
+                      visibleSlots={6}
+                      tokens={tokens}
+                      itemClassName="aspect-square w-20 rounded-lg"
+                    />
+                  )}
+                </>
               )}
             </div>
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               <div>
-                <h1 className="text-xl md:text-2xl font-bold" style={{ color: tokens.headingColor }}>{productName}</h1>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span
+                    className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] md:text-xs font-semibold"
+                    style={{
+                      backgroundColor: tokens.categoryBadgeBg,
+                      color: tokens.categoryBadgeText,
+                      borderColor: tokens.categoryBadgeBorder,
+                      borderWidth: 1,
+                    }}
+                  >
+                    {categoryName}
+                  </span>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold md:hidden" style={{ color: stockStatus.color }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                    <span>{stockStatus.label}</span>
+                  </div>
+                </div>
+                <h1 className="text-lg md:text-2xl font-bold" style={{ color: tokens.headingColor }}>{productName}</h1>
                 {showRating && hasRatingData && (
                   <div className="flex items-center gap-2 mt-2">
                     <div className="flex gap-0.5">
@@ -318,7 +558,7 @@ export function ProductDetailPreview({
                 )}
               </div>
               <div className="flex items-baseline gap-3">
-                <span className="text-2xl font-bold" style={{ color: tokens.priceColor }}>{formatVND(price)}</span>
+                <span className="text-xl font-bold" style={{ color: tokens.priceColor }}>{formatVND(price)}</span>
                 <span className="text-lg line-through" style={{ color: tokens.priceOriginalText }}>{formatVND(originalPrice)}</span>
                 <span className="px-2 py-0.5 text-sm font-medium rounded" style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>-{Math.round((1 - price / originalPrice) * 100)}%</span>
               </div>
@@ -360,6 +600,11 @@ export function ProductDetailPreview({
                 )}
               </div>
 
+              <div className="hidden md:flex items-center gap-2 text-xs md:text-sm font-medium" style={{ color: stockStatus.color }}>
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                <span>{stockStatus.label}</span>
+              </div>
+
               {showHighlightBlock && renderHighlights()}
               <div className="border-t pt-6" style={{ borderColor: tokens.divider }}>
                 <h3 className="font-semibold mb-4" style={{ color: tokens.headingColor }}>Mô tả sản phẩm</h3>
@@ -383,15 +628,25 @@ export function ProductDetailPreview({
         )}
 
         {layoutStyle === 'modern' && (
-          <div className="space-y-6">
-            <header className="border-b pb-4" style={{ borderColor: tokens.divider }}>
+          <div className="space-y-5">
+            <header className="border-b pb-3" style={{ borderColor: tokens.divider }}>
               <div className="flex items-center justify-between gap-4 text-sm" style={{ color: tokens.breadcrumbText }}>
-                <div className="flex items-center gap-2 truncate">
-                  <span>Trang chủ</span>
-                  <ChevronRight size={14} />
-                  <span>Sản phẩm</span>
-                  <ChevronRight size={14} />
-                  <span className="truncate" style={{ color: tokens.breadcrumbActive }}>{productName}</span>
+                <div className={`${isMobile ? 'flex items-center gap-1 text-[11px]' : 'flex items-center gap-2'} truncate`}>
+                  {isMobile ? (
+                    <>
+                      <span>{categoryName}</span>
+                      <ChevronRight size={10} />
+                      <span className="truncate" style={{ color: tokens.breadcrumbActive }}>{productName}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Trang chủ</span>
+                      <ChevronRight size={14} />
+                      <span>Sản phẩm</span>
+                      <ChevronRight size={14} />
+                      <span className="truncate" style={{ color: tokens.breadcrumbActive }}>{productName}</span>
+                    </>
+                  )}
                 </div>
                 {showWishlist && (
                   <button className="inline-flex items-center gap-2 text-sm" style={{ color: tokens.metaText }}>
@@ -402,15 +657,39 @@ export function ProductDetailPreview({
               </div>
             </header>
 
-            <div className="grid md:grid-cols-2 gap-6 lg:gap-10">
-              <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-5 md:gap-6 lg:gap-10">
+              <div className="space-y-3 md:space-y-4">
                 {heroStyle === 'split' ? (
                   <div className={`overflow-hidden ${heroContainerClass}`} style={heroContainerStyle}>
-                    <div className="grid md:grid-cols-2 gap-4 items-center p-4 md:p-6">
+                    <div className="grid md:grid-cols-2 gap-3 items-center p-3 md:p-5">
                       <div className="relative aspect-square rounded-xl overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
-                        {PREVIEW_IMAGES.length > 0 ? (
-                          <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
-                        ) : (
+                        {discountPercent > 0 && (
+                          <span
+                            className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                            style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
+                          >
+                            -{discountPercent}%
+                          </span>
+                        )}
+                      {PREVIEW_IMAGES.length > 0 ? (
+                        <>
+                          {isMobile ? (
+                            <PreviewMobileCarousel
+                              images={PREVIEW_IMAGES}
+                              alt={productName}
+                              activeIndex={mobileCarouselIndex}
+                              onActiveIndexChange={setMobileCarouselIndex}
+                            />
+                          ) : (
+                            <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
+                          )}
+                          {isMobile && (
+                            <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                              {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
+                            </span>
+                          )}
+                        </>
+                      ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
                           </div>
@@ -429,8 +708,32 @@ export function ProductDetailPreview({
                 ) : (
                   <div className={`overflow-hidden ${heroContainerClass}`} style={heroContainerStyle}>
                     <div className={`${heroImageWrapperClass} overflow-hidden`}>
+                      {discountPercent > 0 && (
+                        <span
+                          className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                          style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
+                        >
+                          -{discountPercent}%
+                        </span>
+                      )}
                       {PREVIEW_IMAGES.length > 0 ? (
-                        <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
+                        <>
+                          {isMobile ? (
+                            <PreviewMobileCarousel
+                              images={PREVIEW_IMAGES}
+                              alt={productName}
+                              activeIndex={mobileCarouselIndex}
+                              onActiveIndexChange={setMobileCarouselIndex}
+                            />
+                          ) : (
+                            <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
+                          )}
+                          {isMobile && (
+                            <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                              {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
+                            </span>
+                          )}
+                        </>
                       ) : (
                         <div className="w-40 h-40 rounded-xl" style={{ backgroundColor: tokens.surfaceSoft }} />
                       )}
@@ -439,22 +742,23 @@ export function ProductDetailPreview({
                 )}
 
                 {heroStyle !== 'minimal' && PREVIEW_IMAGES.length > 1 && (
-                  <div className="grid grid-cols-3 gap-3">
-                    {PREVIEW_IMAGES.slice(0, 3).map((img) => (
-                      <div
-                        key={img}
-                        className="aspect-square rounded-xl border-2 overflow-hidden"
-                        style={{ backgroundColor: tokens.surfaceMuted, borderColor: tokens.thumbnailBorder }}
-                      >
-                        <img src={img} alt="" className="h-full w-full object-contain" />
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    {isDesktop && (
+                      <PreviewThumbnailRail
+                        images={PREVIEW_IMAGES}
+                        activeIndex={0}
+                        orientation="horizontal"
+                        visibleSlots={5}
+                        tokens={tokens}
+                        itemClassName="aspect-square w-20 rounded-xl"
+                      />
+                    )}
+                  </>
                 )}
               </div>
 
-              <div className="space-y-5">
-                <div className="flex flex-wrap gap-2">
+              <div className="space-y-3 md:space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
                   <span
                     className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
                     style={{
@@ -466,9 +770,13 @@ export function ProductDetailPreview({
                   >
                     {categoryName}
                   </span>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold md:hidden" style={{ color: stockStatus.color }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                    <span>{stockStatus.label}</span>
+                  </div>
                 </div>
 
-                <h1 className="text-2xl md:text-3xl font-light tracking-tight" style={{ color: tokens.headingColor }}>{productName}</h1>
+                <h1 className="text-lg md:text-3xl font-light tracking-tight" style={{ color: tokens.headingColor }}>{productName}</h1>
 
                 {showRating && hasRatingData && (
                   <div className="flex items-center gap-2 text-xs" style={{ color: tokens.ratingText }}>
@@ -487,24 +795,18 @@ export function ProductDetailPreview({
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-3xl font-light" style={{ color: tokens.priceColor }}>{formatVND(price)}</span>
-                    <span className="text-lg line-through" style={{ color: tokens.priceOriginalText }}>{formatVND(originalPrice)}</span>
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="text-xl md:text-3xl font-light" style={{ color: tokens.priceColor }}>{formatVND(price)}</span>
+                    <span className="text-base line-through" style={{ color: tokens.priceOriginalText }}>{formatVND(originalPrice)}</span>
                   </div>
-                  <span
-                    className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-                    style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
-                  >
-                    Giảm {discountPercent}%
-                  </span>
                 </div>
 
                 {showVariants && <VariantPreview tokens={tokens} />}
 
                 <div className="h-px w-full" style={{ backgroundColor: tokens.divider }} />
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium" style={{ color: tokens.bodyText }}>Số lượng</label>
                   <div className="flex items-center gap-3">
                     <button type="button" className="h-10 w-10 border rounded-full flex items-center justify-center" style={{ borderColor: tokens.quantityBorder }}>
@@ -520,7 +822,7 @@ export function ProductDetailPreview({
                 </div>
 
                 {(showAddToCart || showBuyNow || showWishlist) && (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {showAddToCart && (
                       <button className="w-full h-12 text-base font-semibold" style={{ backgroundColor: tokens.ctaPrimaryBg, color: tokens.ctaPrimaryText }}>
                         <ShoppingBag className="w-5 h-5 mr-2 inline-block" />
@@ -538,12 +840,16 @@ export function ProductDetailPreview({
                         Thêm vào yêu thích
                       </button>
                     )}
+                    <div className="hidden md:flex items-center gap-2 text-xs md:text-sm font-medium" style={{ color: stockStatus.color }}>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                      <span>{stockStatus.label}</span>
+                    </div>
                   </div>
                 )}
 
                 {showHighlightBlock && renderHighlights()}
 
-                <div className="border rounded-2xl p-5" style={{ borderColor: tokens.border }}>
+                <div className="border rounded-2xl p-4" style={{ borderColor: tokens.border }}>
                   <ExpandablePreviewText
                     text={PREVIEW_DESCRIPTION}
                     className="prose prose-sm max-w-none"
@@ -564,47 +870,97 @@ export function ProductDetailPreview({
         )}
 
         {layoutStyle === 'minimal' && (
-          <div className={`space-y-6 ${contentWidthClass} mx-auto`}>
-            <div className="text-xs flex items-center gap-2" style={{ color: tokens.breadcrumbText }}>
-              <span>Trang chủ</span>
-              <ChevronRight size={12} />
-              <span>Sản phẩm</span>
-              <ChevronRight size={12} />
-              <span className="truncate max-w-[160px]" style={{ color: tokens.breadcrumbActive }}>{productName}</span>
+          <div className={`space-y-5 ${contentWidthClass} mx-auto`}>
+            <div className={`${isMobile ? 'flex items-center gap-1 text-[11px]' : 'text-xs flex items-center gap-2'}`} style={{ color: tokens.breadcrumbText }}>
+              {isMobile ? (
+                <>
+                  <span>{categoryName}</span>
+                  <ChevronRight size={10} />
+                  <span className="truncate max-w-[180px]" style={{ color: tokens.breadcrumbActive }}>{productName}</span>
+                </>
+              ) : (
+                <>
+                  <span>Trang chủ</span>
+                  <ChevronRight size={12} />
+                  <span>Sản phẩm</span>
+                  <ChevronRight size={12} />
+                  <span className="truncate max-w-[160px]" style={{ color: tokens.breadcrumbActive }}>{productName}</span>
+                </>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
               <div className="lg:col-span-7">
-                <div className="flex flex-col-reverse md:flex-row gap-4">
-                {PREVIEW_IMAGES.length > 1 && (
-                  <div className="flex md:flex-col gap-4 overflow-x-auto md:overflow-y-auto md:w-24 shrink-0">
-                    {PREVIEW_IMAGES.slice(0, 3).map((img) => (
-                      <div
-                        key={img}
-                        className="relative aspect-square w-20 md:w-full overflow-hidden rounded-sm border"
-                        style={{ backgroundColor: tokens.surfaceMuted, borderColor: tokens.thumbnailBorder }}
-                      >
-                        <img src={img} alt="" className="h-full w-full object-contain" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex-1 relative aspect-[4/5] rounded-sm overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
-                  {PREVIEW_IMAGES.length > 0 ? (
-                    <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
+                <div className="flex flex-col-reverse md:flex-row gap-3 md:gap-4 items-start">
+                  {PREVIEW_IMAGES.length > 1 && isDesktop && (
+                    <div className="hidden md:flex md:flex-col md:w-20 shrink-0">
+                      <PreviewThumbnailRail
+                        images={PREVIEW_IMAGES}
+                        activeIndex={0}
+                        orientation="vertical"
+                        visibleSlots={6}
+                        tokens={tokens}
+                        itemClassName="aspect-square w-full rounded-sm"
+                      />
                     </div>
                   )}
-                </div>
+
+                  <div className="flex-1 relative aspect-square w-full rounded-sm overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
+                    {discountPercent > 0 && (
+                      <span
+                        className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                        style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
+                      >
+                        -{discountPercent}%
+                      </span>
+                    )}
+                    {PREVIEW_IMAGES.length > 0 ? (
+                      <>
+                        {isMobile ? (
+                          <PreviewMobileCarousel
+                            images={PREVIEW_IMAGES}
+                            alt={productName}
+                            activeIndex={mobileCarouselIndex}
+                            onActiveIndexChange={setMobileCarouselIndex}
+                          />
+                        ) : (
+                          <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
+                        )}
+                        {isMobile && (
+                          <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                              {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="lg:col-span-5 px-0 md:px-2 py-6 lg:py-0 flex flex-col justify-center">
-                <div className="mb-6">
-                  <h1 className="text-3xl md:text-4xl font-light tracking-tight mb-4" style={{ color: tokens.headingColor }}>{productName}</h1>
+              <div className="lg:col-span-5 px-0 md:px-2 py-2 lg:py-0 flex flex-col justify-center">
+                <div className="mb-3 md:mb-5 space-y-2 md:space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] md:text-xs font-semibold"
+                      style={{
+                        backgroundColor: tokens.categoryBadgeBg,
+                        color: tokens.categoryBadgeText,
+                        borderColor: tokens.categoryBadgeBorder,
+                        borderWidth: 1,
+                      }}
+                    >
+                      {categoryName}
+                    </span>
+                    <div className="flex items-center gap-2 text-[11px] font-semibold md:hidden" style={{ color: stockStatus.color }}>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                      <span>{stockStatus.label}</span>
+                    </div>
+                  </div>
+                  <h1 className="text-xl md:text-3xl lg:text-[2rem] font-medium leading-tight tracking-tight" style={{ color: tokens.headingColor }}>{productName}</h1>
                   {showRating && hasRatingData && (
                     <div className="flex items-center gap-2 text-xs" style={{ color: tokens.ratingText }}>
                       <div className="flex gap-1">
@@ -621,16 +977,21 @@ export function ProductDetailPreview({
                       <span>{rating} ({reviews})</span>
                     </div>
                   )}
-                  <p className="text-2xl font-light" style={{ color: tokens.priceColor }}>
-                    {formatVND(price)}
-                  </p>
-                  <div className="mt-4">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <p className="text-lg md:text-2xl font-semibold" style={{ color: tokens.priceColor }}>
+                      {formatVND(price)}
+                    </p>
+                    <span className="text-sm md:text-base line-through" style={{ color: tokens.priceOriginalText }}>
+                      {formatVND(originalPrice)}
+                    </span>
+                  </div>
+                  <div className="mt-3 md:mt-4">
                     {showVariants && <VariantPreview tokens={tokens} />}
                   </div>
                 </div>
 
                 {(showAddToCart || showBuyNow || showWishlist) && (
-                  <div className="flex flex-col gap-3 mb-6 border-t pt-6" style={{ borderColor: tokens.divider }}>
+                  <div className="flex flex-col gap-2.5 md:gap-3 mb-4 md:mb-5 border-t pt-4 md:pt-5" style={{ borderColor: tokens.divider }}>
                     <div className="flex gap-4">
                       {showAddToCart && (
                         <button className="flex-1 h-14 uppercase tracking-wider text-sm font-medium" style={{ backgroundColor: tokens.ctaPrimaryBg, color: tokens.ctaPrimaryText }}>
@@ -648,6 +1009,10 @@ export function ProductDetailPreview({
                         Mua ngay
                       </button>
                     )}
+                    <div className="hidden md:flex items-center gap-2 text-xs md:text-sm font-medium" style={{ color: stockStatus.color }}>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                      <span>{stockStatus.label}</span>
+                    </div>
                   </div>
                 )}
 
@@ -657,12 +1022,6 @@ export function ProductDetailPreview({
                   <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: tokens.divider }}>
                     <span>SKU</span>
                     <span className="font-mono" style={{ color: tokens.bodyText }}>{sku}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: tokens.divider }}>
-                    <span>Tình trạng</span>
-                    <span style={{ color: stock > 0 ? tokens.stockSuccessText : tokens.stockDangerText }}>
-                      {stock > 0 ? 'Còn hàng' : 'Hết hàng'}
-                    </span>
                   </div>
                 </div>
               </div>

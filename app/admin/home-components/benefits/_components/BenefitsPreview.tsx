@@ -78,10 +78,21 @@ export const BenefitsPreview = ({
     () => ({
       buttonLink: config?.buttonLink,
       buttonText: config?.buttonText,
+      gridColumnsDesktop: config?.gridColumnsDesktop,
+      gridColumnsMobile: config?.gridColumnsMobile,
       heading: config?.heading,
+      headerAlign: config?.headerAlign,
       subHeading: config?.subHeading,
     }),
-    [config?.buttonLink, config?.buttonText, config?.heading, config?.subHeading],
+    [
+      config?.buttonLink,
+      config?.buttonText,
+      config?.gridColumnsDesktop,
+      config?.gridColumnsMobile,
+      config?.heading,
+      config?.headerAlign,
+      config?.subHeading,
+    ],
   );
 
   return (
@@ -107,6 +118,7 @@ export const BenefitsPreview = ({
             tokens={tokens}
             mode={mode}
             context="preview"
+            previewDevice={device}
           />
         </BrowserFrame>
       </PreviewWrapper>

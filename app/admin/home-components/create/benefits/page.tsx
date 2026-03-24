@@ -66,6 +66,9 @@ const normalizeCreateState = (): BenefitsEditorState => ({
 const toPersistConfig = (state: BenefitsEditorState): BenefitsConfig => ({
   buttonLink: state.buttonLink,
   buttonText: state.buttonText,
+  gridColumnsDesktop: state.gridColumnsDesktop,
+  gridColumnsMobile: state.gridColumnsMobile,
+  headerAlign: state.headerAlign,
   harmony: state.harmony,
   heading: state.heading,
   items: state.items.map(toPersistItem),

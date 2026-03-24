@@ -16,6 +16,7 @@ import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOver
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { PricingPreview } from '../../_components/PricingPreview';
 import { TextsForm } from '../../_components/TextsForm';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   DEFAULT_PRICING_CONFIG,
   DEFAULT_PRICING_TEXTS,
@@ -661,14 +662,12 @@ export default function PricingEditPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end gap-3">
-          <Button type="button" variant="ghost" onClick={() => { router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={!hasChanges || isSubmitting}>
-            {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          onCancel={() => { router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

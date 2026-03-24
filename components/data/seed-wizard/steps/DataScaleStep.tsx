@@ -8,6 +8,7 @@ const SCALE_OPTIONS: Array<{ description: string; key: DataScale; label: string 
   { key: 'low', label: 'Ít (test nhanh)', description: '~5 SP, ~5 bài, ~5 đơn' },
   { key: 'medium', label: 'Vừa (dev)', description: '~20 SP, ~15 bài, ~20 đơn' },
   { key: 'high', label: 'Nhiều (demo)', description: '~50 SP, ~30 bài, ~50 đơn' },
+  { key: 'none', label: 'Không tạo dữ liệu', description: 'Chỉ lưu cấu hình, không seed record nội dung' },
 ];
 
 type DataScaleStepProps = {

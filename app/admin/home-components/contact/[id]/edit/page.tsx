@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Phone, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
 import { ToggleSwitch } from '@/components/modules/shared';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
@@ -17,6 +17,7 @@ import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOver
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { ConfigEditor } from '../../_components/ConfigEditor';
 import { ContactPreview } from '../../_components/ContactPreview';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { DEFAULT_CONTACT_CONFIG } from '../../_lib/constants';
 import { getContactValidationResult } from '../../_lib/colors';
 import {
@@ -331,16 +332,16 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
               fontClassName="font-active"
             />
 
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="ghost" onClick={() => { router.push('/admin/home-components'); }} disabled={isSubmitting}>
-                Hủy bỏ
-              </Button>
-              <Button type="submit" variant="accent" disabled={!hasChanges || hasValidationErrors || isSubmitting}>
-                {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-              </Button>
-            </div>
           </div>
         </div>
+
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          hasChanges={hasChanges}
+          disableSave={!hasChanges || hasValidationErrors || isSubmitting}
+          onCancel={() => { router.push('/admin/home-components'); }}
+          submitLabel="Lưu thay đổi"
+        />
       </form>
     </div>
   );

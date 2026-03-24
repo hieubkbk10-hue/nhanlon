@@ -1,4 +1,4 @@
-import type { FooterConfig, FooterStyle } from '../_types';
+import type { FooterConfig, FooterMaxWidth, FooterStyle } from '../_types';
 
 export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
   columns: [
@@ -10,6 +10,7 @@ export const DEFAULT_FOOTER_CONFIG: FooterConfig = {
   copyright: '',
   description: '',
   logo: '',
+  maxWidth: '7xl',
   logoSizeLevel: 1,
   showCopyright: true,
   showBctLogo: false,
@@ -46,7 +47,13 @@ export const getFooterLogoSize = (baseSize: number, level?: number) => (
 );
 
 const FOOTER_STYLES: FooterStyle[] = ['classic', 'modern', 'corporate', 'minimal', 'centered', 'stacked'];
+const FOOTER_MAX_WIDTHS: FooterMaxWidth[] = ['6xl', '7xl', '8xl', '9xl'];
 const BCT_LOGO_TYPES = ['thong-bao', 'dang-ky'] as const;
+
+export const getFooterMaxWidthClass = (value?: FooterMaxWidth) => {
+  const resolved = value && FOOTER_MAX_WIDTHS.includes(value) ? value : DEFAULT_FOOTER_CONFIG.maxWidth ?? '7xl';
+  return `max-w-${resolved}`;
+};
 
 export const normalizeFooterConfig = (raw: Partial<FooterConfig> | null | undefined): FooterConfig => {
   const safe = raw ?? {};
@@ -59,6 +66,9 @@ export const normalizeFooterConfig = (raw: Partial<FooterConfig> | null | undefi
   const styleCandidate = safe.style && FOOTER_STYLES.includes(safe.style as FooterStyle)
     ? (safe.style as FooterStyle)
     : DEFAULT_FOOTER_CONFIG.style;
+  const maxWidthCandidate = safe.maxWidth && FOOTER_MAX_WIDTHS.includes(safe.maxWidth as FooterMaxWidth)
+    ? (safe.maxWidth as FooterMaxWidth)
+    : DEFAULT_FOOTER_CONFIG.maxWidth;
 
   return {
     columns: columns.map((column, index) => ({
@@ -74,6 +84,7 @@ export const normalizeFooterConfig = (raw: Partial<FooterConfig> | null | undefi
     copyright: typeof safe.copyright === 'string' ? safe.copyright : DEFAULT_FOOTER_CONFIG.copyright,
     description: typeof safe.description === 'string' ? safe.description : DEFAULT_FOOTER_CONFIG.description,
     logo: typeof safe.logo === 'string' ? safe.logo : DEFAULT_FOOTER_CONFIG.logo,
+    maxWidth: maxWidthCandidate,
     logoSizeLevel: clampLogoSizeLevel(safe.logoSizeLevel),
     showCopyright: safe.showCopyright !== false,
     showBctLogo: safe.showBctLogo === true,

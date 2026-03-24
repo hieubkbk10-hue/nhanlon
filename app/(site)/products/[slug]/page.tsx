@@ -13,7 +13,7 @@ import { RichContent, withFormatMarker } from '@/components/common/RichContent';
 import { useCustomerAuth } from '@/app/(site)/auth/context';
 import { notifyAddToCart, useCart } from '@/lib/cart';
 import { useCartConfig, useCheckoutConfig } from '@/lib/experiences';
-import { ArrowLeft, Award, BadgeCheck, Bell, Bolt, Calendar, Camera, Check, CheckCircle2, ChevronRight, Clock, CreditCard, Gift, Globe, Heart, HeartHandshake, Leaf, Lock, MapPin, MessageSquare, Minus, Package, Phone, Plus, Reply, RotateCcw, Share2, Shield, ShoppingBag, ShoppingCart, Star, ThumbsUp, Truck } from 'lucide-react';
+import { ArrowLeft, Award, BadgeCheck, Bell, Bolt, Calendar, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, CreditCard, Gift, Globe, Heart, HeartHandshake, Leaf, Lock, MapPin, MessageSquare, Minus, Package, Phone, Plus, Reply, RotateCcw, Share2, Shield, ShoppingBag, ShoppingCart, Star, ThumbsUp, Truck } from 'lucide-react';
 import { VariantSelector, type VariantSelectorOption } from '@/components/products/VariantSelector';
 import type { Id } from '@/convex/_generated/dataModel';
 import { getPublicPriceLabel } from '@/lib/products/public-price';
@@ -963,6 +963,188 @@ function ExpandableDescription({ content, className, style, buttonStyle }: { con
   );
 }
 
+type MobileImageCarouselProps = {
+  images: string[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  alt: string;
+};
+
+function MobileImageCarousel({ images, selectedIndex, onSelect, alt }: MobileImageCarouselProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const width = container.clientWidth;
+    if (!width) {
+      return;
+    }
+    const targetLeft = selectedIndex * width;
+    if (Math.abs(container.scrollLeft - targetLeft) > 2) {
+      container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    }
+  }, [selectedIndex]);
+
+  useEffect(() => () => {
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  }, []);
+
+  const handleScroll = () => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      const width = container.clientWidth;
+      if (!width) {
+        return;
+      }
+      const nextIndex = Math.round(container.scrollLeft / width);
+      if (nextIndex !== selectedIndex) {
+        onSelect(nextIndex);
+      }
+    }, 120);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex h-full w-full snap-x snap-mandatory overflow-x-auto no-scrollbar scroll-smooth"
+    >
+      {images.map((image, index) => (
+        <div key={`${image}-${index}`} className="relative h-full w-full shrink-0 snap-center">
+          <Image src={image} alt={`${alt} ${index + 1}`} fill sizes="100vw" className="object-contain" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type ThumbnailRailProps = {
+  images: string[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  orientation: 'horizontal' | 'vertical';
+  visibleSlots: number;
+  tokens: ProductDetailColors;
+  className?: string;
+  listClassName?: string;
+  itemClassName?: string;
+  inactiveClassName?: string;
+};
+
+function ThumbnailRail({
+  images,
+  selectedIndex,
+  onSelect,
+  orientation,
+  visibleSlots,
+  tokens,
+  className,
+  listClassName,
+  itemClassName,
+  inactiveClassName,
+}: ThumbnailRailProps) {
+  const [startIndex, setStartIndex] = useState(0);
+  const hasOverflow = images.length > visibleSlots;
+  const maxStartIndex = Math.max(0, images.length - visibleSlots);
+  const isVertical = orientation === 'vertical';
+
+  useEffect(() => {
+    if (!hasOverflow) {
+      if (startIndex !== 0) {
+        setStartIndex(0);
+      }
+      return;
+    }
+    if (startIndex > maxStartIndex) {
+      setStartIndex(maxStartIndex);
+    }
+  }, [hasOverflow, maxStartIndex, startIndex]);
+
+  useEffect(() => {
+    if (!hasOverflow) {
+      return;
+    }
+    if (selectedIndex < startIndex) {
+      setStartIndex(selectedIndex);
+      return;
+    }
+    if (selectedIndex >= startIndex + visibleSlots) {
+      setStartIndex(Math.max(0, selectedIndex - visibleSlots + 1));
+    }
+  }, [hasOverflow, selectedIndex, startIndex, visibleSlots]);
+
+  if (images.length <= 1) {
+    return null;
+  }
+
+  const canScrollPrev = hasOverflow && startIndex > 0;
+  const canScrollNext = hasOverflow && startIndex < maxStartIndex;
+  const visibleImages = hasOverflow ? images.slice(startIndex, startIndex + visibleSlots) : images;
+  const railClassName = `${isVertical ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2'} ${className ?? ''}`.trim();
+  const listClass = `${isVertical ? 'flex flex-col gap-2' : 'flex gap-2'} ${listClassName ?? ''}`.trim();
+  const arrowClassName = 'h-9 w-9 rounded-full border flex items-center justify-center transition-colors disabled:opacity-40';
+
+  return (
+    <div className={railClassName}>
+      {hasOverflow && (
+        <button
+          type="button"
+          aria-label={isVertical ? 'Ảnh trước' : 'Ảnh trước'}
+          disabled={!canScrollPrev}
+          onClick={() => setStartIndex((prev) => Math.max(0, prev - 1))}
+          className={arrowClassName}
+          style={{ borderColor: tokens.thumbnailBorder, color: tokens.thumbnailBorderActive, backgroundColor: tokens.surface }}
+        >
+          {isVertical ? <ChevronUp size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      )}
+
+      <div className={listClass}>
+        {visibleImages.map((img, index) => {
+          const actualIndex = hasOverflow ? startIndex + index : index;
+          const isActive = actualIndex === selectedIndex;
+          return (
+            <button
+              key={`${img}-${actualIndex}`}
+              type="button"
+              onClick={() => onSelect(actualIndex)}
+              className={`${itemClassName ?? 'aspect-square w-20 rounded-lg'} overflow-hidden border-2 transition-colors ${isActive ? '' : inactiveClassName ?? ''}`.trim()}
+              style={{ borderColor: isActive ? tokens.thumbnailBorderActive : tokens.thumbnailBorder }}
+            >
+              <Image src={img} alt="" width={80} height={80} className="object-contain w-full h-full" />
+            </button>
+          );
+        })}
+      </div>
+
+      {hasOverflow && (
+        <button
+          type="button"
+          aria-label={isVertical ? 'Ảnh kế tiếp' : 'Ảnh kế tiếp'}
+          disabled={!canScrollNext}
+          onClick={() => setStartIndex((prev) => Math.min(maxStartIndex, prev + 1))}
+          className={arrowClassName}
+          style={{ borderColor: tokens.thumbnailBorder, color: tokens.thumbnailBorderActive, backgroundColor: tokens.surface }}
+        >
+          {isVertical ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function resolveProductContent(product: {
   renderType?: 'content' | 'markdown' | 'html';
   description?: string;
@@ -1075,7 +1257,10 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
   const showDescription = enabledFields.has('description');
   const showSku = enabledFields.has('sku');
 
-  const images = product.images?.length ? product.images : (product.image ? [product.image] : []);
+  const images = [
+    ...(product.image ? [product.image] : []),
+    ...((product.images ?? []).filter((img) => img && img !== product.image)),
+  ];
   const basePrice = selectedVariant?.price ?? product.price;
   const salePrice = selectedVariant ? selectedVariant.salePrice : product.salePrice;
   const isRangeFromVariant = Boolean(product.hasVariants && !selectedVariant);
@@ -1086,13 +1271,34 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
   const stockValue = selectedVariant?.stock ?? product.stock;
   const inStock = !showStock || stockValue > 0;
   const buyNowDisabled = requireStockForBuyNow && !inStock;
+  const stockStatus = showStock
+    ? stockValue > 10
+      ? { label: 'Còn hàng', color: tokens.stockSuccessText }
+      : stockValue > 0
+        ? { label: `Chỉ còn ${stockValue} sản phẩm`, color: tokens.stockWarningText }
+        : { label: 'Hết hàng', color: tokens.stockDangerText }
+    : null;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: tokens.surface }}>
       {/* Breadcrumb */}
       <div className="border-b" style={{ borderColor: tokens.divider }}>
-        <div className="max-w-6xl mx-auto px-4 py-3">
-          <nav className="flex items-center gap-2 text-sm" style={{ color: tokens.breadcrumbText }}>
+        <div className="max-w-6xl mx-auto px-4 py-2 md:py-3">
+          <nav className="flex items-center gap-1 text-[11px] md:hidden" style={{ color: tokens.breadcrumbText }}>
+            {product.categorySlug && product.categoryName ? (
+              <>
+                <Link href={`/products?category=${product.categorySlug}`} className="transition-colors">{product.categoryName}</Link>
+                <ChevronRight size={10} />
+              </>
+            ) : (
+              <>
+                <Link href="/products" className="transition-colors">Sản phẩm</Link>
+                <ChevronRight size={10} />
+              </>
+            )}
+            <span className="font-medium truncate max-w-[180px]" style={{ color: tokens.breadcrumbActive }}>{product.name}</span>
+          </nav>
+          <nav className="hidden md:flex items-center gap-2 text-sm" style={{ color: tokens.breadcrumbText }}>
             <Link href="/" className="transition-colors">Trang chủ</Link>
             <ChevronRight size={14} />
             <Link href="/products" className="transition-colors">Sản phẩm</Link>
@@ -1108,56 +1314,82 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-5 md:py-8">
         <div className="lg:grid lg:grid-cols-2 lg:gap-12">
           {/* Product Images */}
-          <div className="mb-8 lg:mb-0">
-            <div className="aspect-square rounded-2xl overflow-hidden mb-4 relative" style={{ backgroundColor: tokens.surfaceMuted }}>
+          <div className="mb-6 lg:mb-0">
+            <div className="relative aspect-square rounded-2xl overflow-hidden mb-3 md:mb-4" style={{ backgroundColor: tokens.surfaceMuted }}>
               {images.length > 0 ? (
-                <BlurredProductImage src={images[selectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 50vw" />
+                <>
+                  <div className="h-full w-full md:hidden">
+                    <MobileImageCarousel
+                      images={images}
+                      selectedIndex={selectedImage}
+                      onSelect={setSelectedImage}
+                      alt={product.name}
+                    />
+                  </div>
+                  <div className="hidden md:block h-full w-full">
+                    <BlurredProductImage src={images[selectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 50vw" />
+                  </div>
+                </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center"><Package size={64} style={{ color: tokens.emptyStateIcon }} /></div>
               )}
+              {images.length > 1 && (
+                <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                  {selectedImage + 1}/{images.length}
+                </span>
+              )}
               {showSalePrice && priceDisplay.comparePrice && (
-                <span className="absolute top-4 left-4 px-3 py-1.5 text-sm font-bold rounded-lg" style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>-{discountPercent}%</span>
+                <span className="absolute top-3 left-3 px-3 py-1.5 text-sm font-bold rounded-lg" style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>-{discountPercent}%</span>
               )}
             </div>
             {images.length > 1 && (
-              <div className="flex gap-3">
-                {images.map((img, index) => (
-                  <button
-                    key={index}
-                    onClick={() =>{  setSelectedImage(index); }}
-                    className="w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors"
-                    style={{ borderColor: selectedImage === index ? tokens.thumbnailBorderActive : tokens.thumbnailBorder }}
-                  >
-                    <Image src={img} alt="" width={80} height={80} className="object-contain" />
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="hidden md:block">
+                  <ThumbnailRail
+                    images={images}
+                    selectedIndex={selectedImage}
+                    onSelect={setSelectedImage}
+                    orientation="horizontal"
+                    visibleSlots={6}
+                    tokens={tokens}
+                    itemClassName="aspect-square w-20 rounded-lg"
+                  />
+                </div>
+              </>
             )}
           </div>
 
           {/* Product Info */}
           <div>
-            <Link
-              href={`/products?category=${product.categorySlug}`}
-              className="inline-block px-3 py-1 text-sm font-medium rounded-full mb-4 transition-colors hover:opacity-80"
-              style={{ backgroundColor: tokens.categoryBadgeBg, color: tokens.categoryBadgeText }}
-            >
-              {product.categoryName}
-            </Link>
+            <div className="flex flex-wrap items-center gap-2 mb-2 md:mb-4">
+              <Link
+                href={`/products?category=${product.categorySlug}`}
+                className="inline-block px-3 py-1 text-xs md:text-sm font-medium rounded-full transition-colors hover:opacity-80"
+                style={{ backgroundColor: tokens.categoryBadgeBg, color: tokens.categoryBadgeText }}
+              >
+                {product.categoryName}
+              </Link>
+              {stockStatus && (
+                <div className="flex items-center gap-2 text-[11px] font-semibold md:hidden" style={{ color: stockStatus.color }}>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                  <span>{stockStatus.label}</span>
+                </div>
+              )}
+            </div>
 
-            <h1 className="text-2xl md:text-3xl font-bold mb-4" style={{ color: tokens.headingColor }}>{product.name}</h1>
+            <h1 className="text-xl md:text-3xl font-bold mb-2 md:mb-4" style={{ color: tokens.headingColor }}>{product.name}</h1>
 
-            <div className="flex flex-wrap items-center gap-4 mb-6">
+            <div className="flex flex-wrap items-center gap-4 mb-4 md:mb-6">
               {showSku && <span className="text-sm" style={{ color: tokens.metaText }}>SKU: <span className="font-mono">{product.sku}</span></span>}
               {showRating && <RatingInline summary={ratingSummary} tokens={tokens} />}
             </div>
 
             {showPrice && (
-              <div className="flex items-end gap-3 mb-6">
-                <span className="text-3xl font-bold" style={{ color: tokens.priceColor }}>{priceDisplay.label}</span>
+              <div className="flex items-end gap-3 mb-3 md:mb-6">
+                <span className="text-xl md:text-3xl font-bold" style={{ color: tokens.priceColor }}>{priceDisplay.label}</span>
                 {showSalePrice && priceDisplay.comparePrice && (
                   <>
                     <span className="text-xl line-through" style={{ color: tokens.priceOriginalText }}>{formatPrice(priceDisplay.comparePrice)}</span>
@@ -1168,7 +1400,7 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
             )}
 
             {hasVariants && (
-              <div className="mb-6">
+              <div className="mb-4 md:mb-6">
                 <VariantSelector
                   options={variantOptions}
                   selectedOptions={selectedOptions}
@@ -1179,19 +1411,7 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
               </div>
             )}
 
-            {showStock && (
-              <div className="flex items-center gap-2 mb-6">
-                {stockValue > 10 ? (
-                  <><Check size={18} style={{ color: tokens.stockSuccessText }} /><span className="font-medium" style={{ color: tokens.stockSuccessText }}>Còn hàng</span></>
-                ) : (stockValue > 0 ? (
-                  <><span className="w-2 h-2 rounded-full" style={{ backgroundColor: tokens.stockWarningText }} /><span className="font-medium" style={{ color: tokens.stockWarningText }}>Chỉ còn {stockValue} sản phẩm</span></>
-                ) : (
-                  <><span className="w-2 h-2 rounded-full" style={{ backgroundColor: tokens.stockDangerText }} /><span className="font-medium" style={{ color: tokens.stockDangerText }}>Hết hàng</span></>
-                ))}
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-4 mb-8">
+            <div className="flex flex-wrap items-center gap-4 mb-4 md:mb-8">
               <div className="flex items-center border rounded-lg" style={{ borderColor: tokens.quantityBorder }}>
                 <button
                   onClick={() =>{  setQuantity(q => Math.max(1, q - 1)); }}
@@ -1258,6 +1478,13 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                 </button>
               )}
             </div>
+
+            {stockStatus && (
+              <div className="hidden md:flex items-center gap-2 text-xs md:text-sm font-medium" style={{ color: stockStatus.color }}>
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                <span>{stockStatus.label}</span>
+              </div>
+            )}
 
             {highlightsEnabled && highlights.length > 0 && (
               <div className="grid grid-cols-3 gap-4 p-4 rounded-xl mb-8" style={{ backgroundColor: tokens.highlightBg }}>
@@ -1359,7 +1586,10 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
   const showStock = enabledFields.has('stock');
   const showDescription = enabledFields.has('description');
 
-  const images = product.images?.length ? product.images : (product.image ? [product.image] : []);
+  const images = [
+    ...(product.image ? [product.image] : []),
+    ...((product.images ?? []).filter((img) => img && img !== product.image)),
+  ];
   const basePrice = selectedVariant?.price ?? product.price;
   const salePrice = selectedVariant ? selectedVariant.salePrice : product.salePrice;
   const isRangeFromVariant = Boolean(product.hasVariants && !selectedVariant);
@@ -1371,6 +1601,13 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
   const inStock = !showStock || stockValue > 0;
   const buyNowDisabled = requireStockForBuyNow && !inStock;
   const maxQuantity = showStock ? Math.min(stockValue, 10) : 10;
+  const stockStatus = showStock
+    ? stockValue > 10
+      ? { label: 'Còn hàng', color: tokens.stockSuccessText }
+      : stockValue > 0
+        ? { label: `Chỉ còn ${stockValue} sản phẩm`, color: tokens.stockWarningText }
+        : { label: 'Hết hàng', color: tokens.stockDangerText }
+    : null;
 
   const heroContainerClass = heroStyle === 'full'
     ? 'border rounded-2xl'
@@ -1390,9 +1627,23 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
   return (
     <div className="min-h-screen" style={{ backgroundColor: tokens.surface }}>
       <header className="border-b" style={{ borderColor: tokens.divider }}>
-        <div className="max-w-6xl mx-auto px-4 py-4">
+        <div className="max-w-6xl mx-auto px-4 py-3 md:py-4">
           <nav className="flex items-center justify-between gap-4">
-            <div className="text-sm truncate" style={{ color: tokens.breadcrumbText }}>
+            <div className="md:hidden flex items-center gap-1 text-[11px] truncate" style={{ color: tokens.breadcrumbText }}>
+              {product.categorySlug && product.categoryName ? (
+                <>
+                  <Link href={`/products?category=${product.categorySlug}`} className="transition-colors">{product.categoryName}</Link>
+                  <ChevronRight size={10} />
+                </>
+              ) : (
+                <>
+                  <Link href="/products" className="transition-colors">Sản phẩm</Link>
+                  <ChevronRight size={10} />
+                </>
+              )}
+              <span className="truncate" style={{ color: tokens.breadcrumbActive }}>{product.name}</span>
+            </div>
+            <div className="hidden md:block text-sm truncate" style={{ color: tokens.breadcrumbText }}>
               <Link href="/" className="transition-colors">Trang chủ</Link>
               {' / '}
               <Link href="/products" className="transition-colors">Sản phẩm</Link>
@@ -1414,24 +1665,49 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8 lg:py-12">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
-          <div className="space-y-4">
+      <main className="max-w-6xl mx-auto px-4 py-4 md:py-6 lg:py-10">
+        <div className="grid lg:grid-cols-2 gap-5 md:gap-6 lg:gap-8">
+          <div className="space-y-3 md:space-y-4">
             {heroStyle === 'split' ? (
               <div className={`overflow-hidden ${heroContainerClass}`} style={heroContainerStyle}>
-                <div className="grid md:grid-cols-2 gap-4 items-center p-4 md:p-6">
+                <div className="grid md:grid-cols-2 gap-3 items-center p-3 md:p-5">
                   <div className="relative aspect-square rounded-xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
+                    {showSalePrice && priceDisplay.comparePrice && discountPercent > 0 && (
+                      <span
+                        className="absolute left-3 top-3 z-20 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                        style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
+                      >
+                        -{discountPercent}%
+                      </span>
+                    )}
                     {images[selectedImageIndex] ? (
-                      <BlurredProductImage
-                        src={images[selectedImageIndex]}
-                        alt={product.name}
-                        sizes="(max-width: 1024px) 100vw, 50vw"
-                      />
+                      <>
+                        <div className="h-full w-full md:hidden">
+                          <MobileImageCarousel
+                            images={images}
+                            selectedIndex={selectedImageIndex}
+                            onSelect={setSelectedImageIndex}
+                            alt={product.name}
+                          />
+                        </div>
+                        <div className="hidden md:block h-full w-full">
+                          <BlurredProductImage
+                            src={images[selectedImageIndex]}
+                            alt={product.name}
+                            sizes="(max-width: 1024px) 100vw, 50vw"
+                          />
+                        </div>
+                      </>
                     ) : (
                       <div className="text-center">
                         <div className="rounded-lg w-48 h-48 mx-auto mb-3" style={{ backgroundColor: tokens.surfaceSoft }} />
                         <p className="text-sm" style={{ color: tokens.softText }}>Chưa có hình ảnh sản phẩm</p>
                       </div>
+                    )}
+                    {images.length > 1 && (
+                      <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                        {selectedImageIndex + 1}/{images.length}
+                      </span>
                     )}
                   </div>
                   <div className="hidden md:flex flex-col gap-3 text-sm" style={{ color: tokens.metaText }}>
@@ -1447,40 +1723,66 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
             ) : (
               <div className={`overflow-hidden ${heroContainerClass}`} style={heroContainerStyle}>
                 <div className={heroImageWrapperClass}>
+                  {showSalePrice && priceDisplay.comparePrice && discountPercent > 0 && (
+                    <span
+                      className="absolute left-3 top-3 z-20 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                      style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
+                    >
+                      -{discountPercent}%
+                    </span>
+                  )}
                   {images[selectedImageIndex] ? (
-                    <BlurredProductImage
-                      src={images[selectedImageIndex]}
-                      alt={product.name}
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
+                    <>
+                      <div className="h-full w-full md:hidden">
+                        <MobileImageCarousel
+                          images={images}
+                          selectedIndex={selectedImageIndex}
+                          onSelect={setSelectedImageIndex}
+                          alt={product.name}
+                        />
+                      </div>
+                      <div className="hidden md:block h-full w-full">
+                        <BlurredProductImage
+                          src={images[selectedImageIndex]}
+                          alt={product.name}
+                          sizes="(max-width: 1024px) 100vw, 50vw"
+                        />
+                      </div>
+                    </>
                   ) : (
                     <div className="text-center">
                       <div className="rounded-lg w-64 h-64 mx-auto mb-4" style={{ backgroundColor: tokens.surfaceSoft }} />
                       <p className="text-sm" style={{ color: tokens.softText }}>Chưa có hình ảnh sản phẩm</p>
                     </div>
                   )}
+                  {images.length > 1 && (
+                    <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                      {selectedImageIndex + 1}/{images.length}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
 
             {images.length > 1 && heroStyle !== 'minimal' && (
-              <div className="grid grid-cols-3 gap-3">
-                {images.map((image, index) => (
-                  <button
-                    key={`${image}-${index}`}
-                    onClick={() => setSelectedImageIndex(index)}
-                    className="relative aspect-square overflow-hidden rounded-xl border-2 transition-all"
-                    style={{ borderColor: selectedImageIndex === index ? tokens.thumbnailBorderActive : tokens.thumbnailBorder }}
-                  >
-                    <Image src={image} alt={`${product.name} ${index + 1}`} fill className="object-contain" />
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="hidden md:block">
+                  <ThumbnailRail
+                    images={images}
+                    selectedIndex={selectedImageIndex}
+                    onSelect={setSelectedImageIndex}
+                    orientation="horizontal"
+                    visibleSlots={5}
+                    tokens={tokens}
+                    itemClassName="aspect-square w-20 rounded-xl"
+                  />
+                </div>
+              </>
             )}
           </div>
 
-          <div className="space-y-6 lg:space-y-8">
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-3 md:space-y-4 lg:space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
               <span
                 className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
                 style={{
@@ -1492,34 +1794,32 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
               >
                 {product.categoryName}
               </span>
+              {stockStatus && (
+                <div className="flex items-center gap-2 text-[11px] font-semibold md:hidden" style={{ color: stockStatus.color }}>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                  <span>{stockStatus.label}</span>
+                </div>
+              )}
             </div>
 
-            <h1 className="text-3xl lg:text-4xl font-light tracking-tight" style={{ color: tokens.headingColor }}>
+            <h1 className="text-xl md:text-3xl lg:text-4xl font-light tracking-tight" style={{ color: tokens.headingColor }}>
               {product.name}
             </h1>
 
             {showRating && <RatingInline summary={ratingSummary} tokens={tokens} />}
 
             {showPrice && (
-              <div className="space-y-2">
-                <div className="flex items-baseline gap-3">
-                  <span className="text-3xl lg:text-4xl font-light" style={{ color: tokens.priceColor }}>
+              <div className="space-y-1.5">
+                <div className="flex items-baseline gap-2.5">
+                  <span className="text-xl md:text-3xl lg:text-4xl font-light" style={{ color: tokens.priceColor }}>
                     {priceDisplay.label}
                   </span>
                   {showSalePrice && priceDisplay.comparePrice && (
-                    <span className="text-lg line-through" style={{ color: tokens.priceOriginalText }}>
+                    <span className="text-base line-through" style={{ color: tokens.priceOriginalText }}>
                       {formatPrice(priceDisplay.comparePrice)}
                     </span>
                   )}
                 </div>
-                {showSalePrice && priceDisplay.comparePrice && (
-                  <span
-                    className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-                    style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
-                  >
-                    Giảm {discountPercent}%
-                  </span>
-                )}
               </div>
             )}
 
@@ -1535,7 +1835,7 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
 
             <div className="h-px w-full" style={{ backgroundColor: tokens.divider }} />
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-sm font-medium" style={{ color: tokens.bodyText }}>Số lượng</label>
               <div className="flex items-center gap-3">
                 <button
@@ -1563,7 +1863,7 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
             </div>
 
             {(showAddToCart || showBuyNow || showWishlist) && (
-              <div className="space-y-3">
+              <div className="space-y-2 md:space-y-2.5">
                 {showAddToCart && (
                   <button
                     className={`w-full h-12 text-base font-semibold transition-all ${inStock ? 'hover:shadow-lg hover:scale-[1.01]' : 'opacity-50 cursor-not-allowed'}`}
@@ -1595,6 +1895,12 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
                     <Heart className={`w-5 h-5 mr-2 inline-block ${isWishlisted ? 'fill-current' : ''}`} style={{ color: isWishlisted ? tokens.stockDangerText : tokens.wishlistIcon }} />
                     {isWishlisted ? 'Đã yêu thích' : 'Thêm vào yêu thích'}
                   </button>
+                )}
+                {stockStatus && (
+                  <div className="hidden md:flex items-center gap-2 text-xs md:text-sm font-medium" style={{ color: stockStatus.color }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                    <span>{stockStatus.label}</span>
+                  </div>
                 )}
               </div>
             )}
@@ -1704,18 +2010,33 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
     );
 
   const showPrice = enabledFields.has('price') || enabledFields.size === 0;
+  const showSalePrice = enabledFields.has('salePrice');
   const showStock = enabledFields.has('stock');
   const showDescription = enabledFields.has('description');
   const showSku = enabledFields.has('sku');
 
-  const images = product.images?.length ? product.images : (product.image ? [product.image] : []);
+  const images = [
+    ...(product.image ? [product.image] : []),
+    ...((product.images ?? []).filter((img) => img && img !== product.image)),
+  ];
   const basePrice = selectedVariant?.price ?? product.price;
   const salePrice = selectedVariant ? selectedVariant.salePrice : product.salePrice;
   const isRangeFromVariant = Boolean(product.hasVariants && !selectedVariant);
   const priceDisplay = getPublicPriceLabel({ saleMode, price: basePrice, salePrice, isRangeFromVariant });
+  const discountPercent = priceDisplay.comparePrice
+    ? Math.round((1 - basePrice / priceDisplay.comparePrice) * 100)
+    : 0;
   const stockValue = selectedVariant?.stock ?? product.stock;
   const inStock = !showStock || stockValue > 0;
   const buyNowDisabled = requireStockForBuyNow && !inStock;
+
+  const stockStatus = showStock
+    ? stockValue > 10
+      ? { label: 'Còn hàng', color: tokens.stockSuccessText }
+      : stockValue > 0
+        ? { label: `Chỉ còn ${stockValue} sản phẩm`, color: tokens.stockWarningText }
+        : { label: 'Hết hàng', color: tokens.stockDangerText }
+    : null;
 
   const contentWidthClass = contentWidth === 'narrow'
     ? 'max-w-4xl'
@@ -1725,9 +2046,23 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: tokens.surface }}>
-      <main className={`${contentWidthClass} mx-auto px-0 md:px-6 py-10`}>
-        <div className="px-6 md:px-0 mb-6">
-          <nav className="flex items-center gap-2 text-xs" style={{ color: tokens.breadcrumbText }}>
+      <main className={`${contentWidthClass} mx-auto px-0 md:px-6 py-6 md:py-10`}>
+        <div className="px-4 md:px-0 mb-3 md:mb-6">
+          <nav className="flex items-center gap-1 text-[11px] md:hidden" style={{ color: tokens.breadcrumbText }}>
+            {product.categorySlug && product.categoryName ? (
+              <>
+                <Link href={`/products?category=${product.categorySlug}`} className="transition-colors">{product.categoryName}</Link>
+                <ChevronRight size={10} />
+              </>
+            ) : (
+              <>
+                <Link href="/products" className="transition-colors">Sản phẩm</Link>
+                <ChevronRight size={10} />
+              </>
+            )}
+            <span className="truncate max-w-[180px]" style={{ color: tokens.breadcrumbActive }}>{product.name}</span>
+          </nav>
+          <nav className="hidden md:flex items-center gap-2 text-xs" style={{ color: tokens.breadcrumbText }}>
             <Link href="/" className="transition-colors">Trang chủ</Link>
             <ChevronRight size={12} />
             <Link href="/products" className="transition-colors">Sản phẩm</Link>
@@ -1735,57 +2070,105 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
             <span className="truncate max-w-[160px]" style={{ color: tokens.breadcrumbActive }}>{product.name}</span>
           </nav>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-12 min-h-[calc(100vh-4rem)]">
-          <div className="lg:col-span-7 h-[60vh] lg:h-auto lg:py-0">
-            <div className="lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)]">
-              <div className="flex flex-col-reverse md:flex-row gap-4 h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
+          <div className="lg:col-span-7 lg:py-0">
+            <div className="lg:sticky lg:top-8">
+              <div className="flex flex-col-reverse md:flex-row gap-3 md:gap-4 items-start">
                 {images.length > 1 && (
-                  <div className="flex md:flex-col gap-4 overflow-x-auto md:overflow-y-auto no-scrollbar md:w-24 shrink-0 px-6 md:px-0">
-                    {images.map((img, index) => (
-                      <button
-                        key={img}
-                        onClick={() =>{  setSelectedImage(index); }}
-                        className={`relative aspect-square w-20 md:w-full overflow-hidden rounded-sm transition-all duration-300 border ${
-                          selectedImage === index ? 'opacity-100' : 'opacity-70 hover:opacity-100'
-                        }`}
-                        style={{
-                          borderColor: selectedImage === index ? tokens.thumbnailBorderActive : tokens.thumbnailBorder,
-                        }}
-                      >
-                        <Image src={img} alt={product.name} fill sizes="(max-width: 768px) 80px, 96px" className="object-contain" />
-                      </button>
-                    ))}
+                  <div className="hidden md:flex md:flex-col md:w-20 shrink-0">
+                    <ThumbnailRail
+                      images={images}
+                      selectedIndex={selectedImage}
+                      onSelect={setSelectedImage}
+                      orientation="vertical"
+                      visibleSlots={6}
+                      tokens={tokens}
+                      itemClassName="aspect-square w-full rounded-sm"
+                      inactiveClassName="opacity-70 hover:opacity-100"
+                    />
                   </div>
                 )}
 
-                <div className="flex-1 relative aspect-[4/5] md:aspect-auto rounded-sm overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
+                <div className="flex-1 relative aspect-square w-full rounded-sm overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
+                  {showSalePrice && priceDisplay.comparePrice && discountPercent > 0 && (
+                    <span
+                      className="absolute left-3 top-3 z-20 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                      style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
+                    >
+                      -{discountPercent}%
+                    </span>
+                  )}
                   {images.length > 0 ? (
-                    <BlurredProductImage src={images[selectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 60vw" />
+                    <>
+                      <div className="h-full w-full md:hidden">
+                        <MobileImageCarousel
+                          images={images}
+                          selectedIndex={selectedImage}
+                          onSelect={setSelectedImage}
+                          alt={product.name}
+                        />
+                      </div>
+                      <div className="hidden md:block h-full w-full">
+                        <BlurredProductImage src={images[selectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 60vw" />
+                      </div>
+                    </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Package size={64} style={{ color: tokens.emptyStateIcon }} />
                     </div>
+                  )}
+                  {images.length > 1 && (
+                    <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                      {selectedImage + 1}/{images.length}
+                    </span>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="lg:col-span-5 px-6 py-6 lg:py-0 flex flex-col justify-center" style={{ backgroundColor: tokens.surface }}>
-            <div className="mb-6">
-              <h1 className="text-3xl md:text-5xl font-light tracking-tight mb-4" style={{ color: tokens.headingColor }}>
+          <div className="lg:col-span-5 px-4 md:px-6 py-2 lg:py-0 flex flex-col justify-center" style={{ backgroundColor: tokens.surface }}>
+            <div className="mb-3 md:mb-5 space-y-2 md:space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] md:text-xs font-semibold"
+                  style={{
+                    backgroundColor: tokens.categoryBadgeBg,
+                    color: tokens.categoryBadgeText,
+                    borderColor: tokens.categoryBadgeBorder,
+                    borderWidth: 1,
+                  }}
+                >
+                  {product.categoryName}
+                </span>
+                {stockStatus && (
+                  <div className="flex items-center gap-2 text-[11px] font-semibold md:hidden" style={{ color: stockStatus.color }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                    <span>{stockStatus.label}</span>
+                  </div>
+                )}
+              </div>
+
+              <h1 className="text-xl md:text-3xl lg:text-[2rem] font-medium leading-tight tracking-tight" style={{ color: tokens.headingColor }}>
                 {product.name}
               </h1>
               {showRating && <RatingInline summary={ratingSummary} tokens={tokens} />}
               {showPrice && (
-                <p className="text-2xl font-light" style={{ color: tokens.priceColor }}>
-                  {priceDisplay.label}
-                </p>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <p className="text-lg md:text-2xl font-semibold" style={{ color: tokens.priceColor }}>
+                    {priceDisplay.label}
+                  </p>
+                  {showSalePrice && priceDisplay.comparePrice && (
+                    <span className="text-sm md:text-base line-through" style={{ color: tokens.priceOriginalText }}>
+                      {formatPrice(priceDisplay.comparePrice)}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 
             {hasVariants && (
-              <div className="mb-6">
+              <div className="mb-4 md:mb-6">
                 <VariantSelector
                   options={variantOptions}
                   selectedOptions={selectedOptions}
@@ -1797,7 +2180,7 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
             )}
 
             {(showAddToCart || showBuyNow || showWishlist) && (
-              <div className="flex flex-col gap-3 mb-8 border-t pt-6" style={{ borderColor: tokens.divider }}>
+              <div className="flex flex-col gap-2.5 md:gap-3 mb-5 md:mb-6 border-t pt-4 md:pt-5" style={{ borderColor: tokens.divider }}>
                 <div className="flex gap-4">
                   {showAddToCart && (
                     <button
@@ -1832,6 +2215,12 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                     {buyNowLabel}
                   </button>
                 )}
+                {stockStatus && (
+                  <div className="hidden md:flex items-center gap-2 text-xs md:text-sm font-medium" style={{ color: stockStatus.color }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: stockStatus.color }} />
+                    <span>{stockStatus.label}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1843,14 +2232,6 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                   <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: tokens.divider }}>
                     <span>SKU</span>
                     <span className="font-mono" style={{ color: tokens.bodyText }}>{product.sku}</span>
-                  </div>
-                )}
-                {showStock && (
-                  <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: tokens.divider }}>
-                    <span>Tình trạng</span>
-                    <span style={{ color: inStock ? tokens.stockSuccessText : tokens.stockDangerText }}>
-                      {inStock ? 'Còn hàng' : 'Hết hàng'}
-                    </span>
                   </div>
                 )}
               </div>

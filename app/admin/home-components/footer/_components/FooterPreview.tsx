@@ -7,7 +7,7 @@ import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { PreviewImage } from '../../_shared/components/PreviewImage';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 import { getFooterLayoutColors } from '../_lib/colors';
-import { getFooterLogoSize } from '../_lib/constants';
+import { getFooterLogoSize, getFooterMaxWidthClass } from '../_lib/constants';
 import type { FooterBrandMode, FooterConfig, FooterStyle } from '../_types';
 
 const TikTokIcon = ({ size = 18 }: { size?: number }) => (
@@ -92,6 +92,7 @@ export const FooterPreview = ({
   const useOriginalSocialIconColors = config.useOriginalSocialIconColors !== false;
   const logoSizeLevel = config.logoSizeLevel ?? 1;
   const resolveLogoSize = (baseSize: number) => getFooterLogoSize(baseSize, logoSizeLevel);
+  const maxWidthClass = getFooterMaxWidthClass(config.maxWidth);
   const resolveSocialStyles = (platform: string, fallbackBg: string, fallbackText: string) => {
     if (!useOriginalSocialIconColors) {
       return { bg: fallbackBg, color: fallbackText };
@@ -117,7 +118,7 @@ export const FooterPreview = ({
   const bctLogoType = config.bctLogoType ?? 'thong-bao';
   const bctLogoLink = typeof config.bctLogoLink === 'string' ? config.bctLogoLink.trim() : '';
   const bctLogoSrc = bctLogoType === 'dang-ky'
-    ? '/images/bct/logo-da-dang-ky-bct.png'
+    ? '/images/bct/logo-da-dang-ky-bct.webp'
     : '/images/bct/logo-da-thong-bao-bct.png';
   const renderBctLogo = (baseHeight = 42) => {
     if (!showBctLogo) {return null;}
@@ -148,7 +149,7 @@ export const FooterPreview = ({
     if (previewStyle === 'classic') {
       return (
         <footer className="w-full py-6 md:py-8" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
-          <div className="max-w-7xl mx-auto px-3 md:px-4">
+          <div className={`${maxWidthClass} mx-auto px-3 md:px-4`}>
             <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-12">
               <div className="md:col-span-5 space-y-3 text-center md:text-left">
                 <div className="flex items-center gap-2 justify-center md:justify-start">
@@ -219,7 +220,7 @@ export const FooterPreview = ({
     if (previewStyle === 'modern') {
       return (
         <footer className="w-full py-6 md:py-8" style={{ backgroundColor: colors.bg }}>
-          <div className="max-w-5xl mx-auto px-3 md:px-4 flex flex-col items-center text-center space-y-4">
+          <div className={`${maxWidthClass} mx-auto px-3 md:px-4 flex flex-col items-center text-center space-y-4`}>
             <div className="flex flex-col items-center gap-2">
               {config.logo
                 ? <PreviewImage src={config.logo} alt="Logo" className="object-contain" style={{ width: resolveLogoSize(24), height: resolveLogoSize(24) }} />
@@ -277,7 +278,7 @@ export const FooterPreview = ({
     if (previewStyle === 'corporate') {
       return (
         <footer className="w-full py-6 md:py-8" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
-          <div className="max-w-7xl mx-auto px-3 md:px-4">
+          <div className={`${maxWidthClass} mx-auto px-3 md:px-4`}>
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 pb-4" style={{ borderBottom: `1px solid ${colors.border}` }}>
               <div className="flex items-center gap-2">
                 {config.logo
@@ -346,7 +347,7 @@ export const FooterPreview = ({
     if (previewStyle === 'minimal') {
       return (
         <footer className="w-full py-4" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
-          <div className="max-w-7xl mx-auto px-3 md:px-4 flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className={`${maxWidthClass} mx-auto px-3 md:px-4 flex flex-col md:flex-row items-center justify-between gap-3`}>
             <div className="flex items-center gap-2">
               {config.logo
                 ? <PreviewImage src={config.logo} alt="Logo" className="object-contain" style={{ width: resolveLogoSize(16), height: resolveLogoSize(16) }} />
@@ -392,7 +393,7 @@ export const FooterPreview = ({
     if (previewStyle === 'centered') {
       return (
         <footer className="w-full py-6 md:py-8" style={{ backgroundColor: colors.bg }}>
-          <div className="max-w-6xl mx-auto px-3 md:px-4 text-center">
+          <div className={`${maxWidthClass} mx-auto px-3 md:px-4 text-center`}>
             <div className="flex flex-col items-center gap-2 mb-5">
               {config.logo
                 ? <PreviewImage src={config.logo} alt="Logo" className="object-contain" style={{ width: resolveLogoSize(24), height: resolveLogoSize(24) }} />
@@ -462,7 +463,7 @@ export const FooterPreview = ({
 
     return (
       <footer className="w-full py-5" style={{ backgroundColor: colors.bg, borderTop: `3px solid ${colors.stackedTopBorder}` }}>
-        <div className="max-w-4xl mx-auto px-3 md:px-4">
+        <div className={`${maxWidthClass} mx-auto px-3 md:px-4`}>
           <div className="flex flex-col md:flex-row items-center md:items-start gap-2 mb-4 text-center md:text-left">
             {config.logo
               ? <PreviewImage src={config.logo} alt="Logo" className="object-contain" style={{ width: resolveLogoSize(20), height: resolveLogoSize(20) }} />

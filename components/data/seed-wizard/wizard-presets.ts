@@ -131,6 +131,31 @@ export const VARIANT_PRESET_EXAMPLES: VariantPresetExample[] = [
   { key: 'size_age', label: 'Size + Độ tuổi', example: 'Tã Size S 0-6M, Size M 6-12M' },
 ];
 
+const SCALE_MODULE_KEYS = [
+  'analytics',
+  'cart',
+  'comments',
+  'subscriptions',
+  'customers',
+  'homepage',
+  'kanban',
+  'menus',
+  'orders',
+  'postCategories',
+  'posts',
+  'productCategories',
+  'products',
+  'promotions',
+  'roles',
+  'serviceCategories',
+  'services',
+  'settings',
+  'users',
+  'wishlist',
+  'notifications',
+  'media',
+];
+
 const SCALE_QUANTITIES: Record<DataScale, Record<string, number>> = {
   low: {
     analytics: 10,
@@ -204,6 +229,7 @@ const SCALE_QUANTITIES: Record<DataScale, Record<string, number>> = {
     notifications: 20,
     media: 30,
   },
+  none: Object.fromEntries(SCALE_MODULE_KEYS.map((key) => [key, 0])),
 };
 
 const SCALE_SUMMARY_ITEMS: Array<{ key: string; label: string }> = [
@@ -291,6 +317,9 @@ export function buildSeedConfigs(
   selectedLogo?: string | null,
   useSeedMauImages?: boolean
 ) {
+  if (scale === 'none') {
+    return [];
+  }
   const quantities = SCALE_QUANTITIES[scale];
   const canSeedAnalytics = selectedModules.includes('orders')
     || selectedModules.includes('customers')
@@ -309,6 +338,9 @@ export function buildSeedConfigs(
 }
 
 export function getScaleSummary(selectedModules: string[], scale: DataScale) {
+  if (scale === 'none') {
+    return [];
+  }
   const quantities = SCALE_QUANTITIES[scale];
   const moduleSet = new Set(selectedModules);
   return SCALE_SUMMARY_ITEMS

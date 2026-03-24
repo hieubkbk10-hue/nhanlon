@@ -20,11 +20,14 @@ export type FooterBrandMode = 'single' | 'dual';
 
 export type FooterStyle = 'classic' | 'modern' | 'corporate' | 'minimal' | 'centered' | 'stacked';
 
+export type FooterMaxWidth = '6xl' | '7xl' | '8xl' | '9xl';
+
 export interface FooterConfig {
   columns: FooterColumn[];
   copyright: string;
   description: string;
   logo: string;
+  maxWidth?: FooterMaxWidth;
   logoSizeLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   showCopyright?: boolean;
   showBctLogo?: boolean;

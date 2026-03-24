@@ -2,6 +2,7 @@
 
 import React from 'react';
 import {
+  ArrowUp,
   Calendar,
   Facebook,
   Headphones,
@@ -11,6 +12,7 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  Plus,
   ShoppingCart,
   Youtube,
 } from 'lucide-react';
@@ -107,17 +109,6 @@ const renderPageMock = (tokens: SpeedDialColorTokens) => (
       <div className="h-24 rounded-lg border" style={{ backgroundColor: tokens.pageMockCard, borderColor: tokens.neutralBorder }} />
     </div>
 
-    <div
-      className="absolute top-3 right-3 w-10 h-10 rounded-lg border flex items-center justify-center"
-      style={{
-        backgroundColor: tokens.plusTileBg,
-        borderColor: tokens.neutralBorder,
-        color: tokens.plusTileIcon,
-      }}
-      aria-hidden="true"
-    >
-      +
-    </div>
   </div>
 );
 
@@ -127,20 +118,46 @@ const renderFab = ({
   tokens,
   context,
   groupLabel,
+  isOpen,
+  onToggle,
+  showBackToTop,
+  onBackToTop,
 }: {
   actions: SpeedDialRenderableAction[];
   isRight: boolean;
   tokens: SpeedDialColorTokens;
   context: SpeedDialSectionContext;
   groupLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  showBackToTop: boolean;
+  onBackToTop: () => void;
 }) => {
+  const siteRight = isRight ? 'right-0' : 'left-0';
+  const previewRight = isRight ? (showBackToTop ? 'right-3' : 'right-1') : (showBackToTop ? 'left-3' : 'left-1');
   const wrapperClass = context === 'site'
-    ? `fixed bottom-6 z-50 flex flex-col gap-3 ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`
-    : `absolute bottom-4 z-30 flex flex-col gap-2 ${isRight ? 'right-4 items-end' : 'left-4 items-start'}`;
+    ? `fixed bottom-4 z-50 flex flex-col gap-2 ${siteRight} ${isRight ? 'items-end' : 'items-start'}`
+    : `absolute bottom-3 z-30 flex flex-col gap-2 ${previewRight} ${isRight ? 'items-end' : 'items-start'}`;
 
   return (
     <div className={wrapperClass} role="group" aria-label={groupLabel}>
-      {actions.map((action) => {
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={onBackToTop}
+          className="flex h-8 w-8 items-center justify-center rounded-full border transition-transform"
+          style={{
+            backgroundColor: tokens.neutralSurface,
+            borderColor: tokens.neutralBorder,
+            color: tokens.bodyText,
+          }}
+          aria-label="Lên đầu trang"
+        >
+          <ArrowUp className="h-3.5 w-3.5" />
+        </button>
+      )}
+
+      {isOpen && actions.map((action) => {
         const bg = resolveActionBgColor(action.bgColor, tokens, 'fab');
         const text = getAPCATextColor(bg, 14, 600);
 
@@ -148,25 +165,25 @@ const renderFab = ({
           <a key={action.key} {...getLinkProps(action.url)} className="group flex items-center gap-2" aria-label={action.label || action.icon}>
             {isRight && action.label && (
               <span
-                className="px-2.5 py-1 text-xs font-medium rounded-md shadow-md opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-200 whitespace-nowrap"
+                className="px-2 py-1 text-[11px] font-medium rounded-md shadow-sm opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-200 whitespace-nowrap"
                 style={{ backgroundColor: tokens.labelPillBg, color: tokens.labelPillText }}
               >
                 {action.label}
               </span>
             )}
             <span
-              className="w-11 h-11 rounded-full shadow-sm flex items-center justify-center transition-colors border"
+              className="w-9 h-9 rounded-full shadow-sm flex items-center justify-center transition-transform border backdrop-blur-sm"
               style={{
                 backgroundColor: bg,
                 color: text,
                 borderColor: tokens.actionStyleBorder.fab,
               }}
             >
-              {getIconNode(action.icon, 18)}
+              {getIconNode(action.icon, 16)}
             </span>
             {!isRight && action.label && (
               <span
-                className="px-2.5 py-1 text-xs font-medium rounded-md shadow-md opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-200 whitespace-nowrap"
+                className="px-2 py-1 text-[11px] font-medium rounded-md shadow-sm opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-200 whitespace-nowrap"
                 style={{ backgroundColor: tokens.labelPillBg, color: tokens.labelPillText }}
               >
                 {action.label}
@@ -176,17 +193,20 @@ const renderFab = ({
         );
       })}
 
-      <span
-        className="w-12 h-12 rounded-full shadow-xl border flex items-center justify-center"
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-label="Toggle menu"
+        className="w-9 h-9 rounded-full shadow-sm border flex items-center justify-center transition-transform"
         style={{
           backgroundColor: tokens.mainButtonBg,
           color: tokens.mainButtonText,
           borderColor: tokens.mainButtonRing,
         }}
-        aria-hidden="true"
       >
-        +
-      </span>
+        <Plus className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 };
@@ -197,43 +217,90 @@ const renderSidebar = ({
   tokens,
   context,
   groupLabel,
+  isOpen,
+  onToggle,
+  showBackToTop,
+  onBackToTop,
 }: {
   actions: SpeedDialRenderableAction[];
   isRight: boolean;
   tokens: SpeedDialColorTokens;
   context: SpeedDialSectionContext;
   groupLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  showBackToTop: boolean;
+  onBackToTop: () => void;
 }) => {
   const wrapperClass = context === 'site'
-    ? `fixed top-1/2 -translate-y-1/2 z-50 flex flex-col overflow-hidden shadow-xl ${isRight ? 'right-0 rounded-l-xl' : 'left-0 rounded-r-xl'}`
-    : `absolute top-1/2 -translate-y-1/2 z-30 flex flex-col overflow-hidden shadow-xl ${isRight ? 'right-0 rounded-l-xl' : 'left-0 rounded-r-xl'}`;
+    ? `fixed top-1/2 -translate-y-1/2 z-50 ${isRight ? 'right-0' : 'left-0'}`
+    : `absolute top-1/2 -translate-y-1/2 z-30 ${isRight ? 'right-0' : 'left-0'}`;
+  const panelRadius = isRight ? 'rounded-l-xl' : 'rounded-r-xl';
+  const toggleRadius = isRight ? 'rounded-l-md' : 'rounded-r-md';
 
   return (
     <div className={wrapperClass} role="group" aria-label={groupLabel}>
-      {actions.map((action, idx) => {
-        const bg = resolveActionBgColor(action.bgColor, tokens, 'sidebar');
-        const _text = getAPCATextColor(bg, 14, 600);
-
-        return (
-          <a
-            key={action.key}
-            {...getLinkProps(action.url)}
-            className="group relative flex items-center justify-center w-11 h-11 text-sm font-medium hover:w-32 transition-all duration-200"
-            style={{ backgroundColor: bg, color: tokens.actionStyleText.sidebar }}
-            aria-label={action.label || action.icon}
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={onBackToTop}
+          className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full border ${isRight ? 'mr-1' : 'ml-1'}`}
+          style={{
+            backgroundColor: tokens.neutralSurface,
+            borderColor: tokens.neutralBorder,
+            color: tokens.bodyText,
+          }}
+          aria-label="Lên đầu trang"
+        >
+          <ArrowUp className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          aria-label="Toggle menu"
+          className={`flex h-12 w-7 items-center justify-center border shadow-md ${toggleRadius}`}
+          style={{
+            backgroundColor: tokens.neutralSurface,
+            borderColor: tokens.neutralBorder,
+            color: tokens.bodyText,
+          }}
+        >
+          <Plus className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-45' : ''}`} />
+        </button>
+        {isOpen && (
+          <div
+            className={`flex flex-col gap-1.5 p-1.5 border shadow-sm backdrop-blur-md ${panelRadius} ${isRight ? '-ml-1' : '-mr-1'}`}
+            style={{
+              backgroundColor: tokens.neutralSurface,
+              borderColor: tokens.neutralBorder,
+            }}
           >
-            <span className={`absolute ${isRight ? 'right-3' : 'left-3'}`}>{getIconNode(action.icon, 17)}</span>
-            {action.label && <span className={`absolute text-xs opacity-0 group-hover:opacity-100 transition-opacity ${isRight ? 'right-10' : 'left-10'}`}>{action.label}</span>}
-            {idx < actions.length - 1 && (
-              <span
-                className="absolute bottom-0 left-2 right-2 h-px"
-                style={{ backgroundColor: tokens.separatorColor }}
-                aria-hidden="true"
-              />
-            )}
-          </a>
-        );
-      })}
+            {actions.map((action) => {
+              const bg = resolveActionBgColor(action.bgColor, tokens, 'sidebar');
+              const text = getAPCATextColor(bg, 14, 600);
+
+              return (
+                <a
+                  key={action.key}
+                  {...getLinkProps(action.url)}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform border"
+                  style={{
+                    backgroundColor: bg,
+                    color: text,
+                    borderColor: tokens.actionStyleBorder.sidebar,
+                  }}
+                  aria-label={action.label || action.icon}
+                >
+                  {getIconNode(action.icon, 18)}
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -244,40 +311,105 @@ const renderPills = ({
   tokens,
   context,
   groupLabel,
+  isOpen,
+  onToggle,
+  showBackToTop,
+  onBackToTop,
 }: {
   actions: SpeedDialRenderableAction[];
   isRight: boolean;
   tokens: SpeedDialColorTokens;
   context: SpeedDialSectionContext;
   groupLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  showBackToTop: boolean;
+  onBackToTop: () => void;
 }) => {
+  const siteRight = isRight ? 'right-0' : 'left-0';
+  const previewRight = isRight ? (showBackToTop ? 'right-3' : 'right-1') : (showBackToTop ? 'left-3' : 'left-1');
   const wrapperClass = context === 'site'
-    ? `fixed bottom-6 z-50 flex flex-col gap-3 ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`
-    : `absolute bottom-4 z-30 flex flex-col gap-2 ${isRight ? 'right-4 items-end' : 'left-4 items-start'}`;
+    ? `fixed bottom-4 z-50 ${siteRight}`
+    : `absolute bottom-3 z-30 ${previewRight}`;
 
   return (
     <div className={wrapperClass} role="group" aria-label={groupLabel}>
-      {actions.map((action) => {
-        const bg = resolveActionBgColor(action.bgColor, tokens, 'pills');
-        const _text = getAPCATextColor(bg, 14, 600);
+      <div
+        className="flex flex-col items-center gap-1.5 rounded-full border px-1.5 py-1.5 shadow-md"
+        style={{
+          backgroundColor: tokens.neutralSurface,
+          borderColor: tokens.neutralBorder,
+        }}
+      >
+        {showBackToTop && (
+          <>
+            <button
+              type="button"
+              onClick={onBackToTop}
+              className="flex h-8 w-8 items-center justify-center rounded-full"
+              style={{
+                backgroundColor: tokens.neutralSurface,
+                color: tokens.bodyText,
+              }}
+              aria-label="Lên đầu trang"
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+            </button>
+            <span
+              className="h-px w-6"
+              style={{ backgroundColor: tokens.separatorColor }}
+              aria-hidden="true"
+            />
+          </>
+        )}
+        {isOpen && actions.map((action, idx) => {
+          const bg = resolveActionBgColor(action.bgColor, tokens, 'pills');
+          const text = getAPCATextColor(bg, 14, 600);
 
-        return (
-          <a
-            key={action.key}
-            {...getLinkProps(action.url)}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full shadow-sm transition-colors border ${isRight ? 'flex-row' : 'flex-row-reverse'}`}
-            style={{ 
-              backgroundColor: bg, 
-              color: tokens.actionStyleText.pills,
-              borderColor: tokens.actionStyleBorder.pills,
-            }}
-            aria-label={action.label || action.icon}
-          >
-            {getIconNode(action.icon, 17)}
-            {action.label && <span className="text-xs font-medium whitespace-nowrap">{action.label}</span>}
-          </a>
-        );
-      })}
+          return (
+            <React.Fragment key={action.key}>
+              <a
+                {...getLinkProps(action.url)}
+                className="flex h-9 w-9 items-center justify-center rounded-full transition-transform"
+                style={{
+                  backgroundColor: bg,
+                  color: text,
+                }}
+                aria-label={action.label || action.icon}
+              >
+                {getIconNode(action.icon, 16)}
+              </a>
+              {idx < actions.length - 1 && (
+                <span
+                  className="h-px w-6"
+                  style={{ backgroundColor: tokens.separatorColor }}
+                  aria-hidden="true"
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+        {(isOpen || showBackToTop) && actions.length > 0 && (
+          <span
+            className="h-px w-6"
+            style={{ backgroundColor: tokens.separatorColor }}
+            aria-hidden="true"
+          />
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          aria-label="Toggle menu"
+          className="flex h-8 w-8 items-center justify-center rounded-full"
+          style={{
+            backgroundColor: tokens.bodyText,
+            color: tokens.neutralSurface,
+          }}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 };
@@ -288,108 +420,180 @@ const renderStack = ({
   tokens,
   context,
   groupLabel,
+  isOpen,
+  onToggle,
+  showBackToTop,
+  onBackToTop,
 }: {
   actions: SpeedDialRenderableAction[];
   isRight: boolean;
   tokens: SpeedDialColorTokens;
   context: SpeedDialSectionContext;
   groupLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  showBackToTop: boolean;
+  onBackToTop: () => void;
 }) => {
+  const siteRight = isRight ? 'right-0' : 'left-0';
+  const previewRight = isRight ? (showBackToTop ? 'right-3' : 'right-1') : (showBackToTop ? 'left-3' : 'left-1');
   const wrapperClass = context === 'site'
-    ? `fixed bottom-6 z-50 ${isRight ? 'right-6' : 'left-6'}`
-    : `absolute bottom-4 z-30 ${isRight ? 'right-4' : 'left-4'}`;
+    ? `fixed bottom-4 z-50 flex flex-col items-end gap-2 ${siteRight} ${isRight ? '' : 'items-start'}`
+    : `absolute bottom-3 z-30 flex flex-col items-end gap-2 ${previewRight} ${isRight ? '' : 'items-start'}`;
 
   return (
     <div className={wrapperClass} role="group" aria-label={groupLabel}>
-      <div className="relative" style={{ height: `${Math.min(actions.length * 34 + 28, 190)}px`, width: '48px' }}>
-        {actions.map((action, idx) => {
-          const bg = resolveActionBgColor(action.bgColor, tokens, 'stack');
-          const text = getAPCATextColor(bg, 14, 600);
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={onBackToTop}
+          className="flex h-8 w-8 items-center justify-center rounded-full border"
+          style={{
+            backgroundColor: tokens.neutralSurface,
+            borderColor: tokens.neutralBorder,
+            color: tokens.bodyText,
+          }}
+          aria-label="Lên đầu trang"
+        >
+          <ArrowUp className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {isOpen && (
+        <div
+          className="rounded-2xl border p-2 shadow-lg"
+          style={{
+            backgroundColor: tokens.neutralSurface,
+            borderColor: tokens.neutralBorder,
+          }}
+        >
+          <div className="flex flex-col gap-2">
+            {actions.map((action) => {
+              const bg = resolveActionBgColor(action.bgColor, tokens, 'stack');
+              const text = getAPCATextColor(bg, 14, 600);
 
-          return (
-            <a
-              key={action.key}
-              {...getLinkProps(action.url)}
-              className="group absolute left-1/2 -translate-x-1/2 w-11 h-11 rounded-full shadow-sm flex items-center justify-center transition-colors border"
-              style={{
-                bottom: `${idx * 34}px`,
-                zIndex: actions.length - idx,
-                backgroundColor: bg,
-                color: text,
-                borderColor: tokens.actionStyleBorder.stack,
-              }}
-              aria-label={action.label || action.icon}
-            >
-              {getIconNode(action.icon, 17)}
-              {action.label && (
-                <span
-                  className={`absolute px-2 py-1 text-[11px] rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ${isRight ? 'right-full mr-2' : 'left-full ml-2'}`}
-                  style={{ backgroundColor: tokens.labelPillBg, color: tokens.labelPillText }}
+              return (
+                <a
+                  key={action.key}
+                  {...getLinkProps(action.url)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl transition-transform"
+                  style={{
+                    backgroundColor: bg,
+                    color: text,
+                  }}
+                  aria-label={action.label || action.icon}
                 >
-                  {action.label}
-                </span>
-              )}
-            </a>
-          );
-        })}
-      </div>
+                  {getIconNode(action.icon, 16)}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-label="Toggle menu"
+        className="flex h-9 w-9 items-center justify-center rounded-full shadow-sm"
+        style={{
+          backgroundColor: tokens.mainButtonBg,
+          color: tokens.mainButtonText,
+        }}
+      >
+        <Plus className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-45' : ''}`} />
+      </button>
     </div>
   );
 };
 
 const renderDock = ({
   actions,
+  isRight,
   tokens,
   context,
   groupLabel,
+  isOpen,
+  onToggle,
+  showBackToTop,
+  onBackToTop,
 }: {
   actions: SpeedDialRenderableAction[];
+  isRight: boolean;
   tokens: SpeedDialColorTokens;
   context: SpeedDialSectionContext;
   groupLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  showBackToTop: boolean;
+  onBackToTop: () => void;
 }) => {
+  const siteRight = isRight ? 'right-0' : 'left-0';
+  const previewRight = isRight ? (showBackToTop ? 'right-3' : 'right-1') : (showBackToTop ? 'left-3' : 'left-1');
   const wrapperClass = context === 'site'
-    ? 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50'
-    : 'absolute bottom-4 left-1/2 -translate-x-1/2 z-30';
+    ? `fixed bottom-4 z-50 flex items-center gap-2 ${siteRight} ${isRight ? '' : 'flex-row-reverse'}`
+    : `absolute bottom-3 z-30 flex items-center gap-2 ${previewRight} ${isRight ? '' : 'flex-row-reverse'}`;
+
+  const actionNodes = actions.map((action) => {
+    const bg = resolveActionBgColor(action.bgColor, tokens, 'dock');
+    const text = getAPCATextColor(bg, 14, 600);
+
+    return (
+      <a
+        key={action.key}
+        {...getLinkProps(action.url)}
+        className="group relative w-9 h-9 rounded-full flex items-center justify-center transition-transform border backdrop-blur-sm"
+        style={{
+          backgroundColor: bg,
+          color: text,
+          borderColor: tokens.actionStyleBorder.dock,
+        }}
+        aria-label={action.label || action.icon}
+      >
+        {getIconNode(action.icon, 16)}
+        {action.label && (
+          <span
+            className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-[11px] rounded-md shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+            style={{ backgroundColor: tokens.labelPillBg, color: tokens.labelPillText }}
+          >
+            {action.label}
+          </span>
+        )}
+      </a>
+    );
+  });
 
   return (
     <div className={wrapperClass} role="group" aria-label={groupLabel}>
-      <div
-        className="flex items-end justify-center rounded-2xl p-2 gap-1.5 border"
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={onBackToTop}
+          className="flex h-8 w-8 items-center justify-center rounded-full border"
+          style={{
+            backgroundColor: tokens.neutralSurface,
+            borderColor: tokens.neutralBorder,
+            color: tokens.bodyText,
+          }}
+          aria-label="Lên đầu trang"
+        >
+          <ArrowUp className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {isOpen && (isRight ? actionNodes : [...actionNodes].reverse())}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-label="Toggle menu"
+        className="w-9 h-9 rounded-full shadow-sm border flex items-center justify-center"
         style={{
-          backgroundColor: context === 'site' ? tokens.overlayScrim : tokens.dockBackdrop,
-          borderColor: tokens.neutralBorder,
+          backgroundColor: tokens.mainButtonBg,
+          color: tokens.mainButtonText,
+          borderColor: tokens.mainButtonRing,
         }}
       >
-        {actions.map((action) => {
-          const bg = resolveActionBgColor(action.bgColor, tokens, 'dock');
-          const text = getAPCATextColor(bg, 14, 600);
-
-          return (
-            <a
-              key={action.key}
-              {...getLinkProps(action.url)}
-              className="group relative w-10 h-10 rounded-xl flex items-center justify-center transition-colors border"
-              style={{
-                backgroundColor: bg,
-                color: text,
-                borderColor: tokens.actionStyleBorder.dock,
-              }}
-              aria-label={action.label || action.icon}
-            >
-              {getIconNode(action.icon, 16)}
-              {action.label && (
-                <span
-                  className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-[11px] rounded-md shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
-                  style={{ backgroundColor: tokens.labelPillBg, color: tokens.labelPillText }}
-                >
-                  {action.label}
-                </span>
-              )}
-            </a>
-          );
-        })}
-      </div>
+        <Plus className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-45' : ''}`} />
+      </button>
     </div>
   );
 };
@@ -400,57 +604,101 @@ const renderMinimal = ({
   tokens,
   context,
   groupLabel,
+  isOpen,
+  onToggle,
+  showBackToTop,
+  onBackToTop,
 }: {
   actions: SpeedDialRenderableAction[];
   isRight: boolean;
   tokens: SpeedDialColorTokens;
   context: SpeedDialSectionContext;
   groupLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  showBackToTop: boolean;
+  onBackToTop: () => void;
 }) => {
+  const siteRight = isRight ? 'right-0' : 'left-0';
+  const previewRight = isRight ? (showBackToTop ? 'right-3' : 'right-1') : (showBackToTop ? 'left-3' : 'left-1');
   const wrapperClass = context === 'site'
-    ? `fixed bottom-6 z-50 flex items-center rounded-full px-2 py-1.5 gap-1.5 border shadow-sm ${isRight ? 'right-6' : 'left-6'}`
-    : `absolute bottom-4 z-30 flex items-center rounded-full px-2 py-1.5 gap-1.5 border shadow-sm ${isRight ? 'right-4' : 'left-4'}`;
+    ? `fixed bottom-4 z-50 ${siteRight}`
+    : `absolute bottom-3 z-30 ${previewRight}`;
 
   return (
     <div
       className={wrapperClass}
-      style={{
-        backgroundColor: tokens.minimalBarBg,
-        borderColor: tokens.neutralBorder,
-      }}
       role="group"
       aria-label={groupLabel}
     >
-      {actions.map((action, idx) => {
-        const _baseColor = resolveActionBgColor(action.bgColor, tokens, 'minimal');
+      <div
+        className="flex flex-col-reverse items-center gap-2 rounded-full border px-1.5 py-1.5 shadow-lg backdrop-blur-xl"
+        style={{
+          backgroundColor: tokens.glassSurface,
+          borderColor: tokens.glassBorder,
+        }}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          aria-label="Toggle menu"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+          style={{
+            backgroundColor: tokens.bodyText,
+            color: tokens.neutralSurface,
+          }}
+        >
+          <Plus className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-45' : ''}`} />
+        </button>
+        {showBackToTop && (
+          <button
+            type="button"
+            onClick={onBackToTop}
+            className="flex h-8 w-8 items-center justify-center rounded-full border"
+            style={{
+              backgroundColor: tokens.neutralSurface,
+              borderColor: tokens.neutralBorder,
+              color: tokens.bodyText,
+            }}
+            aria-label="Lên đầu trang"
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {isOpen && (
+          <div className="flex flex-col-reverse gap-2">
+            {actions.map((action) => {
+              const bg = resolveActionBgColor(action.bgColor, tokens, 'minimal');
+              const text = getAPCATextColor(bg, 14, 600);
 
-        return (
-          <React.Fragment key={action.key}>
-            <a
-              {...getLinkProps(action.url)}
-              className="group relative w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-              style={{ color: tokens.minimalIconColor }}
-              aria-label={action.label || action.icon}
-            >
-              <span
-                className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ backgroundColor: tokens.minimalHoverBg }}
-                aria-hidden="true"
-              />
-              <span className="relative z-10">{getIconNode(action.icon, 16)}</span>
-              {action.label && (
-                <span
-                  className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-[11px] rounded-md shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
-                  style={{ backgroundColor: tokens.labelPillBg, color: tokens.labelPillText }}
+              return (
+                <a
+                  key={action.key}
+                  {...getLinkProps(action.url)}
+                  className="group relative h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-sm flex"
+                  style={{
+                    backgroundColor: bg,
+                    color: text,
+                    borderColor: tokens.actionStyleBorder.minimal,
+                  }}
+                  aria-label={action.label || action.icon}
                 >
-                  {action.label}
-                </span>
-              )}
-            </a>
-            {idx < actions.length - 1 && <span className="w-px h-5" style={{ backgroundColor: tokens.separatorColor }} aria-hidden="true" />}
-          </React.Fragment>
-        );
-      })}
+                  {getIconNode(action.icon, 16)}
+                  {action.label && (
+                    <span
+                      className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-[11px] rounded-md shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+                      style={{ backgroundColor: tokens.labelPillBg, color: tokens.labelPillText }}
+                    >
+                      {action.label}
+                    </span>
+                  )}
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -462,6 +710,10 @@ const SpeedDialSectionContent = ({
   tokens,
   context,
   groupLabel,
+  isOpen,
+  onToggle,
+  showBackToTop,
+  onBackToTop,
 }: {
   actions: SpeedDialRenderableAction[];
   style: SpeedDialStyle;
@@ -469,6 +721,10 @@ const SpeedDialSectionContent = ({
   tokens: SpeedDialColorTokens;
   context: SpeedDialSectionContext;
   groupLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  showBackToTop: boolean;
+  onBackToTop: () => void;
 }) => {
   const isRight = position !== 'bottom-left';
 
@@ -478,12 +734,12 @@ const SpeedDialSectionContent = ({
 
   const floating = (
     <>
-      {style === 'fab' && renderFab({ actions, isRight, tokens, context, groupLabel })}
-      {style === 'sidebar' && renderSidebar({ actions, isRight, tokens, context, groupLabel })}
-      {style === 'pills' && renderPills({ actions, isRight, tokens, context, groupLabel })}
-      {style === 'stack' && renderStack({ actions, isRight, tokens, context, groupLabel })}
-      {style === 'dock' && renderDock({ actions, tokens, context, groupLabel })}
-      {style === 'minimal' && renderMinimal({ actions, isRight, tokens, context, groupLabel })}
+      {style === 'fab' && renderFab({ actions, isRight, tokens, context, groupLabel, isOpen, onToggle, showBackToTop, onBackToTop })}
+      {style === 'sidebar' && renderSidebar({ actions, isRight, tokens, context, groupLabel, isOpen, onToggle, showBackToTop, onBackToTop })}
+      {style === 'pills' && renderPills({ actions, isRight, tokens, context, groupLabel, isOpen, onToggle, showBackToTop, onBackToTop })}
+      {style === 'stack' && renderStack({ actions, isRight, tokens, context, groupLabel, isOpen, onToggle, showBackToTop, onBackToTop })}
+      {style === 'dock' && renderDock({ actions, isRight, tokens, context, groupLabel, isOpen, onToggle, showBackToTop, onBackToTop })}
+      {style === 'minimal' && renderMinimal({ actions, isRight, tokens, context, groupLabel, isOpen, onToggle, showBackToTop, onBackToTop })}
     </>
   );
 
@@ -522,6 +778,28 @@ export function SpeedDialSectionShared({
     secondary,
     mode,
   }), [brandColor, secondary, mode]);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [isScrolled, setIsScrolled] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {return;}
+
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 120);
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  const handleBackToTop = () => {
+    if (typeof window === 'undefined') {return;}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const showBackToTop = context === 'preview' ? false : isScrolled;
   if (!includePreviewWrapper || context === 'site') {
     return (
       <SpeedDialSectionContent
@@ -531,6 +809,10 @@ export function SpeedDialSectionShared({
         tokens={tokens}
         context={context}
         groupLabel={resolvedSectionTitle}
+        isOpen={isOpen}
+        onToggle={() => { setIsOpen((prev) => !prev); }}
+        showBackToTop={showBackToTop}
+        onBackToTop={handleBackToTop}
       />
     );
   }
@@ -557,6 +839,10 @@ export function SpeedDialSectionShared({
             tokens={tokens}
             context="preview"
             groupLabel={resolvedSectionTitle}
+            isOpen={isOpen}
+            onToggle={() => { setIsOpen((prev) => !prev); }}
+            showBackToTop={showBackToTop}
+            onBackToTop={handleBackToTop}
           />
         </BrowserFrame>
       </PreviewWrapper>
