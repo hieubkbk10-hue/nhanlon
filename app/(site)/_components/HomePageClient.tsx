@@ -1,13 +1,15 @@
 'use client';
 
 import { ComponentRenderer } from '@/components/site/ComponentRenderer';
+import { HomePageLoading } from '@/components/site/loading/HomePageLoading';
 import { api } from '@/convex/_generated/api';
 import type { Doc } from '@/convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
-import { Loader2 } from 'lucide-react';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const EMPTY_COMPONENTS_COUNT = 0;
+const LOADING_DELAY_MS = 120;
+const LOADING_MIN_DISPLAY_MS = 320;
 
 export default function HomePageClient({
   initialComponents,
@@ -16,12 +18,68 @@ export default function HomePageClient({
 }): React.ReactElement {
   const components = useQuery(api.homeComponents.listActive);
   const resolvedComponents = components ?? initialComponents;
+  const [showLoading, setShowLoading] = useState(false);
+  const loadingStartRef = useRef<number | null>(null);
+  const delayTimerRef = useRef<number | null>(null);
 
-  if (typeof resolvedComponents === 'undefined') {
+  const isDataReady = typeof resolvedComponents !== 'undefined';
+
+  useEffect(() => {
+    if (!isDataReady) {
+      if (!loadingStartRef.current) {
+        loadingStartRef.current = Date.now();
+      }
+      if (showLoading) {
+        return;
+      }
+      if (LOADING_DELAY_MS <= 0) {
+        setShowLoading(true);
+        return;
+      }
+      if (delayTimerRef.current === null) {
+        delayTimerRef.current = window.setTimeout(() => {
+          setShowLoading(true);
+          delayTimerRef.current = null;
+        }, LOADING_DELAY_MS);
+      }
+      return;
+    }
+
+    if (delayTimerRef.current) {
+      window.clearTimeout(delayTimerRef.current);
+      delayTimerRef.current = null;
+    }
+
+    if (!showLoading) {
+      setShowLoading(false);
+      loadingStartRef.current = null;
+      return;
+    }
+
+    const startedAt = loadingStartRef.current ?? Date.now();
+    const elapsed = Date.now() - startedAt;
+    const remaining = Math.max(0, LOADING_MIN_DISPLAY_MS - elapsed);
+    if (remaining <= 0) {
+      setShowLoading(false);
+      loadingStartRef.current = null;
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowLoading(false);
+      loadingStartRef.current = null;
+    }, remaining);
+
+    return () => window.clearTimeout(timer);
+  }, [isDataReady, showLoading]);
+
+  if (!isDataReady && !showLoading) {
+    return <></>;
+  }
+
+  if (!isDataReady || showLoading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
-      </div>
+      <HomePageLoading />
     );
   }
 

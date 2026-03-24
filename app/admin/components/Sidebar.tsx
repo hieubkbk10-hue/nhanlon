@@ -13,6 +13,7 @@ import {
 import { cn } from './ui';
 import { api } from '@/convex/_generated/api';
 import { useAdminModules } from '../context/AdminModulesContext';
+import { useSidebarState } from '../context/SidebarContext';
 import { useAdminAuth } from '../auth/context';
 import { isValidImageSrc } from '@/lib/utils/image';
 
@@ -131,7 +132,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuOpen }) => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { isSidebarCollapsed, setIsSidebarCollapsed } = useSidebarState();
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -478,7 +479,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
                 {showContactInboxSection && (
                   <SidebarItem
                     icon={Inbox}
-                    label="Contact Inbox"
+                    label="Tin nhắn liên hệ"
                     href="/admin/contact-inbox"
                     active={isActive('/admin/contact-inbox')}
                     isCollapsed={isSidebarCollapsed}

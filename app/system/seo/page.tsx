@@ -11,6 +11,7 @@ import { SeoCriticalActions } from './_components/SeoCriticalActions';
 import { SeoQuickWins } from './_components/SeoQuickWins';
 import { SeoGuidedActions } from './_components/SeoGuidedActions';
 import { SeoOverviewSummary } from './_components/SeoOverviewSummary';
+import { SeoSiteVerificationPanel } from './_components/SeoSiteVerificationPanel';
 
 export default function SEOConfigPage(): React.ReactElement {
   const searchParams = useSearchParams();
@@ -79,6 +80,7 @@ export default function SEOConfigPage(): React.ReactElement {
             robotsUrl={robotsUrl}
             llmsUrl={llmsUrl}
           />
+          <SeoSiteVerificationPanel />
           <SeoHealthPanel checklist={checklist} isLoading={isLoading} />
         </div>
       )}

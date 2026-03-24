@@ -1,5 +1,5 @@
 import type { Doc } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { consumeRateLimit, getClientIdentifier } from "./lib/rateLimit";
@@ -35,6 +35,7 @@ const statsDoc = v.object({
 });
 
 const sanitizeText = (value: string, max: number) => value.trim().slice(0, max);
+const MAX_ADMIN_SELECTION = 5000;
 
 async function adjustStat(ctx: MutationCtx, key: string, delta: number) {
   const existing = await ctx.db
@@ -63,6 +64,39 @@ async function bumpStatsOnStatusChange(ctx: MutationCtx, prev: string, next: str
     adjustStat(ctx, prev, -1),
     adjustStat(ctx, next, 1),
   ]);
+}
+
+async function fetchInboxRecords(
+  ctx: QueryCtx,
+  options: { status?: "new" | "in_progress" | "resolved" | "spam"; search?: string; max: number }
+) {
+  const max = Math.max(0, Math.min(options.max, MAX_ADMIN_SELECTION + 1));
+  let records: Doc<"contactInquiries">[] = [];
+  if (options.status) {
+    records = await ctx.db
+      .query("contactInquiries")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", options.status!))
+      .order("desc")
+      .take(max);
+  } else {
+    records = await ctx.db
+      .query("contactInquiries")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .take(max);
+  }
+
+  if (options.search?.trim()) {
+    const searchLower = options.search.trim().toLowerCase();
+    records = records.filter((record) =>
+      record.name.toLowerCase().includes(searchLower)
+      || record.subject.toLowerCase().includes(searchLower)
+      || record.email?.toLowerCase().includes(searchLower)
+      || record.phone?.toLowerCase().includes(searchLower)
+    );
+  }
+
+  return records;
 }
 
 export const submitContactInquiry = mutation({
@@ -144,31 +178,11 @@ export const listInbox = query({
     const limit = Math.min(args.limit ?? 20, 100);
     const offset = args.offset ?? 0;
     const fetchLimit = Math.min(offset + limit + 50, 500);
-
-    let records: Doc<"contactInquiries">[] = [];
-    if (args.status) {
-      records = await ctx.db
-        .query("contactInquiries")
-        .withIndex("by_status_createdAt", (q) => q.eq("status", args.status!))
-        .order("desc")
-        .take(fetchLimit);
-    } else {
-      records = await ctx.db
-        .query("contactInquiries")
-        .withIndex("by_createdAt")
-        .order("desc")
-        .take(fetchLimit);
-    }
-
-    if (args.search?.trim()) {
-      const searchLower = args.search.trim().toLowerCase();
-      records = records.filter((record) =>
-        record.name.toLowerCase().includes(searchLower)
-        || record.subject.toLowerCase().includes(searchLower)
-        || record.email?.toLowerCase().includes(searchLower)
-        || record.phone?.toLowerCase().includes(searchLower)
-      );
-    }
+    const records = await fetchInboxRecords(ctx, {
+      max: fetchLimit,
+      search: args.search,
+      status: args.status,
+    });
 
     return records.slice(offset, offset + limit);
   },
@@ -210,6 +224,51 @@ export const getInboxStats = query({
   }),
 });
 
+export const countAdmin = query({
+  args: {
+    search: v.optional(v.string()),
+    status: v.optional(contactStatus),
+  },
+  handler: async (ctx, args) => {
+    const records = await fetchInboxRecords(ctx, {
+      max: MAX_ADMIN_SELECTION + 1,
+      search: args.search,
+      status: args.status,
+    });
+    return {
+      count: Math.min(records.length, MAX_ADMIN_SELECTION),
+      hasMore: records.length > MAX_ADMIN_SELECTION,
+    };
+  },
+  returns: v.object({ count: v.number(), hasMore: v.boolean() }),
+});
+
+export const listAdminIds = query({
+  args: {
+    search: v.optional(v.string()),
+    status: v.optional(contactStatus),
+  },
+  handler: async (ctx, args) => {
+    const records = await fetchInboxRecords(ctx, {
+      max: MAX_ADMIN_SELECTION + 1,
+      search: args.search,
+      status: args.status,
+    });
+    const ids = records.slice(0, MAX_ADMIN_SELECTION).map((record) => record._id);
+    return { ids, hasMore: records.length > MAX_ADMIN_SELECTION };
+  },
+  returns: v.object({ ids: v.array(v.id("contactInquiries")), hasMore: v.boolean() }),
+});
+
+export const getById = query({
+  args: { id: v.id("contactInquiries") },
+  handler: async (ctx, args) => {
+    const record = await ctx.db.get(args.id);
+    return record ?? null;
+  },
+  returns: v.union(contactInquiryDoc, v.null()),
+});
+
 export const updateInquiryStatus = mutation({
   args: {
     id: v.id("contactInquiries"),
@@ -233,6 +292,97 @@ export const updateInquiryStatus = mutation({
     return { success: true };
   },
   returns: v.object({ success: v.boolean() }),
+});
+
+export const updateInquiry = mutation({
+  args: {
+    email: v.optional(v.string()),
+    id: v.id("contactInquiries"),
+    message: v.string(),
+    name: v.string(),
+    phone: v.optional(v.string()),
+    status: contactStatus,
+    subject: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.get(args.id);
+    if (!existing) {
+      throw new Error("Không tìm thấy tin nhắn");
+    }
+
+    const name = sanitizeText(args.name, 120);
+    const email = args.email ? sanitizeText(args.email, 160) : undefined;
+    const phone = args.phone ? sanitizeText(args.phone, 40) : undefined;
+    const subject = sanitizeText(args.subject, 160);
+    const message = sanitizeText(args.message, 2000);
+
+    if (!name || !subject || !message) {
+      throw new Error("Vui lòng nhập đầy đủ họ tên, chủ đề và nội dung.");
+    }
+
+    const now = Date.now();
+    const handledAt = args.status === "new" ? undefined : (existing.handledAt ?? now);
+    await ctx.db.patch(args.id, {
+      email,
+      handledAt,
+      message,
+      name,
+      phone,
+      status: args.status,
+      subject,
+      updatedAt: now,
+    });
+
+    await bumpStatsOnStatusChange(ctx, existing.status, args.status);
+
+    return { success: true };
+  },
+  returns: v.object({ success: v.boolean() }),
+});
+
+export const remove = mutation({
+  args: { id: v.id("contactInquiries") },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.get(args.id);
+    if (!existing) {
+      throw new Error("Không tìm thấy tin nhắn");
+    }
+
+    await ctx.db.delete(args.id);
+    await Promise.all([
+      adjustStat(ctx, "total", -1),
+      adjustStat(ctx, existing.status, -1),
+    ]);
+
+    return { success: true };
+  },
+  returns: v.object({ success: v.boolean() }),
+});
+
+export const bulkRemove = mutation({
+  args: { ids: v.array(v.id("contactInquiries")) },
+  handler: async (ctx, args) => {
+    const records = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
+    const existingRecords = records.filter(Boolean) as Doc<"contactInquiries">[];
+
+    if (existingRecords.length === 0) {
+      return 0;
+    }
+
+    const statusCounts = existingRecords.reduce<Record<string, number>>((acc, record) => {
+      acc[record.status] = (acc[record.status] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    await Promise.all([
+      adjustStat(ctx, "total", -existingRecords.length),
+      ...Object.entries(statusCounts).map(([status, count]) => adjustStat(ctx, status, -count)),
+      ...existingRecords.map((record) => ctx.db.delete(record._id)),
+    ]);
+
+    return existingRecords.length;
+  },
+  returns: v.number(),
 });
 
 export const getInboxStatsRows = query({

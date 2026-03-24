@@ -10,6 +10,7 @@ export type HomeComponentBaseType = {
 
 export const HOME_COMPONENT_BASE_TYPES: HomeComponentBaseType[] = [
   { description: 'Banner chính đầu trang', label: 'Hero Banner', route: 'hero', value: 'Hero', singleton: true, recommended: true, position: 1 },
+  { description: 'Hero danh mục kèm sidebar', label: 'Hero khám phá danh mục', route: 'homepage-category-hero', value: 'HomepageCategoryHero', singleton: true, recommended: true, position: 2 },
   { description: 'Số liệu nổi bật', label: 'Thống kê', route: 'stats', value: 'Stats', recommended: true, position: 2 },
   { description: 'Logo đối tác, khách hàng', label: 'Đối tác / Logos', route: 'partners', value: 'Partners', position: 3 },
   { description: 'Giải thưởng, chứng chỉ', label: 'Chứng nhận', route: 'trust-badges', value: 'TrustBadges', position: 4 },

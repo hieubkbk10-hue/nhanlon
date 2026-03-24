@@ -62,6 +62,8 @@ import { BrandBadge } from './shared/BrandColorHelpers';
 import { BlogSection } from './BlogSection';
 import { ProductListSection } from './ProductListSection';
 import { ServiceListSection } from './ServiceListSection';
+import { HomepageCategoryHeroSection } from './HomepageCategoryHeroSection';
+import { getHomepageCategoryHeroColors } from '@/app/admin/home-components/homepage-category-hero/_lib/colors';
 import { PricingSection as PricingSectionRuntime } from './PricingSection';
 import { CareerSection as CareerSectionRuntime } from './CareerSection';
 import { VoucherPromotionsSection as VoucherPromotionsSectionRuntime } from './VoucherPromotionsSection';
@@ -78,6 +80,7 @@ import { ContactSection as ContactSectionRuntime } from './ContactSection';
 import { CaseStudySection } from './CaseStudySection';
 import { SpeedDialSection } from './SpeedDialSection';
 import { CountdownSectionWrapper } from './CountdownSectionWrapper';
+import type { HomepageCategoryHeroConfig } from '@/app/admin/home-components/homepage-category-hero/_types';
 import {
   ArrowRight, ArrowUpRight,
   ChevronLeft, ChevronRight, Globe,
@@ -154,6 +157,22 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
     case 'Hero': {
       return wrapWithFont(
         <HeroSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} />
+      );
+    }
+    case 'HomepageCategoryHero': {
+      const heroTokens = getHomepageCategoryHeroColors(
+        resolvedColors.primary,
+        resolvedColors.secondary,
+        resolvedColors.mode,
+      );
+      return wrapWithFont(
+        <HomepageCategoryHeroSection
+          config={config as unknown as HomepageCategoryHeroConfig}
+          brandColor={resolvedColors.primary}
+          secondary={resolvedColors.secondary}
+          mode={resolvedColors.mode}
+          tokens={heroTokens}
+        />
       );
     }
     case 'Stats': {
@@ -341,6 +360,7 @@ function HeroSection({
   const style = (config.style as HeroStyle) || 'slider';
   const content = (config.content as HeroContent) || {};
   const [currentSlide, setCurrentSlide] = React.useState(0);
+  const touchStartX = React.useRef<number | null>(null);
   const primaryHref = content.primaryButtonLink || slides[currentSlide]?.link || '#';
   const secondaryHref = content.secondaryButtonLink || '#';
   const sliderColors = getSliderColors(brandColor, secondary, mode);
@@ -384,11 +404,41 @@ function HeroSection({
     </div>
   );
 
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    touchStartX.current = event.touches[0]?.clientX ?? null;
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const startX = touchStartX.current;
+    const endX = event.changedTouches[0]?.clientX;
+    touchStartX.current = null;
+
+    if (slides.length <= 1 || startX == null || endX == null) {
+      return;
+    }
+
+    const deltaX = endX - startX;
+    if (Math.abs(deltaX) < 40) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      setCurrentSlide(prev => (prev + 1) % slides.length);
+      return;
+    }
+
+    setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1);
+  };
+
   // Style 1: Slider
   if (style === 'slider') {
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden">
-        <div className="relative w-full aspect-[16/9] md:aspect-[21/9] max-h-[400px] md:max-h-[550px]">
+        <div
+          className="relative w-full aspect-[16/9] md:aspect-[21/9] max-h-[400px] md:max-h-[550px]"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {slides.map((slide, idx) => (
             <div
               key={idx}
@@ -400,10 +450,10 @@ function HeroSection({
           ))}
           {slides.length > 1 && (
             <>
-              <button onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all z-20 border-2" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
+              <button onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg hidden md:flex items-center justify-center transition-all z-20 border-2" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: sliderColors.navButtonIconColor }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
               </button>
-              <button onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all z-20 border-2" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
+              <button onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg hidden md:flex items-center justify-center transition-all z-20 border-2" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: sliderColors.navButtonIconColor }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </button>
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
@@ -520,7 +570,7 @@ function HeroSection({
 
   const renderHeroSlideContain = (
     slide: { image?: string },
-    options?: { overlay?: React.ReactNode; blur?: number }
+    options?: { overlay?: React.ReactNode; blur?: number; fit?: 'contain' | 'cover' }
   ) => (
     <div className="w-full h-full relative">
       <div
@@ -532,7 +582,14 @@ function HeroSection({
           filter: `blur(${options?.blur ?? 25}px)`,
         }}
       />
-      <SiteImage src={slide.image ?? ''} alt="" className="relative w-full h-full object-contain z-10" />
+      <SiteImage
+        src={slide.image ?? ''}
+        alt=""
+        className={cn(
+          'relative w-full h-full z-10',
+          options?.fit === 'cover' ? 'object-cover' : 'object-contain'
+        )}
+      />
       {options?.overlay}
     </div>
   );
@@ -547,6 +604,7 @@ function HeroSection({
             <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               {slide.image ? (
                 renderHeroSlideContain(slide, {
+                  fit: 'cover',
                   overlay: showFullscreenContent ? (
                     <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent z-20" />
                   ) : null,
@@ -992,6 +1050,9 @@ function BenefitsSection({
     style?: BenefitsSharedStyle;
     subHeading?: string;
     heading?: string;
+    headerAlign?: 'left' | 'center' | 'right';
+    gridColumnsDesktop?: 3 | 4;
+    gridColumnsMobile?: 1 | 2;
     buttonText?: string;
     buttonLink?: string;
     harmony?: unknown;
@@ -1024,10 +1085,13 @@ function BenefitsSection({
     secondary,
   });
 
-  const sectionConfig: Pick<BenefitsConfig, 'subHeading' | 'heading' | 'buttonText' | 'buttonLink'> = {
+  const sectionConfig: Pick<BenefitsConfig, 'subHeading' | 'heading' | 'buttonText' | 'buttonLink' | 'headerAlign' | 'gridColumnsDesktop' | 'gridColumnsMobile'> = {
     buttonLink: benefitsConfig.buttonLink,
     buttonText: benefitsConfig.buttonText,
+    gridColumnsDesktop: benefitsConfig.gridColumnsDesktop,
+    gridColumnsMobile: benefitsConfig.gridColumnsMobile,
     heading: benefitsConfig.heading,
+    headerAlign: benefitsConfig.headerAlign,
     subHeading: benefitsConfig.subHeading,
   };
 
@@ -2465,12 +2529,12 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
 
     return (
       <div
-        className="grid gap-4 grid-cols-1 auto-rows-[200px] sm:auto-rows-[250px] md:grid-cols-3 md:auto-rows-[300px] rounded-lg border p-2"
+        className="grid gap-4 grid-cols-3 auto-rows-[110px] sm:auto-rows-[250px] md:grid-cols-3 md:auto-rows-[300px] rounded-lg border p-2"
         style={{ backgroundColor: colors.neutralBackground, borderColor: colors.neutralBorder }}
       >
         {normalizedItems.map((photo, i) => {
           const isLarge = i % 4 === 0 || i % 4 === 3;
-          const colSpan = isLarge ? 'md:col-span-2' : 'md:col-span-1';
+          const colSpan = isLarge ? 'col-span-2 md:col-span-2' : 'col-span-1 md:col-span-1';
 
           return (
             <div
@@ -4863,7 +4927,7 @@ function FooterSection({
   const bctLogoType = (config.bctLogoType as 'thong-bao' | 'dang-ky') ?? 'thong-bao';
   const bctLogoLink = typeof config.bctLogoLink === 'string' ? config.bctLogoLink.trim() : '';
   const bctLogoSrc = bctLogoType === 'dang-ky'
-    ? '/images/bct/logo-da-dang-ky-bct.png'
+    ? '/images/bct/logo-da-dang-ky-bct.webp'
     : '/images/bct/logo-da-thong-bao-bct.png';
   const colors: FooterLayoutColors = getFooterLayoutColors(style, brandColor, secondary, mode);
   const useOriginalSocialIconColors = config.useOriginalSocialIconColors !== false;

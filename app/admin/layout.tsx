@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Toaster } from 'sonner';
 import { AdminModulesProvider } from './context/AdminModulesContext';
+import { SidebarProvider } from './context/SidebarContext';
 import { AdminAuthProvider } from './auth/context';
 import { AdminAuthGuard } from './auth/AdminAuthGuard';
 
@@ -36,19 +37,21 @@ function AdminLayoutContent({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 flex font-sans">
       <Toaster position="top-right" richColors theme={isDarkMode ? 'dark' : 'light'} />
       
-      <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      <SidebarProvider>
+        <Sidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
 
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
-        <Header 
-          isDarkMode={isDarkMode} 
-          toggleTheme={toggleTheme} 
-          setMobileMenuOpen={setMobileMenuOpen} 
-        />
+        <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
+          <Header 
+            isDarkMode={isDarkMode} 
+            toggleTheme={toggleTheme} 
+            setMobileMenuOpen={setMobileMenuOpen} 
+          />
 
-        <main className="flex-1 p-4 lg:p-8 overflow-x-hidden w-full max-w-[1600px] mx-auto">
-          {children}
-        </main>
-      </div>
+          <main className="flex-1 p-4 lg:p-8 overflow-x-hidden w-full max-w-[1600px] mx-auto">
+            {children}
+          </main>
+        </div>
+      </SidebarProvider>
     </div>
   );
 }

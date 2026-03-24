@@ -12,8 +12,9 @@ import {
   Package, Phone, ShoppingBag, Star, Tag, UserCircle, User as UserIcon, Users, Zap
 } from 'lucide-react';
 import { formatHex, oklch } from 'culori';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../components/ui';
 import { HOME_COMPONENT_BASE_TYPES, HOME_COMPONENT_TYPE_VALUES as BASE_COMPONENT_TYPE_VALUES } from '@/lib/home-components/componentTypes';
+import { HomeComponentStickyFooter } from '../_shared/components/HomeComponentStickyFooter';
 import { TypeColorOverrideCard } from '../_shared/components/TypeColorOverrideCard';
 import { useTypeColorOverrideState } from '../_shared/hooks/useTypeColorOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode, type ColorOverrideState } from '../_shared/lib/typeColorOverride';
@@ -37,6 +38,7 @@ const ICON_MAP: Record<string, typeof LayoutTemplate> = {
   Footer: LayoutTemplate,
   Gallery: ImageIcon,
   Hero: LayoutTemplate,
+  HomepageCategoryHero: LayoutTemplate,
   Partners: Users,
   Pricing: Tag,
   Process: LayoutTemplate,
@@ -311,14 +313,13 @@ export function ComponentFormWrapper({
           </div>
         )}
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/home-components'); }} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
-          <Button type="submit" variant="accent" disabled={isSubmitting}>
-            {isSubmitting ? 'Đang tạo...' : 'Tạo Component'}
-          </Button>
-        </div>
+        <HomeComponentStickyFooter
+          isSubmitting={isSubmitting}
+          onCancel={() =>{  router.push('/admin/home-components'); }}
+          submitLabel="Tạo Component"
+          submittingLabel="Đang tạo..."
+          disableSave={isSubmitting}
+        />
       </form>
     </div>
   );

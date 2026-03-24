@@ -19,6 +19,9 @@ export interface BenefitsConfig {
   heading?: string;
   buttonText?: string;
   buttonLink?: string;
+  headerAlign?: 'left' | 'center' | 'right';
+  gridColumnsDesktop?: 3 | 4;
+  gridColumnsMobile?: 1 | 2;
   harmony?: BenefitsHarmony;
 }
 

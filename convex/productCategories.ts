@@ -106,6 +106,162 @@ export const listActive = query({
   returns: v.array(categoryDoc),
 });
 
+export const listActiveWithStats = query({
+  args: { productLimit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const MAX_SAMPLE_IMAGES = 6;
+    const categories = await ctx.db
+      .query("productCategories")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    if (categories.length === 0) {
+      return { categories: [], stats: [] };
+    }
+
+    const limit = Math.min(args.productLimit ?? 5000, 10000);
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_status_order", (q) => q.eq("status", "Active"))
+      .take(limit);
+
+    const statsMap = new Map<Id<"productCategories">, { productCount: number; totalSales: number; latestProductTime: number; representativeImage?: string; sampleImages?: string[] }>();
+
+    products.forEach((product) => {
+      const current = statsMap.get(product.categoryId) ?? { productCount: 0, totalSales: 0, latestProductTime: 0, sampleImages: [] as string[] };
+      const sampleImages = current.sampleImages ? [...current.sampleImages] : [];
+      if (product.image && !sampleImages.includes(product.image) && sampleImages.length < MAX_SAMPLE_IMAGES) {
+        sampleImages.push(product.image);
+      }
+      statsMap.set(product.categoryId, {
+        productCount: current.productCount + 1,
+        totalSales: current.totalSales + (product.sales ?? 0),
+        latestProductTime: Math.max(current.latestProductTime, product._creationTime ?? 0),
+        representativeImage: current.representativeImage ?? product.image,
+        sampleImages,
+      });
+    });
+
+    const stats = Array.from(statsMap.entries()).map(([categoryId, value]) => ({
+      categoryId,
+      productCount: value.productCount,
+      totalSales: value.totalSales,
+      latestProductTime: value.latestProductTime,
+      representativeImage: value.representativeImage,
+      sampleImages: value.sampleImages,
+    }));
+
+    return { categories, stats };
+  },
+  returns: v.object({
+    categories: v.array(categoryDoc),
+    stats: v.array(v.object({
+      categoryId: v.id("productCategories"),
+      productCount: v.number(),
+      totalSales: v.number(),
+      latestProductTime: v.number(),
+      representativeImage: v.optional(v.string()),
+      sampleImages: v.optional(v.array(v.string())),
+    })),
+  }),
+});
+
+export const listActiveWithStatsForHero = query({
+  args: {
+    productLimit: v.optional(v.number()),
+    productPerCategoryLimit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const MAX_SAMPLE_IMAGES = 6;
+    const categories = await ctx.db
+      .query("productCategories")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    if (categories.length === 0) {
+      return { categories: [], stats: [], productsByCategory: [] };
+    }
+
+    const limit = Math.min(args.productLimit ?? 5000, 10000);
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_status_order", (q) => q.eq("status", "Active"))
+      .take(limit);
+
+    const statsMap = new Map<Id<"productCategories">, { productCount: number; totalSales: number; latestProductTime: number; representativeImage?: string; sampleImages?: string[] }>();
+    const productsMap = new Map<Id<"productCategories">, Array<{ _id: Id<"products">; name: string; slug: string; image?: string; categoryId: Id<"productCategories">; sales: number; _creationTime: number }>>();
+
+    products.forEach((product) => {
+      const current = statsMap.get(product.categoryId) ?? { productCount: 0, totalSales: 0, latestProductTime: 0, sampleImages: [] as string[] };
+      const sampleImages = current.sampleImages ? [...current.sampleImages] : [];
+      if (product.image && !sampleImages.includes(product.image) && sampleImages.length < MAX_SAMPLE_IMAGES) {
+        sampleImages.push(product.image);
+      }
+      statsMap.set(product.categoryId, {
+        productCount: current.productCount + 1,
+        totalSales: current.totalSales + (product.sales ?? 0),
+        latestProductTime: Math.max(current.latestProductTime, product._creationTime ?? 0),
+        representativeImage: current.representativeImage ?? product.image,
+        sampleImages,
+      });
+
+      const list = productsMap.get(product.categoryId) ?? [];
+      list.push({
+        _id: product._id,
+        name: product.name,
+        slug: product.slug,
+        image: product.image,
+        categoryId: product.categoryId,
+        sales: product.sales ?? 0,
+        _creationTime: product._creationTime,
+      });
+      productsMap.set(product.categoryId, list);
+    });
+
+    const stats = Array.from(statsMap.entries()).map(([categoryId, value]) => ({
+      categoryId,
+      productCount: value.productCount,
+      totalSales: value.totalSales,
+      latestProductTime: value.latestProductTime,
+      representativeImage: value.representativeImage,
+      sampleImages: value.sampleImages,
+    }));
+
+    const perCategoryLimit = Math.min(Math.max(args.productPerCategoryLimit ?? 6, 1), 20);
+    const productsByCategory = Array.from(productsMap.entries()).map(([categoryId, list]) => ({
+      categoryId,
+      products: list
+        .sort((a, b) => (b.sales !== a.sales ? b.sales - a.sales : b._creationTime - a._creationTime))
+        .slice(0, perCategoryLimit),
+    }));
+
+    return { categories, stats, productsByCategory };
+  },
+  returns: v.object({
+    categories: v.array(categoryDoc),
+    stats: v.array(v.object({
+      categoryId: v.id("productCategories"),
+      productCount: v.number(),
+      totalSales: v.number(),
+      latestProductTime: v.number(),
+      representativeImage: v.optional(v.string()),
+      sampleImages: v.optional(v.array(v.string())),
+    })),
+    productsByCategory: v.array(v.object({
+      categoryId: v.id("productCategories"),
+      products: v.array(v.object({
+        _id: v.id("products"),
+        name: v.string(),
+        slug: v.string(),
+        image: v.optional(v.string()),
+        categoryId: v.id("productCategories"),
+        sales: v.number(),
+        _creationTime: v.number(),
+      })),
+    })),
+  }),
+});
+
 export const listNonEmptyCategoryIds = query({
   args: {},
   handler: async (ctx) => {
