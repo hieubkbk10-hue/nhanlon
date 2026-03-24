@@ -390,11 +390,11 @@ function HeroSection({
   }
 
   // Helper: Render slide với blurred background
-  const renderSlideWithBlur = (slide: { image: string; link: string }) => (
+  const renderSlideWithBlur = (slide: { image: string; link: string }, options?: { priority?: boolean }) => (
     <a href={slide.link || '#'} className="block w-full h-full relative">
       <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(30px)' }} />
       <div className="absolute inset-0 bg-black/20" />
-      <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+      <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" priority={options?.priority} />
     </a>
   );
 
@@ -445,7 +445,7 @@ function HeroSection({
               className={`absolute inset-0 transition-opacity duration-700 hover:ring-2 hover:ring-offset-2 hover:ring-offset-slate-900 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
               style={{ '--tw-ring-color': sliderColors.hoverRingColor } as React.CSSProperties}
             >
-              {slide.image ? renderSlideWithBlur(slide) : renderPlaceholder(sliderColors.placeholderBg, sliderColors.placeholderIconColor)}
+              {slide.image ? renderSlideWithBlur(slide, { priority: idx === 0 }) : renderPlaceholder(sliderColors.placeholderBg, sliderColors.placeholderIconColor)}
             </div>
           ))}
           {slides.length > 1 && (
@@ -484,7 +484,7 @@ function HeroSection({
         <div className="relative w-full aspect-[16/9] md:aspect-[21/9] max-h-[450px] md:max-h-[600px]">
           {slides.map((slide, idx) => (
             <div key={idx} className={`absolute inset-0 transition-opacity duration-700 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-              {slide.image ? renderSlideWithBlur(slide) : renderPlaceholder(fadeColors.placeholderBg, fadeColors.placeholderIconColor)}
+              {slide.image ? renderSlideWithBlur(slide, { priority: idx === 0 }) : renderPlaceholder(fadeColors.placeholderBg, fadeColors.placeholderIconColor)}
             </div>
           ))}
           {slides.length > 1 && (
@@ -516,7 +516,7 @@ function HeroSection({
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" priority={idx === 0} />
                   </div>
                 ) : (
                   renderPlaceholder(bentoPlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)
@@ -531,7 +531,7 @@ function HeroSection({
                 <div className="w-full h-full relative">
                   <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
-                  <SiteImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" />
+                  <SiteImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" priority />
                 </div>
               ) : renderPlaceholder(bentoPlaceholders[0], bentoColors.placeholderIcon, 24)}
             </a>
@@ -570,7 +570,7 @@ function HeroSection({
 
   const renderHeroSlideContain = (
     slide: { image?: string },
-    options?: { overlay?: React.ReactNode; blur?: number; fit?: 'contain' | 'cover' }
+    options?: { overlay?: React.ReactNode; blur?: number; fit?: 'contain' | 'cover'; priority?: boolean }
   ) => (
     <div className="w-full h-full relative">
       <div
@@ -589,6 +589,7 @@ function HeroSection({
           'relative w-full h-full z-10',
           options?.fit === 'cover' ? 'object-cover' : 'object-contain'
         )}
+        priority={options?.priority}
       />
       {options?.overlay}
     </div>
@@ -605,6 +606,7 @@ function HeroSection({
               {slide.image ? (
                 renderHeroSlideContain(slide, {
                   fit: 'cover',
+                  priority: idx === 0,
                   overlay: showFullscreenContent ? (
                     <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent z-20" />
                   ) : null,
@@ -699,7 +701,7 @@ function HeroSection({
             {slides.map((slide, idx) => (
               <div key={idx} className={`absolute inset-0 transition-all duration-700 ${idx === currentSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
                 {slide.image ? (
-                  <SiteImage src={slide.image} alt="" className="w-full h-full object-cover" />
+                  <SiteImage src={slide.image} alt="" className="w-full h-full object-cover" priority={idx === 0} />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-slate-200">
                     <LayoutTemplate size={48} className="text-slate-400" />
@@ -733,6 +735,7 @@ function HeroSection({
             <div key={idx} className={`absolute inset-0 transition-opacity duration-700 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               {slide.image ? (
                 renderHeroSlideContain(slide, {
+                  priority: idx === 0,
                   overlay: (
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/10 z-20" />
                   ),
