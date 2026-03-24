@@ -3,15 +3,14 @@
 import { useQuery } from 'convex/react';
 import { formatHex, oklch } from 'culori';
 import { api } from '@/convex/_generated/api';
+import { useInitialBrandColors } from '@/components/providers/InitialBrandColorsProvider';
 
 const DEFAULT_BRAND_COLOR = '#3b82f6';
 
-const getCssVariable = (name: string): string | null => {
-  if (typeof window === 'undefined') {return null;}
+const getCssVariableFromDoc = (name: string): string | null => {
+  if (typeof document === 'undefined') {return null;}
   const inlineValue = document.documentElement.style.getPropertyValue(name).trim();
-  if (inlineValue) {return inlineValue;}
-  const computedValue = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return computedValue || null;
+  return inlineValue || null;
 };
 
 const safeOklch = (value: string) => oklch(value) ?? oklch(DEFAULT_BRAND_COLOR);
@@ -33,19 +32,24 @@ const generateComplementary = (hex: string): string => {
 };
 
 export function useBrandColors() {
+  const initialBrandColors = useInitialBrandColors();
   const primarySetting = useQuery(api.settings.getByKey, { key: 'site_brand_primary' });
   const legacySetting = useQuery(api.settings.getByKey, { key: 'site_brand_color' });
   const secondarySetting = useQuery(api.settings.getByKey, { key: 'site_brand_secondary' });
   const modeSetting = useQuery(api.settings.getByKey, { key: 'site_brand_mode' });
   const primary = resolveColorSetting(primarySetting?.value)
     ?? resolveColorSetting(legacySetting?.value)
-    ?? resolveColorSetting(getCssVariable('--site-brand-primary'))
+    ?? initialBrandColors?.primary
+    ?? resolveColorSetting(getCssVariableFromDoc('--site-brand-primary'))
     ?? DEFAULT_BRAND_COLOR;
-  const mode: 'single' | 'dual' = modeSetting?.value === 'single' ? 'single' : 'dual';
+  const mode = modeSetting?.value === 'single'
+    ? 'single'
+    : (initialBrandColors?.mode ?? (getCssVariableFromDoc('--site-brand-mode') === 'single' ? 'single' : 'dual'));
   const secondary = mode === 'single'
     ? ''
     : resolveColorSetting(secondarySetting?.value)
-      ?? resolveColorSetting(getCssVariable('--site-brand-secondary'))
+      ?? initialBrandColors?.secondary
+      ?? resolveColorSetting(getCssVariableFromDoc('--site-brand-secondary'))
       ?? generateComplementary(primary);
 
   return { primary, secondary, mode };

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { BrandColorProvider } from "@/components/providers/BrandColorProvider";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
+import { InitialBrandColorsProvider } from "@/components/providers/InitialBrandColorsProvider";
 import { getSEOSettings, getSiteSettings } from "@/lib/get-settings";
 import {
   Be_Vietnam_Pro,
@@ -121,13 +122,17 @@ export default async function RootLayout({
 }>): Promise<React.ReactElement> {
   const site = await getSiteSettings();
   const brandPrimary = site.site_brand_primary || site.site_brand_color || '#3b82f6';
-  const brandSecondary = site.site_brand_secondary || '';
+  const brandMode = site.site_brand_mode === 'single' ? 'single' : 'dual';
+  const brandSecondary = brandMode === 'single'
+    ? ''
+    : (site.site_brand_secondary || '');
 
   return (
     <html
       lang="vi"
       style={{
         '--site-brand-primary': brandPrimary,
+        '--site-brand-mode': brandMode,
         '--site-brand-secondary': brandSecondary,
         '--scrollbar-color': brandPrimary,
       } as React.CSSProperties}
@@ -136,9 +141,17 @@ export default async function RootLayout({
         className={`${vietnameseSans.variable} ${geistSans.variable} ${geistMono.variable} ${robotoSans.variable} ${notoSans.variable} ${nunitoSans.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${montserrat.variable} ${robotoSlab.variable} ${notoSerif.variable} antialiased`}
       >
         <ConvexClientProvider>
-          <BrandColorProvider />
-          <PageViewTracker />
-          {children}
+          <InitialBrandColorsProvider
+            value={{
+              mode: brandMode,
+              primary: brandPrimary,
+              secondary: brandSecondary,
+            }}
+          >
+            <BrandColorProvider />
+            <PageViewTracker />
+            {children}
+          </InitialBrandColorsProvider>
         </ConvexClientProvider>
       </body>
     </html>

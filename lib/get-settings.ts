@@ -9,6 +9,7 @@ export interface SiteSettings {
   site_favicon: string;
   site_brand_primary: string;
   site_brand_secondary: string;
+  site_brand_mode: 'single' | 'dual';
   site_brand_color: string;
   site_timezone: string;
   site_language: string;
@@ -83,6 +84,7 @@ const SETTINGS_KEYS = {
     "site_favicon",
     "site_brand_primary",
     "site_brand_secondary",
+    "site_brand_mode",
     "site_brand_color",
     "site_timezone",
     "site_language",
@@ -96,6 +98,7 @@ export const getSiteSettings =  async (): Promise<SiteSettings> => {
   }).then((settings) => ({
     site_brand_primary: (settings.site_brand_primary as string) || (settings.site_brand_color as string) || "#3b82f6",
     site_brand_secondary: (settings.site_brand_secondary as string) || "",
+    site_brand_mode: settings.site_brand_mode === 'single' ? 'single' : 'dual',
     site_brand_color: (settings.site_brand_primary as string) || (settings.site_brand_color as string) || "#3b82f6",
     site_favicon: (settings.site_favicon as string) || "",
     site_language: (settings.site_language as string) || "vi",
