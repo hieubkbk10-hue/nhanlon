@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { BrandColorProvider } from "@/components/providers/BrandColorProvider";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
-import { getSEOSettings } from "@/lib/get-settings";
+import { getSEOSettings, getSiteSettings } from "@/lib/get-settings";
 import {
   Be_Vietnam_Pro,
   Geist,
@@ -114,13 +114,24 @@ export const generateMetadata = async (): Promise<Metadata> => {
   };
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
-}>): React.ReactElement {
+}>): Promise<React.ReactElement> {
+  const site = await getSiteSettings();
+  const brandPrimary = site.site_brand_primary || site.site_brand_color || '#3b82f6';
+  const brandSecondary = site.site_brand_secondary || '';
+
   return (
-    <html lang="vi">
+    <html
+      lang="vi"
+      style={{
+        '--site-brand-primary': brandPrimary,
+        '--site-brand-secondary': brandSecondary,
+        '--scrollbar-color': brandPrimary,
+      } as React.CSSProperties}
+    >
       <body
         className={`${vietnameseSans.variable} ${geistSans.variable} ${geistMono.variable} ${robotoSans.variable} ${notoSans.variable} ${nunitoSans.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${montserrat.variable} ${robotoSlab.variable} ${notoSerif.variable} antialiased`}
       >

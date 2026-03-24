@@ -6,6 +6,14 @@ import { api } from '@/convex/_generated/api';
 
 const DEFAULT_BRAND_COLOR = '#3b82f6';
 
+const getCssVariable = (name: string): string | null => {
+  if (typeof window === 'undefined') {return null;}
+  const inlineValue = document.documentElement.style.getPropertyValue(name).trim();
+  if (inlineValue) {return inlineValue;}
+  const computedValue = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return computedValue || null;
+};
+
 const safeOklch = (value: string) => oklch(value) ?? oklch(DEFAULT_BRAND_COLOR);
 
 const resolveColorSetting = (value: unknown): string | null => {
@@ -31,11 +39,13 @@ export function useBrandColors() {
   const modeSetting = useQuery(api.settings.getByKey, { key: 'site_brand_mode' });
   const primary = resolveColorSetting(primarySetting?.value)
     ?? resolveColorSetting(legacySetting?.value)
+    ?? resolveColorSetting(getCssVariable('--site-brand-primary'))
     ?? DEFAULT_BRAND_COLOR;
   const mode: 'single' | 'dual' = modeSetting?.value === 'single' ? 'single' : 'dual';
   const secondary = mode === 'single'
     ? ''
     : resolveColorSetting(secondarySetting?.value)
+      ?? resolveColorSetting(getCssVariable('--site-brand-secondary'))
       ?? generateComplementary(primary);
 
   return { primary, secondary, mode };
