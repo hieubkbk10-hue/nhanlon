@@ -1,5 +1,4 @@
-import { getConvexClient } from '@/lib/convex';
-import { api } from '@/convex/_generated/api';
+import { resolveSiteUrl } from '@/lib/seo/site-url';
 
 type SitemapChangeFrequency =
   | 'always'
@@ -88,12 +87,4 @@ export const buildSitemapIndexXml = (entries: SitemapIndexEntry[]): string => {
   ].join('');
 };
 
-export const resolveBaseUrl = async (): Promise<string> => {
-  const client = getConvexClient();
-  const siteUrlSetting = await client.query(api.settings.getByKey, { key: 'site_url' });
-  const baseUrl = ((siteUrlSetting?.value as string) || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
-  if (!baseUrl || baseUrl === 'https://example.com') {
-    return '';
-  }
-  return baseUrl;
-};
+export const resolveBaseUrl = async (): Promise<string> => resolveSiteUrl();

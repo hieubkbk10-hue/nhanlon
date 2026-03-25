@@ -3,6 +3,8 @@ import { api } from '@/convex/_generated/api';
 import { collectPaginated } from '@/lib/seo/sitemap';
 import { buildSitemapXml, resolveBaseUrl } from '@/lib/seo/sitemap-xml';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(): Promise<Response> {
   const baseUrl = await resolveBaseUrl();
   if (!baseUrl) {

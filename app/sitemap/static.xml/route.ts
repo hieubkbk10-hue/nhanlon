@@ -2,6 +2,8 @@ import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
 import { buildSitemapXml, resolveBaseUrl } from '@/lib/seo/sitemap-xml';
 
+export const dynamic = 'force-dynamic';
+
 const resolveLatestTimestamp = (values: Array<number | undefined>): Date | undefined => {
   const normalized = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
   if (normalized.length === 0) {

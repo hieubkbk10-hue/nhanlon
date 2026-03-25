@@ -2,13 +2,13 @@ import type { MetadataRoute } from 'next';
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
 import { collectPaginated } from '@/lib/seo/sitemap';
+import { resolveSiteUrl } from '@/lib/seo/site-url';
+
+export const dynamic = 'force-dynamic';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const client = getConvexClient();
-  
-  // Get site URL from settings
-  const siteUrlSetting = await client.query(api.settings.getByKey, { key: 'site_url' });
-  const baseUrl = ((siteUrlSetting?.value as string) || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+  const baseUrl = await resolveSiteUrl();
 
   if (!baseUrl || baseUrl === 'https://example.com') {
     return [];
