@@ -30,6 +30,7 @@ const serviceDoc = v.object({
   slug: v.string(),
   status: contentStatus,
   thumbnail: v.optional(v.string()),
+  thumbnailStorageId: v.optional(v.union(v.id("_storage"), v.null())),
   title: v.string(),
   views: v.number(),
 });
@@ -547,6 +548,7 @@ export const create = mutation({
     slug: v.string(),
     status: v.optional(contentStatus),
     thumbnail: v.optional(v.string()),
+    thumbnailStorageId: v.optional(v.union(v.id("_storage"), v.null())),
     title: v.string(),
   },
   handler: async (ctx, args) => {
@@ -579,10 +581,23 @@ export const update = mutation({
     slug: v.optional(v.string()),
     status: v.optional(contentStatus),
     thumbnail: v.optional(v.string()),
+    thumbnailStorageId: v.optional(v.union(v.id("_storage"), v.null())),
     title: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const previous = await ctx.db.get(args.id);
     await ServicesModel.update(ctx, args);
+    const shouldCheckStorage = Object.prototype.hasOwnProperty.call(args, "thumbnailStorageId");
+    if (shouldCheckStorage && previous?.thumbnailStorageId) {
+      const nextThumbnailStorageId = Object.prototype.hasOwnProperty.call(args, "thumbnailStorageId")
+        ? args.thumbnailStorageId ?? null
+        : previous.thumbnailStorageId ?? null;
+      if (!nextThumbnailStorageId || nextThumbnailStorageId !== previous.thumbnailStorageId) {
+        await ctx.runMutation(api.storage.cleanupStorageIfUnreferenced, {
+          storageId: previous.thumbnailStorageId,
+        });
+      }
+    }
     await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "service" });
     return null;
   },

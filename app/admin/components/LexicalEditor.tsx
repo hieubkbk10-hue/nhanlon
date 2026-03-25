@@ -42,6 +42,7 @@ import { cn } from './ui';
 import { toast } from 'sonner';
 import ImagesPlugin, { INSERT_IMAGE_COMMAND, ImageNode } from './nodes/ImageNode';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext } from '@/lib/image/uploadNaming';
 
 
 
@@ -450,6 +451,7 @@ const InitialContentPlugin: React.FC<{ initialContent?: string; resetKey?: numbe
 export const LexicalEditor: React.FC<LexicalEditorProps> = ({ onChange, initialContent, folder = 'posts-content', resetKey }) => {
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
   const saveImage = useMutation(api.storage.saveImage);
+  const uploadCounterRef = useRef(1);
   
   const initialConfig = {
     namespace: 'MyEditor',
@@ -474,7 +476,12 @@ export const LexicalEditor: React.FC<LexicalEditorProps> = ({ onChange, initialC
     }
 
     try {
-      const prepared = await prepareImageForUpload(file);
+      const resolvedNaming = resolveNamingContext(undefined, {
+        entityName: folder,
+        field: 'content',
+        index: uploadCounterRef.current++,
+      });
+      const prepared = await prepareImageForUpload(file, { naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(uploadUrl, {

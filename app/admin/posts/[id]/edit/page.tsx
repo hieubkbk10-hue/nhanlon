@@ -34,6 +34,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [thumbnail, setThumbnail] = useState<string | undefined>();
+  const [thumbnailStorageId, setThumbnailStorageId] = useState<Id<'_storage'> | undefined>();
   const [categoryId, setCategoryId] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [status, setStatus] = useState<'Draft' | 'Published' | 'Archived'>('Draft');
@@ -53,6 +54,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
     metaTitle: string;
     metaDescription: string;
     thumbnail: string;
+    thumbnailStorageId?: Id<'_storage'> | null;
     categoryId: string;
     authorName: string;
     status: 'Draft' | 'Published' | 'Archived';
@@ -85,6 +87,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
     status,
     thumbnail: thumbnail ?? '',
     title: title.trim(),
+    thumbnailStorageId,
   }), [authorName, categoryId, normalizedContent, renderType, markdownRender, htmlRender, excerpt, metaDescription, metaTitle, slug, status, thumbnail, title]);
 
   const hasChanges = useMemo(() => {
@@ -121,6 +124,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
       setMetaTitle(postData.metaTitle ?? '');
       setMetaDescription(postData.metaDescription ?? '');
       setThumbnail(postData.thumbnail);
+      setThumbnailStorageId((postData as { thumbnailStorageId?: Id<'_storage'> }).thumbnailStorageId);
       setCategoryId(postData.categoryId);
       setAuthorName(postData.authorName ?? '');
       setStatus(postData.status);
@@ -138,6 +142,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         status: postData.status,
         thumbnail: postData.thumbnail ?? '',
         title: postData.title.trim(),
+        thumbnailStorageId: (postData as { thumbnailStorageId?: Id<'_storage'> }).thumbnailStorageId,
       };
       setSnapshotVersion((prev) => prev + 1);
     }
@@ -179,6 +184,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         slug: slug.trim(),
         status,
         thumbnail,
+        thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
         title: title.trim(),
       });
       const persistedSnapshot = {
@@ -192,6 +198,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         metaDescription: resolvedMetaDescriptionValue,
         metaTitle: resolvedMetaTitleValue,
         thumbnail: thumbnail ?? '',
+        thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
       };
       if (enabledFields.has('metaTitle')) {
         setMetaTitle(resolvedMetaTitleValue);
@@ -428,8 +435,14 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
             <CardContent>
               <ImageUploader
                 value={thumbnail}
-                onChange={(url) =>{  setThumbnail(url); }}
+                storageId={thumbnailStorageId}
+                onChange={(url, storageId) => {
+                  setThumbnail(url);
+                  setThumbnailStorageId(storageId);
+                }}
                 folder="posts"
+                naming={{ entityName: slug.trim() || 'post', style: 'slug-index', index: 1 }}
+                deleteMode="defer"
                 aspectRatio="video"
               />
             </CardContent>

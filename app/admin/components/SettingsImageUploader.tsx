@@ -9,6 +9,7 @@ import { Image as ImageIcon, Link, Loader2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner';
 import { Button, Input, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 
 type InputMode = 'upload' | 'url';
 
@@ -16,6 +17,7 @@ interface SettingsImageUploaderProps {
   value?: string;
   onChange: (url: string | undefined) => void;
   folder?: string;
+  naming?: ImageNamingContext;
   className?: string;
   label?: string;
   previewSize?: 'sm' | 'md' | 'lg';
@@ -25,6 +27,7 @@ export function SettingsImageUploader({
   value,
   onChange,
   folder = 'settings',
+  naming,
   className,
   label,
   previewSize = 'md',
@@ -61,7 +64,8 @@ export function SettingsImageUploader({
     setIsUploading(true);
 
     try {
-      const prepared = await prepareImageForUpload(file);
+      const resolvedNaming = resolveNamingContext(naming, { entityName: folder, field: 'image', index: 1 });
+      const prepared = await prepareImageForUpload(file, { naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(uploadUrl, {
@@ -96,7 +100,7 @@ export function SettingsImageUploader({
     } finally {
       setIsUploading(false);
     }
-  }, [generateUploadUrl, saveImage, folder, onChange]);
+  }, [generateUploadUrl, saveImage, folder, onChange, naming]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

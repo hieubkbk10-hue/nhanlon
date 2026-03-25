@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
@@ -6,6 +7,9 @@ import { contentStatus } from "./lib/validators";
 import { rankByFuzzyMatches } from "./lib/search";
 import * as PostsModel from "./model/posts";
 import type { Doc } from "./_generated/dataModel";
+import { generateArticlePayload } from "../lib/posts/generator/assembler";
+import { getMacroTemplate } from "../lib/posts/generator/macro-templates";
+import type { GeneratorProduct, GeneratorSettings, GeneratorRequest } from "../lib/posts/generator/types";
 
 const postDoc = v.object({
   _creationTime: v.number(),
@@ -29,6 +33,7 @@ const postDoc = v.object({
   slug: v.string(),
   status: contentStatus,
   thumbnail: v.optional(v.string()),
+  thumbnailStorageId: v.optional(v.union(v.id("_storage"), v.null())),
   title: v.string(),
   views: v.number(),
 });
@@ -609,6 +614,7 @@ export const create = mutation({
     slug: v.string(),
     status: v.optional(contentStatus),
     thumbnail: v.optional(v.string()),
+    thumbnailStorageId: v.optional(v.union(v.id("_storage"), v.null())),
     title: v.string(),
   },
   handler: async (ctx, args) => {
@@ -639,10 +645,23 @@ export const update = mutation({
     slug: v.optional(v.string()),
     status: v.optional(contentStatus),
     thumbnail: v.optional(v.string()),
+    thumbnailStorageId: v.optional(v.union(v.id("_storage"), v.null())),
     title: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const previous = await ctx.db.get(args.id);
     await PostsModel.update(ctx, args);
+    const shouldCheckStorage = Object.prototype.hasOwnProperty.call(args, "thumbnailStorageId");
+    if (shouldCheckStorage && previous?.thumbnailStorageId) {
+      const nextThumbnailStorageId = Object.prototype.hasOwnProperty.call(args, "thumbnailStorageId")
+        ? args.thumbnailStorageId ?? null
+        : previous.thumbnailStorageId ?? null;
+      if (!nextThumbnailStorageId || nextThumbnailStorageId !== previous.thumbnailStorageId) {
+        await ctx.runMutation(api.storage.cleanupStorageIfUnreferenced, {
+          storageId: previous.thumbnailStorageId,
+        });
+      }
+    }
     await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "post" });
     return null;
   },
@@ -680,4 +699,309 @@ export const getDeleteInfo = query({
       preview: v.array(v.object({ id: v.string(), name: v.string() })),
     })),
   }),
+});
+
+// ============================================================
+// AUTO GENERATOR (PREVIEW/REGENERATE)
+// ============================================================
+
+const generatorRequestValidator = v.object({
+  templateKey: v.string(),
+  seed: v.string(),
+  productLimit: v.optional(v.number()),
+  budgetMin: v.optional(v.number()),
+  budgetMax: v.optional(v.number()),
+  keyword: v.optional(v.string()),
+  compareSlugs: v.optional(v.array(v.string())),
+  selectedProductSlugs: v.optional(v.array(v.string())),
+  categoryId: v.optional(v.string()),
+  useCase: v.optional(v.string()),
+  tone: v.optional(v.string()),
+});
+
+const getModuleSettingValue = async (
+  ctx: QueryCtx | MutationCtx,
+  moduleKey: string,
+  settingKey: string,
+) => {
+  const setting = await ctx.db
+    .query("moduleSettings")
+    .withIndex("by_module_setting", (q) => q.eq("moduleKey", moduleKey).eq("settingKey", settingKey))
+    .unique();
+  return setting?.value;
+};
+
+const getGeneratorSettings = async (_ctx: QueryCtx | MutationCtx) => ({
+  minSlots: 7,
+  maxSlots: 10,
+  diversityLevel: "high",
+  regenerateStrength: "strong",
+  defaultTone: "helpful",
+  internalLinkDensity: "medium",
+} satisfies GeneratorSettings);
+
+const resolveSaleMode = async (ctx: QueryCtx | MutationCtx) => {
+  const value = await getModuleSettingValue(ctx, "products", "saleMode");
+  if (value === "contact" || value === "affiliate") {
+    return value as "contact" | "affiliate";
+  }
+  return "cart";
+};
+
+const normalizeProductImage = (product: Doc<"products">) => product.image ?? product.images?.[0];
+
+const buildRelatedProductsByCategory = async (
+  ctx: QueryCtx | MutationCtx,
+  docs: Doc<"products">[],
+) => {
+  const categoryIds = Array.from(new Set(docs.map((product) => product.categoryId)));
+  const excludeIds = new Set(docs.map((product) => product._id));
+  const relatedLimit = 6;
+  const results = await Promise.all(categoryIds.map((categoryId) =>
+    ctx.db
+      .query("products")
+      .withIndex("by_category_status", (q) => q.eq("categoryId", categoryId).eq("status", "Active"))
+      .take(20)
+  ));
+
+  const relatedMap = new Map<Doc<"productCategories">["_id"], Doc<"products">[]>();
+  categoryIds.forEach((categoryId, index) => {
+    const list = results[index] ?? [];
+    const filtered = list.filter((product) => !excludeIds.has(product._id));
+    filtered.sort((a, b) => (b.sales ?? 0) - (a.sales ?? 0));
+    relatedMap.set(categoryId, filtered.slice(0, relatedLimit));
+  });
+
+  return relatedMap;
+};
+
+const buildGeneratorProducts = async (
+  ctx: QueryCtx | MutationCtx,
+  docs: Doc<"products">[],
+  relatedByCategory: Map<Doc<"productCategories">["_id"], Doc<"products">[]>,
+): Promise<GeneratorProduct[]> => {
+  const categoryIds = Array.from(new Set(docs.map((product) => product.categoryId)));
+  const categories = await Promise.all(categoryIds.map((id) => ctx.db.get(id)));
+  const categoryNameMap = new Map(
+    categories.filter(Boolean).map((category) => [category!._id, category!.name]),
+  );
+  const categoryImageMap = new Map(
+    categories.filter(Boolean).map((category) => [category!._id, category!.image]),
+  );
+
+  return docs.map((product) => {
+    const related = relatedByCategory.get(product.categoryId) ?? [];
+    const relatedItems = related.map((item) => ({
+      id: item._id,
+      name: item.name,
+      slug: item.slug,
+      price: item.price,
+      salePrice: item.salePrice,
+      sales: item.sales,
+      image: normalizeProductImage(item),
+      affiliateLink: item.affiliateLink,
+    }));
+    const categoryImage = categoryImageMap.get(product.categoryId) ?? relatedItems[0]?.image;
+    return {
+      id: product._id,
+      name: product.name,
+      slug: product.slug,
+      price: product.price,
+      salePrice: product.salePrice,
+      sales: product.sales,
+      image: normalizeProductImage(product),
+      images: product.images,
+      affiliateLink: product.affiliateLink,
+      categoryId: product.categoryId,
+      categoryName: categoryNameMap.get(product.categoryId),
+      categoryImage,
+      description: product.description,
+      relatedProducts: relatedItems,
+    };
+  });
+};
+
+const fetchProductsForRequest = async (
+  ctx: QueryCtx,
+  request: GeneratorRequest,
+): Promise<Doc<"products">[]> => {
+  const template = getMacroTemplate(request.templateKey as GeneratorRequest["templateKey"]);
+  const limit = Math.min(request.productLimit ?? 6, 12);
+
+  if (template.productStrategy === "best_sellers" || template.productStrategy === "value_popular") {
+    if (request.selectedProductSlugs?.length) {
+      const expectedCount = request.productLimit ?? request.selectedProductSlugs.length;
+      if (request.selectedProductSlugs.length !== expectedCount) {
+        throw new Error("Cần chọn đủ số lượng sản phẩm đã cấu hình");
+      }
+      const uniqueSlugs = Array.from(new Set(request.selectedProductSlugs));
+      if (uniqueSlugs.length !== request.selectedProductSlugs.length) {
+        throw new Error("Danh sách sản phẩm không được trùng nhau");
+      }
+      const selectedDocs = await Promise.all(
+        request.selectedProductSlugs.map((slug) =>
+          ctx.db.query("products").withIndex("by_slug", (q) => q.eq("slug", slug)).unique()
+        )
+      );
+      if (selectedDocs.some((doc) => !doc)) {
+        throw new Error("Không tìm thấy đủ sản phẩm đã chọn");
+      }
+      return (selectedDocs.filter(Boolean) as Doc<"products">[]).slice(0, limit);
+    }
+  }
+
+  if (template.productStrategy === "compare") {
+    const slugs = request.compareSlugs?.filter(Boolean) ?? [];
+    const uniqueSlugs = Array.from(new Set(slugs));
+    if (uniqueSlugs.length < 2) {
+      throw new Error("Cần chọn 2 sản phẩm khác nhau để so sánh");
+    }
+    const compareDocs = await Promise.all(slugs.map((slug) =>
+      ctx.db.query("products").withIndex("by_slug", (q) => q.eq("slug", slug)).unique()
+    ));
+    const results = compareDocs.filter(Boolean) as Doc<"products">[];
+    if (results.length >= 2) {
+      return results.slice(0, limit);
+    }
+    throw new Error("Không tìm thấy đủ 2 sản phẩm để so sánh");
+  }
+
+  if (template.productStrategy === "budget_under") {
+    if (!request.budgetMax) {
+      throw new Error("Cần nhập ngân sách tối đa");
+    }
+    return ctx.db
+      .query("products")
+      .withIndex("by_status_price", (q) => q.eq("status", "Active").lt("price", request.budgetMax!))
+      .take(limit);
+  }
+
+  if (template.productStrategy === "budget_between") {
+    if (!request.budgetMin || !request.budgetMax) {
+      throw new Error("Cần nhập khoảng ngân sách");
+    }
+    if (request.budgetMin >= request.budgetMax) {
+      throw new Error("Ngân sách tối thiểu phải nhỏ hơn ngân sách tối đa");
+    }
+    return ctx.db
+      .query("products")
+      .withIndex("by_status_price", (q) =>
+        q.eq("status", "Active").gt("price", request.budgetMin!).lt("price", request.budgetMax!)
+      )
+      .take(limit);
+  }
+
+  if (template.productStrategy === "category") {
+    if (!request.categoryId) {
+      throw new Error("Cần chọn danh mục sản phẩm");
+    }
+    return ctx.db
+      .query("products")
+      .withIndex("by_category_status", (q) =>
+        q.eq("categoryId", request.categoryId as Doc<"productCategories">["_id"]).eq("status", "Active")
+      )
+      .take(limit);
+  }
+
+  if (template.productStrategy === "use_case" || template.productStrategy === "value_popular") {
+    const keyword = request.useCase ?? request.keyword;
+    if (template.productStrategy === "use_case" && !keyword?.trim()) {
+      throw new Error("Cần nhập nhu cầu/keyword");
+    }
+    if (keyword?.trim()) {
+      return ctx.db
+        .query("products")
+        .withSearchIndex("search_name", (q) => q.search("name", keyword.toLowerCase()).eq("status", "Active"))
+        .take(limit);
+    }
+  }
+
+  return ctx.db
+    .query("products")
+    .withIndex("by_status_sales", (q) => q.eq("status", "Active"))
+    .order("desc")
+    .take(limit);
+};
+
+export const generateFromProductsPreview = query({
+  args: { request: generatorRequestValidator },
+  handler: async (ctx, args) => {
+    const enabled = await getModuleSettingValue(ctx, "posts", "enableAutoPostGenerator");
+    if (!enabled) {
+      throw new Error("Auto generator đang tắt");
+    }
+
+    const request = args.request as GeneratorRequest;
+    const settings = await getGeneratorSettings(ctx);
+    const products = await fetchProductsForRequest(ctx, request);
+    const saleMode = await resolveSaleMode(ctx);
+    const relatedByCategory = await buildRelatedProductsByCategory(ctx, products);
+    const normalized = await buildGeneratorProducts(ctx, products, relatedByCategory);
+
+    return generateArticlePayload({
+      request,
+      products: normalized,
+      settings,
+      saleMode,
+    });
+  },
+});
+
+export const regenerateFromDraftSeed = query({
+  args: { request: generatorRequestValidator },
+  handler: async (ctx, args) => {
+    const enabled = await getModuleSettingValue(ctx, "posts", "enableAutoPostGenerator");
+    if (!enabled) {
+      throw new Error("Auto generator đang tắt");
+    }
+    const request = args.request as GeneratorRequest;
+    const settings = await getGeneratorSettings(ctx);
+    const products = await fetchProductsForRequest(ctx, request);
+    const saleMode = await resolveSaleMode(ctx);
+    const relatedByCategory = await buildRelatedProductsByCategory(ctx, products);
+    const normalized = await buildGeneratorProducts(ctx, products, relatedByCategory);
+    return generateArticlePayload({
+      request,
+      products: normalized,
+      settings,
+      saleMode,
+    });
+  },
+});
+
+export const createFromGeneratedPayload = mutation({
+  args: {
+    categoryId: v.id("postCategories"),
+    status: v.optional(contentStatus),
+    payload: v.object({
+      title: v.string(),
+      slug: v.string(),
+      contentHtml: v.string(),
+      excerpt: v.string(),
+      metaTitle: v.string(),
+      metaDescription: v.string(),
+      thumbnail: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const enabled = await getModuleSettingValue(ctx, "posts", "enableAutoPostGenerator");
+    if (!enabled) {
+      throw new Error("Auto generator đang tắt");
+    }
+    const id = await PostsModel.create(ctx, {
+      title: args.payload.title,
+      slug: args.payload.slug,
+      content: "",
+      renderType: "html",
+      htmlRender: args.payload.contentHtml,
+      excerpt: args.payload.excerpt,
+      metaTitle: args.payload.metaTitle,
+      metaDescription: args.payload.metaDescription,
+      thumbnail: args.payload.thumbnail,
+      categoryId: args.categoryId,
+      status: args.status ?? "Draft",
+    });
+    return id;
+  },
+  returns: v.id("posts"),
 });

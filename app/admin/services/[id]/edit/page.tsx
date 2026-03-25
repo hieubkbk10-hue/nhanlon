@@ -36,6 +36,7 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [thumbnail, setThumbnail] = useState<string | undefined>();
+  const [thumbnailStorageId, setThumbnailStorageId] = useState<Id<'_storage'> | undefined>();
   const [categoryId, setCategoryId] = useState('');
   const [price, setPrice] = useState<number | undefined>();
   const [duration, setDuration] = useState('');
@@ -61,6 +62,7 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
     slug: string;
     status: 'Draft' | 'Published' | 'Archived';
     thumbnail: string;
+    thumbnailStorageId?: Id<'_storage'> | null;
     title: string;
   } | null>(null);
 
@@ -102,8 +104,9 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
     slug: slug.trim(),
     status,
     thumbnail: thumbnail ?? '',
+    thumbnailStorageId,
     title: title.trim(),
-  }), [categoryId, normalizedContent, renderType, markdownRender, htmlRender, duration, excerpt, featured, metaDescription, metaTitle, price, slug, status, thumbnail, title]);
+  }), [categoryId, normalizedContent, renderType, markdownRender, htmlRender, duration, excerpt, featured, metaDescription, metaTitle, price, slug, status, thumbnail, thumbnailStorageId, title]);
 
   const hasChanges = useMemo(() => {
     if (!initialSnapshotRef.current) {return false;}
@@ -137,6 +140,7 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
       setMetaTitle(serviceData.metaTitle ?? '');
       setMetaDescription(serviceData.metaDescription ?? '');
       setThumbnail(serviceData.thumbnail);
+      setThumbnailStorageId((serviceData as { thumbnailStorageId?: Id<'_storage'> }).thumbnailStorageId);
       setCategoryId(serviceData.categoryId);
       setPrice(serviceData.price);
       setDuration(serviceData.duration ?? '');
@@ -157,6 +161,7 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
         slug: serviceData.slug.trim(),
         status: serviceData.status,
         thumbnail: serviceData.thumbnail ?? '',
+        thumbnailStorageId: (serviceData as { thumbnailStorageId?: Id<'_storage'> }).thumbnailStorageId,
         title: serviceData.title.trim(),
       };
       setSnapshotVersion((prev) => prev + 1);
@@ -201,6 +206,7 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
         slug: slug.trim(),
         status,
         thumbnail,
+        thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
         title: title.trim(),
       });
       const persistedSnapshot = {
@@ -214,6 +220,7 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
         metaDescription: resolvedMetaDescriptionValue,
         metaTitle: resolvedMetaTitleValue,
         thumbnail: thumbnail ?? '',
+        thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
       };
       if (enabledFields.has('metaTitle')) {
         setMetaTitle(resolvedMetaTitleValue);
@@ -482,8 +489,14 @@ export default function ServiceEditPage({ params }: { params: Promise<{ id: stri
             <CardContent>
               <ImageUploader
                 value={thumbnail}
-                onChange={(url) =>{  setThumbnail(url); }}
+                storageId={thumbnailStorageId}
+                onChange={(url, storageId) => {
+                  setThumbnail(url);
+                  setThumbnailStorageId(storageId);
+                }}
                 folder="services"
+                naming={{ entityName: slug.trim() || 'service', style: 'slug-index', index: 1 }}
+                deleteMode="defer"
                 aspectRatio="video"
               />
             </CardContent>

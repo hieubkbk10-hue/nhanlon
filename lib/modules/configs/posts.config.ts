@@ -29,6 +29,18 @@ export const postsModule = defineModuleWithRuntime({
          { value: 'published', label: 'Xuất bản' },
        ],
      },
+     {
+       key: 'enableAutoPostGenerator',
+       label: 'Bật sinh bài tự động',
+       type: 'toggle',
+       default: false,
+       group: 'generator',
+     },
+   ],
+
+   settingGroups: [
+     { key: 'general', label: 'Cài đặt chung' },
+     { key: 'generator', label: 'Auto Generator' },
    ],
    
    conventionNote: 'Slug tự động từ tiêu đề. Trường order và active bắt buộc.',

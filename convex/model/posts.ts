@@ -155,6 +155,7 @@ export async function create(
     htmlRender?: string;
     excerpt?: string;
     thumbnail?: string;
+    thumbnailStorageId?: Id<"_storage"> | null;
     categoryId: Id<"postCategories">;
     authorName?: string;
     metaTitle?: string;
@@ -188,6 +189,7 @@ export async function create(
     slug: args.slug,
     status,
     thumbnail: args.thumbnail,
+    thumbnailStorageId: args.thumbnailStorageId ?? null,
     title: args.title,
     views: 0,
   });
@@ -209,6 +211,7 @@ export async function update(
     htmlRender?: string;
     excerpt?: string;
     thumbnail?: string;
+    thumbnailStorageId?: Id<"_storage"> | null;
     categoryId?: Id<"postCategories">;
     metaTitle?: string;
     metaDescription?: string;

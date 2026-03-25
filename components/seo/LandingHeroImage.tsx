@@ -23,6 +23,8 @@ export default function LandingHeroImage({
         fill
         sizes={isHero ? '(max-width: 1024px) 100vw, 896px' : '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw'}
         className="object-cover"
+        priority={isHero}
+        fetchPriority={isHero ? 'high' : undefined}
         unoptimized
       />
     </div>

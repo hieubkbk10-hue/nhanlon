@@ -53,6 +53,7 @@ function ProductCreateContent() {
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [image, setImage] = useState<string | undefined>();
+  const [imageStorageId, setImageStorageId] = useState<Id<'_storage'> | undefined>();
   const [galleryItems, setGalleryItems] = useState<ImageItem[]>([]);
   const [status, setStatus] = useState<'Draft' | 'Active' | 'Archived'>('Draft');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -233,7 +234,11 @@ function ProductCreateContent() {
       const resolvedStock = productType === 'digital' ? 0 : (Number.parseInt(stock) || 0);
       const resolvedMetaTitle = truncateText(name.trim(), 60);
       const resolvedMetaDescription = truncateText(stripHtml(description || ''), 160);
-      const resolvedImages = galleryItems.map(item => item.url).filter(Boolean);
+      const resolvedGalleryItems = galleryItems
+        .map(item => ({ url: item.url, storageId: item.storageId }))
+        .filter(item => Boolean(item.url));
+      const resolvedImages = resolvedGalleryItems.map(item => item.url);
+      const resolvedImageStorageIds = resolvedGalleryItems.map(item => item.storageId ?? null);
       const resolvedSalePrice = hideBasePricing ? undefined : resolveSalePrice(salePrice);
       await createProduct({
         ...(isAffiliateMode ? { affiliateLink: affiliateLink.trim() || undefined } : {}),
@@ -244,7 +249,9 @@ function ProductCreateContent() {
         htmlRender: htmlRender.trim() || undefined,
         hasVariants: variantEnabled ? hasVariants : false,
         image,
+        imageStorageId: image ? (imageStorageId ?? null) : null,
         images: enabledFields.has('images') ? resolvedImages : undefined,
+        imageStorageIds: enabledFields.has('images') ? resolvedImageStorageIds : undefined,
         metaDescription: enabledFields.has('metaDescription')
           ? (metaDescription.trim() || resolvedMetaDescription || undefined)
           : undefined,
@@ -610,7 +617,15 @@ function ProductCreateContent() {
           <Card>
             <CardHeader><CardTitle className="text-base">Ảnh sản phẩm</CardTitle></CardHeader>
             <CardContent>
-              <ImageUpload value={image} onChange={setImage} folder="products" enableSquareCrop={enableImageCrop} />
+              <ImageUpload
+                value={image}
+                storageId={imageStorageId}
+                onChange={setImage}
+                onStorageIdChange={setImageStorageId}
+                folder="products"
+                naming={{ entityName: slug.trim() || 'product', style: 'slug-index', index: 1 }}
+                enableSquareCrop={enableImageCrop}
+              />
             </CardContent>
           </Card>
 
@@ -622,6 +637,9 @@ function ProductCreateContent() {
                   items={galleryItems}
                   onChange={setGalleryItems}
                   folder="products"
+                  naming={{ entityName: slug.trim() || 'product', style: 'slug-index' }}
+                  namingIndexOffset={image ? 1 : 0}
+                  deleteMode="defer"
                   imageKey="url"
                   minItems={0}
                   maxItems={20}

@@ -1,20 +1,15 @@
+import { buildImageFilename, getExtensionFromMime, slugify, type ImageNamingContext } from './uploadNaming';
+
 export const WEBP_UPLOAD_QUALITY = 0.85;
 
 const DEFAULT_MAX_FILE_SIZE_MB = 10;
-
-const MIME_EXTENSION_MAP: Record<string, string> = {
-  'image/gif': 'gif',
-  'image/jpeg': 'jpg',
-  'image/jpg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
 
 type PrepareImageOptions = {
   quality?: number;
   preserveGif?: boolean;
   preservePngWithTransparency?: boolean;
   crop?: SquareCropSelection;
+  naming?: ImageNamingContext;
 };
 
 export type SquareCropSelection = {
@@ -33,25 +28,7 @@ export type PreparedUploadImage = {
   width: number;
 };
 
-function slugify(value: string): string {
-  const normalized = value
-    .toLowerCase()
-    .normalize('NFD')
-    .replaceAll(/[\u0300-\u036f]/g, '')
-    .replaceAll(/[đĐ]/g, 'd')
-    .replaceAll(/[^a-z0-9\s-]/g, '')
-    .replaceAll(/\s+/g, '-')
-    .replaceAll(/-+/g, '-')
-    .trim();
-
-  return normalized || 'image';
-}
-
-function getExtensionFromMime(mimeType: string): string {
-  return MIME_EXTENSION_MAP[mimeType] ?? 'bin';
-}
-
-function buildFilename(originalName: string, mimeType: string): string {
+function buildLegacyFilename(originalName: string, mimeType: string): string {
   const baseName = originalName.replace(/\.[^/.]+$/, '');
   const timestamp = Date.now();
   const random = Math.random().toString(36).slice(2, 6);
@@ -261,7 +238,9 @@ export async function prepareImageForUpload(
     }
   }
 
-  const filename = buildFilename(sourceFile.name, targetMimeType);
+  const filename = options.naming
+    ? buildImageFilename({ context: options.naming, originalName: sourceFile.name, mimeType: targetMimeType })
+    : buildLegacyFilename(sourceFile.name, targetMimeType);
   const uploadFile = new File([targetBlob], filename, { type: targetMimeType });
 
   return {

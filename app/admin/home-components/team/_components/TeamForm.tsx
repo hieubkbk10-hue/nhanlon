@@ -7,6 +7,8 @@ import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { toast } from 'sonner';
+import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext } from '@/lib/image/uploadNaming';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, cn } from '../../../components/ui';
 import type { TeamEditorMember } from '../_types';
 
@@ -69,7 +71,7 @@ function useDragReorder<T extends { id: number }>(items: T[], setItems: (items: 
   return { draggedId, dragOverId, dragProps };
 }
 
-function AvatarUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+function AvatarUpload({ value, onChange, index }: { value: string; onChange: (url: string) => void; index: number }) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [isDragOver, setIsDragOver] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -77,69 +79,28 @@ function AvatarUpload({ value, onChange }: { value: string; onChange: (url: stri
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
   const saveImage = useMutation(api.storage.saveImage);
 
-  const slugifyFilename = (filename: string): string => {
-    const name = filename.replace(/\.[^/.]+$/, '');
-    const slugified = name
-      .toLowerCase()
-      .normalize('NFD')
-      .replaceAll(/[\u0300-\u036F]/g, '')
-      .replaceAll(/[đĐ]/g, 'd')
-      .replaceAll(/[^a-z0-9\s-]/g, '')
-      .replaceAll(/\s+/g, '-')
-      .replaceAll(/-+/g, '-')
-      .trim();
-
-    return `${slugified}-${Date.now()}.webp`;
-  };
-
-  const compressToWebP = async (file: File): Promise<Blob> => new Promise((resolve, reject) => {
-    const image = new window.Image();
-
-    image.onload = () => {
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-
-      if (!context) {
-        reject(new Error('Canvas error'));
-        return;
-      }
-
-      canvas.width = image.width;
-      canvas.height = image.height;
-      context.drawImage(image, 0, 0);
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-
-        reject(new Error('Compress failed'));
-      }, 'image/webp', 0.85);
-    };
-
-    image.onerror = reject;
-    image.src = URL.createObjectURL(file);
-  });
-
   const handleFile = React.useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
-      toast.error('File không hợp lệ (max 10MB)');
+    const validationError = validateImageFile(file, 10);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
     setIsUploading(true);
 
     try {
-      const blob = await compressToWebP(file);
-      const filename = slugifyFilename(file.name);
-      const webpFile = new File([blob], filename, { type: 'image/webp' });
+      const resolvedNaming = resolveNamingContext(undefined, {
+        entityName: 'team',
+        field: 'avatar',
+        index,
+      });
+      const prepared = await prepareImageForUpload(file, { quality: 0.85, naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
 
       const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'image/webp' },
-        body: webpFile,
+        headers: { 'Content-Type': prepared.mimeType },
+        body: prepared.file,
       });
 
       if (!uploadResponse.ok) {
@@ -148,22 +109,14 @@ function AvatarUpload({ value, onChange }: { value: string; onChange: (url: stri
 
       const { storageId } = await uploadResponse.json();
 
-      const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
-        const image = new window.Image();
-        image.onload = () => {
-          resolve({ width: image.width, height: image.height });
-        };
-        image.src = URL.createObjectURL(webpFile);
-      });
-
       const result = await saveImage({
         storageId: storageId as Id<'_storage'>,
-        filename,
+        filename: prepared.filename,
         folder: 'team-avatars',
-        mimeType: 'image/webp',
-        size: webpFile.size,
-        width: dimensions.width,
-        height: dimensions.height,
+        mimeType: prepared.mimeType,
+        size: prepared.size,
+        width: prepared.width,
+        height: prepared.height,
       });
 
       onChange(result.url ?? '');
@@ -173,7 +126,7 @@ function AvatarUpload({ value, onChange }: { value: string; onChange: (url: stri
     } finally {
       setIsUploading(false);
     }
-  }, [generateUploadUrl, onChange, saveImage]);
+  }, [generateUploadUrl, index, onChange, saveImage]);
 
   return (
     <div className="relative">
@@ -375,6 +328,7 @@ export const TeamForm = ({
 
               <AvatarUpload
                 value={member.avatar}
+                index={members.findIndex((item) => item.id === member.id) + 1}
                 onChange={(url) => {
                   updateMember(member.id, 'avatar', url);
                 }}

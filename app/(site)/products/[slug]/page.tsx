@@ -878,7 +878,29 @@ function formatPrice(price: number): string {
   return new Intl.NumberFormat('vi-VN', { currency: 'VND', style: 'currency' }).format(price);
 }
 
-function BlurredProductImage({ src, alt, sizes }: { src: string; alt: string; sizes?: string }) {
+function isValidImageSrc(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function buildProductImages(product: { image?: unknown; images?: unknown[] }): string[] {
+  const images = new Set<string>();
+  if (isValidImageSrc(product.image)) {
+    images.add(product.image.trim());
+  }
+  if (Array.isArray(product.images)) {
+    product.images.forEach((img) => {
+      if (isValidImageSrc(img)) {
+        images.add(img.trim());
+      }
+    });
+  }
+  return Array.from(images);
+}
+
+function BlurredProductImage({ src, alt, sizes }: { src?: string | null; alt: string; sizes?: string }) {
+  if (!isValidImageSrc(src)) {
+    return null;
+  }
   return (
     <>
       <div
@@ -1257,10 +1279,18 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
   const showDescription = enabledFields.has('description');
   const showSku = enabledFields.has('sku');
 
-  const images = [
-    ...(product.image ? [product.image] : []),
-    ...((product.images ?? []).filter((img) => img && img !== product.image)),
-  ];
+  const images = buildProductImages(product);
+  const safeSelectedImage = Math.min(selectedImage, Math.max(images.length - 1, 0));
+
+  useEffect(() => {
+    if (images.length === 0 && selectedImage !== 0) {
+      setSelectedImage(0);
+      return;
+    }
+    if (images.length > 0 && selectedImage >= images.length) {
+      setSelectedImage(images.length - 1);
+    }
+  }, [images.length, selectedImage]);
   const basePrice = selectedVariant?.price ?? product.price;
   const salePrice = selectedVariant ? selectedVariant.salePrice : product.salePrice;
   const isRangeFromVariant = Boolean(product.hasVariants && !selectedVariant);
@@ -1324,13 +1354,13 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                   <div className="h-full w-full md:hidden">
                     <MobileImageCarousel
                       images={images}
-                      selectedIndex={selectedImage}
+                      selectedIndex={safeSelectedImage}
                       onSelect={setSelectedImage}
                       alt={product.name}
                     />
                   </div>
                   <div className="hidden md:block h-full w-full">
-                    <BlurredProductImage src={images[selectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 50vw" />
+                    <BlurredProductImage src={images[safeSelectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 50vw" />
                   </div>
                 </>
               ) : (
@@ -1338,7 +1368,7 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
               )}
               {images.length > 1 && (
                 <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                  {selectedImage + 1}/{images.length}
+                  {safeSelectedImage + 1}/{images.length}
                 </span>
               )}
               {showSalePrice && priceDisplay.comparePrice && (
@@ -1350,7 +1380,7 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                 <div className="hidden md:block">
                   <ThumbnailRail
                     images={images}
-                    selectedIndex={selectedImage}
+                    selectedIndex={safeSelectedImage}
                     onSelect={setSelectedImage}
                     orientation="horizontal"
                     visibleSlots={6}
@@ -1586,10 +1616,18 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
   const showStock = enabledFields.has('stock');
   const showDescription = enabledFields.has('description');
 
-  const images = [
-    ...(product.image ? [product.image] : []),
-    ...((product.images ?? []).filter((img) => img && img !== product.image)),
-  ];
+  const images = buildProductImages(product);
+  const safeSelectedImageIndex = Math.min(selectedImageIndex, Math.max(images.length - 1, 0));
+
+  useEffect(() => {
+    if (images.length === 0 && selectedImageIndex !== 0) {
+      setSelectedImageIndex(0);
+      return;
+    }
+    if (images.length > 0 && selectedImageIndex >= images.length) {
+      setSelectedImageIndex(images.length - 1);
+    }
+  }, [images.length, selectedImageIndex]);
   const basePrice = selectedVariant?.price ?? product.price;
   const salePrice = selectedVariant ? selectedVariant.salePrice : product.salePrice;
   const isRangeFromVariant = Boolean(product.hasVariants && !selectedVariant);
@@ -1680,19 +1718,19 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
                         -{discountPercent}%
                       </span>
                     )}
-                    {images[selectedImageIndex] ? (
+                    {images[safeSelectedImageIndex] ? (
                       <>
                         <div className="h-full w-full md:hidden">
                           <MobileImageCarousel
                             images={images}
-                            selectedIndex={selectedImageIndex}
+                            selectedIndex={safeSelectedImageIndex}
                             onSelect={setSelectedImageIndex}
                             alt={product.name}
                           />
                         </div>
                         <div className="hidden md:block h-full w-full">
                           <BlurredProductImage
-                            src={images[selectedImageIndex]}
+                            src={images[safeSelectedImageIndex]}
                             alt={product.name}
                             sizes="(max-width: 1024px) 100vw, 50vw"
                           />
@@ -1706,7 +1744,7 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
                     )}
                     {images.length > 1 && (
                       <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                        {selectedImageIndex + 1}/{images.length}
+                        {safeSelectedImageIndex + 1}/{images.length}
                       </span>
                     )}
                   </div>
@@ -1731,19 +1769,19 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
                       -{discountPercent}%
                     </span>
                   )}
-                  {images[selectedImageIndex] ? (
+                  {images[safeSelectedImageIndex] ? (
                     <>
                       <div className="h-full w-full md:hidden">
                         <MobileImageCarousel
                           images={images}
-                          selectedIndex={selectedImageIndex}
+                          selectedIndex={safeSelectedImageIndex}
                           onSelect={setSelectedImageIndex}
                           alt={product.name}
                         />
                       </div>
                       <div className="hidden md:block h-full w-full">
                         <BlurredProductImage
-                          src={images[selectedImageIndex]}
+                          src={images[safeSelectedImageIndex]}
                           alt={product.name}
                           sizes="(max-width: 1024px) 100vw, 50vw"
                         />
@@ -1757,7 +1795,7 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
                   )}
                   {images.length > 1 && (
                     <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                      {selectedImageIndex + 1}/{images.length}
+                      {safeSelectedImageIndex + 1}/{images.length}
                     </span>
                   )}
                 </div>
@@ -1769,7 +1807,7 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
                 <div className="hidden md:block">
                   <ThumbnailRail
                     images={images}
-                    selectedIndex={selectedImageIndex}
+                    selectedIndex={safeSelectedImageIndex}
                     onSelect={setSelectedImageIndex}
                     orientation="horizontal"
                     visibleSlots={5}
@@ -2015,10 +2053,18 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
   const showDescription = enabledFields.has('description');
   const showSku = enabledFields.has('sku');
 
-  const images = [
-    ...(product.image ? [product.image] : []),
-    ...((product.images ?? []).filter((img) => img && img !== product.image)),
-  ];
+  const images = buildProductImages(product);
+  const safeSelectedImage = Math.min(selectedImage, Math.max(images.length - 1, 0));
+
+  useEffect(() => {
+    if (images.length === 0 && selectedImage !== 0) {
+      setSelectedImage(0);
+      return;
+    }
+    if (images.length > 0 && selectedImage >= images.length) {
+      setSelectedImage(images.length - 1);
+    }
+  }, [images.length, selectedImage]);
   const basePrice = selectedVariant?.price ?? product.price;
   const salePrice = selectedVariant ? selectedVariant.salePrice : product.salePrice;
   const isRangeFromVariant = Boolean(product.hasVariants && !selectedVariant);
@@ -2078,7 +2124,7 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                   <div className="hidden md:flex md:flex-col md:w-20 shrink-0">
                     <ThumbnailRail
                       images={images}
-                      selectedIndex={selectedImage}
+                      selectedIndex={safeSelectedImage}
                       onSelect={setSelectedImage}
                       orientation="vertical"
                       visibleSlots={6}
@@ -2103,13 +2149,13 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                       <div className="h-full w-full md:hidden">
                         <MobileImageCarousel
                           images={images}
-                          selectedIndex={selectedImage}
+                          selectedIndex={safeSelectedImage}
                           onSelect={setSelectedImage}
                           alt={product.name}
                         />
                       </div>
                       <div className="hidden md:block h-full w-full">
-                        <BlurredProductImage src={images[selectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 60vw" />
+                        <BlurredProductImage src={images[safeSelectedImage]} alt={product.name} sizes="(max-width: 1024px) 100vw, 60vw" />
                       </div>
                     </>
                   ) : (
@@ -2119,7 +2165,7 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
                   )}
                   {images.length > 1 && (
                     <span className="absolute bottom-3 right-3 md:hidden px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                      {selectedImage + 1}/{images.length}
+                      {safeSelectedImage + 1}/{images.length}
                     </span>
                   )}
                 </div>

@@ -10,10 +10,11 @@ import { GripVertical, Image as ImageIcon, Link, Loader2, Plus, Trash2, Upload }
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, cn } from './ui';
 import { prepareImageForUpload, type SquareCropSelection, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 export interface ImageItem {
   id: string | number;
   url: string;
-  storageId?: string;
+  storageId?: Id<'_storage'>;
   [key: string]: unknown; // Allow extra fields like link, title, etc.
 }
 
@@ -23,6 +24,7 @@ interface MultiImageUploaderProps<T extends ImageItem> {
   items: T[];
   onChange: (items: T[]) => void;
   folder?: string;
+  naming?: ImageNamingContext;
   className?: string;
   imageKey?: keyof T; // Which field contains the image URL (default: 'url')
   extraFields?: {
@@ -39,12 +41,15 @@ interface MultiImageUploaderProps<T extends ImageItem> {
   emptyText?: string;
   layout?: 'horizontal' | 'vertical'; // Vertical: image on top, fields below (better for cards)
   enableSquareCrop?: boolean;
+  deleteMode?: 'immediate' | 'defer';
+  namingIndexOffset?: number;
 }
 
 export function MultiImageUploader<T extends ImageItem>({
   items,
   onChange,
   folder = 'home-components',
+  naming,
   className,
   imageKey = 'url' as keyof T,
   extraFields = [],
@@ -57,6 +62,8 @@ export function MultiImageUploader<T extends ImageItem>({
   emptyText = 'Chưa có ảnh nào',
   layout = 'horizontal',
   enableSquareCrop = false,
+  deleteMode = 'immediate',
+  namingIndexOffset = 0,
 }: MultiImageUploaderProps<T>) {
   const itemsRef = useRef(items);
   const [uploadingIds, setUploadingIds] = useState<Set<string | number>>(new Set());
@@ -157,7 +164,13 @@ export function MultiImageUploader<T extends ImageItem>({
     setUploadingIds(prev => new Set(prev).add(itemId));
 
     try {
-      const prepared = await prepareImageForUpload(file, crop ? { crop } : undefined);
+      const itemIndex = itemsRef.current.findIndex(item => item.id === itemId);
+      const resolvedNaming = resolveNamingContext(naming, {
+        entityName: folder,
+        field: 'image',
+        index: (itemIndex >= 0 ? itemIndex + 1 : itemsRef.current.length + 1) + namingIndexOffset,
+      });
+      const prepared = await prepareImageForUpload(file, crop ? { crop, naming: resolvedNaming } : { naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(uploadUrl, {
@@ -182,7 +195,7 @@ export function MultiImageUploader<T extends ImageItem>({
 
       onChange(itemsRef.current.map(item => 
         item.id === itemId 
-          ? { ...item, [imageKey]: result.url ?? '', storageId } as T
+          ? { ...item, [imageKey]: result.url ?? '', storageId: storageId as Id<'_storage'> } as T
           : item
       ));
       clearBroken(itemId);
@@ -198,7 +211,7 @@ export function MultiImageUploader<T extends ImageItem>({
         return next;
       });
     }
-  }, [generateUploadUrl, saveImage, folder, imageKey, onChange, clearBroken]);
+  }, [generateUploadUrl, saveImage, folder, imageKey, onChange, clearBroken, naming, namingIndexOffset]);
 
   const handleSelectedFile = useCallback((itemId: string | number, file: File) => {
     const validationError = validateImageFile(file, 5);
@@ -388,7 +401,7 @@ export function MultiImageUploader<T extends ImageItem>({
     }
 
     const item = items.find(i => i.id === itemId);
-    if (item?.storageId) {
+    if (deleteMode === 'immediate' && item?.storageId) {
       try {
         await deleteImage({ storageId: item.storageId as Id<"_storage"> });
       } catch (error) {
@@ -397,7 +410,7 @@ export function MultiImageUploader<T extends ImageItem>({
     }
 
     onChange(items.filter(i => i.id !== itemId));
-  }, [items, minItems, deleteImage, onChange]);
+  }, [items, minItems, deleteImage, onChange, deleteMode]);
 
   const handleItemDragStart = useCallback((e: React.DragEvent, itemId: string | number) => {
     e.dataTransfer.effectAllowed = 'move';

@@ -33,6 +33,7 @@ export default function ServiceCreatePage() {
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [thumbnail, setThumbnail] = useState<string | undefined>();
+  const [thumbnailStorageId, setThumbnailStorageId] = useState<Id<'_storage'> | undefined>();
   const [categoryId, setCategoryId] = useState('');
   const [price, setPrice] = useState<number | undefined>();
   const [duration, setDuration] = useState('');
@@ -98,6 +99,7 @@ export default function ServiceCreatePage() {
         slug: slug.trim() || title.toLowerCase().replaceAll(/\s+/g, '-'),
         status,
         thumbnail,
+        thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
         title: title.trim(),
       });
       toast.success("Tạo dịch vụ mới thành công");
@@ -336,8 +338,14 @@ export default function ServiceCreatePage() {
             <CardContent>
               <ImageUploader
                 value={thumbnail}
-                onChange={(url) =>{  setThumbnail(url); }}
+                storageId={thumbnailStorageId}
+                onChange={(url, storageId) => {
+                  setThumbnail(url);
+                  setThumbnailStorageId(storageId);
+                }}
                 folder="services"
+                naming={{ entityName: slug.trim() || 'service', style: 'slug-index', index: 1 }}
+                deleteMode="defer"
                 aspectRatio="video"
               />
             </CardContent>

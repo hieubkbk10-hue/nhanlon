@@ -8,6 +8,8 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Building2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { prepareImageForUpload } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext } from '@/lib/image/uploadNaming';
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
@@ -171,16 +173,25 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
   const handleImageUpload = async (itemId: string, file: File) => {
     setUploadingId(itemId);
     try {
+      const itemIndex = items.findIndex(item => item.id === itemId);
+      const resolvedNaming = resolveNamingContext(undefined, {
+        entityName: 'clients',
+        field: 'logo',
+        index: itemIndex >= 0 ? itemIndex + 1 : 1,
+      });
+      const prepared = await prepareImageForUpload(file, { naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, { body: file, headers: { 'Content-Type': file.type }, method: 'POST' });
+      const result = await fetch(uploadUrl, { body: prepared.file, headers: { 'Content-Type': prepared.mimeType }, method: 'POST' });
       const { storageId } = await result.json();
 
       const saved = await saveImage({
-        filename: file.name,
+        filename: prepared.filename,
         folder: 'clients',
-        mimeType: file.type,
-        size: file.size,
+        height: prepared.height,
+        mimeType: prepared.mimeType,
+        size: prepared.size,
         storageId: storageId as Id<'_storage'>,
+        width: prepared.width,
       });
 
       if (saved.url) {

@@ -16,6 +16,7 @@ import { Badge, Button, Card, Input, cn } from '../components/ui';
 import { BulkActionBar, SelectCheckbox } from '../components/TableUtilities';
 import { ModuleGuard } from '../components/ModuleGuard';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext } from '@/lib/image/uploadNaming';
 
 const MODULE_KEY = 'media';
 type ViewMode = 'grid' | 'list';
@@ -145,14 +146,19 @@ function MediaContent() {
     let uploadedCount = 0;
 
     try {
-      for (const file of files) {
+      for (const [fileIndex, file] of Array.from(files).entries()) {
         const validationError = validateImageFile(file, 10);
         if (validationError) {
           toast.error(`${file.name}: ${validationError}`);
           continue;
         }
 
-        const prepared = await prepareImageForUpload(file);
+        const resolvedNaming = resolveNamingContext(undefined, {
+          entityName: 'media',
+          field: 'upload',
+          index: fileIndex + 1,
+        });
+        const prepared = await prepareImageForUpload(file, { naming: resolvedNaming });
         const uploadUrl = await generateUploadUrl();
 
         const response = await fetch(uploadUrl, {

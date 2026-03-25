@@ -23,6 +23,8 @@ const productDoc = v.object({
   hasVariants: v.optional(v.boolean()),
   image: v.optional(v.string()),
   images: v.optional(v.array(v.string())),
+  imageStorageId: v.optional(v.union(v.id("_storage"), v.null())),
+  imageStorageIds: v.optional(v.array(v.union(v.id("_storage"), v.null()))),
   metaDescription: v.optional(v.string()),
   metaTitle: v.optional(v.string()),
   name: v.string(),
@@ -70,6 +72,8 @@ const productAdminDoc = v.object({
   hasVariants: v.optional(v.boolean()),
   image: v.optional(v.string()),
   images: v.optional(v.array(v.string())),
+  imageStorageId: v.optional(v.union(v.id("_storage"), v.null())),
+  imageStorageIds: v.optional(v.array(v.union(v.id("_storage"), v.null()))),
   metaDescription: v.optional(v.string()),
   metaTitle: v.optional(v.string()),
   name: v.string(),
@@ -1234,6 +1238,8 @@ export const create = mutation({
     hasVariants: v.optional(v.boolean()),
     image: v.optional(v.string()),
     images: v.optional(v.array(v.string())),
+    imageStorageId: v.optional(v.union(v.id("_storage"), v.null())),
+    imageStorageIds: v.optional(v.array(v.union(v.id("_storage"), v.null()))),
     productType: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
     digitalDeliveryType: v.optional(
       v.union(
@@ -1382,6 +1388,8 @@ export const update = mutation({
     hasVariants: v.optional(v.boolean()),
     image: v.optional(v.string()),
     images: v.optional(v.array(v.string())),
+    imageStorageId: v.optional(v.union(v.id("_storage"), v.null())),
+    imageStorageIds: v.optional(v.array(v.union(v.id("_storage"), v.null()))),
     productType: v.optional(v.union(v.literal("physical"), v.literal("digital"))),
     digitalDeliveryType: v.optional(
       v.union(
@@ -1524,6 +1532,34 @@ export const update = mutation({
     }
 
     await ctx.db.patch(id, nextUpdates);
+
+    const shouldCheckStorage = Object.prototype.hasOwnProperty.call(args, "imageStorageId")
+      || Object.prototype.hasOwnProperty.call(args, "imageStorageIds");
+    if (shouldCheckStorage) {
+      const normalizeStorageIds = (values?: (Id<"_storage"> | null)[]) =>
+        values?.filter((value): value is Id<"_storage"> => Boolean(value)) ?? [];
+      const previousStorageIds = new Set([
+        ...(product.imageStorageId ? [product.imageStorageId] : []),
+        ...normalizeStorageIds(product.imageStorageIds),
+      ]);
+      const nextImageStorageId = Object.prototype.hasOwnProperty.call(nextUpdates, "imageStorageId")
+        ? nextUpdates.imageStorageId ?? null
+        : product.imageStorageId ?? null;
+      const nextImageStorageIds = Object.prototype.hasOwnProperty.call(nextUpdates, "imageStorageIds")
+        ? nextUpdates.imageStorageIds ?? []
+        : product.imageStorageIds ?? [];
+      const nextStorageIds = new Set<Id<"_storage">>([
+        ...(nextImageStorageId ? [nextImageStorageId] : []),
+        ...normalizeStorageIds(nextImageStorageIds),
+      ]);
+      const removedStorageIds = Array.from(previousStorageIds).filter((storageId) => !nextStorageIds.has(storageId));
+      if (removedStorageIds.length > 0) {
+        await Promise.all(removedStorageIds.map((storageId) =>
+          ctx.runMutation(api.storage.cleanupStorageIfUnreferenced, { storageId })
+        ));
+      }
+    }
+
     await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "product" });
     return null;
   },

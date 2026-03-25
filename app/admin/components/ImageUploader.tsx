@@ -9,23 +9,30 @@ import { ImageOff, Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 
 interface ImageUploaderProps {
   value?: string;
-  onChange: (url: string | undefined, storageId?: string) => void;
+  onChange: (url: string | undefined, storageId?: Id<'_storage'>) => void;
+  storageId?: Id<'_storage'>;
   folder?: string;
+  naming?: ImageNamingContext;
   className?: string;
   aspectRatio?: 'square' | 'video' | 'auto';
   quality?: number;
+  deleteMode?: 'immediate' | 'defer';
 }
 
 export function ImageUploader({
   value,
   onChange,
+  storageId,
   folder = 'general',
+  naming,
   className,
   aspectRatio = 'auto',
   quality = 0.85,
+  deleteMode = 'immediate',
 }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | undefined>(value);
@@ -36,13 +43,14 @@ export function ImageUploader({
   const saveImage = useMutation(api.storage.saveImage);
   const deleteImage = useMutation(api.storage.deleteImage);
   
-  const [currentStorageId, setCurrentStorageId] = useState<string | undefined>();
+  const [currentStorageId, setCurrentStorageId] = useState<Id<'_storage'> | undefined>();
 
   // Sync preview with value prop when it changes
   useEffect(() => {
     setPreview(value);
     setHasError(false);
-  }, [value]);
+    setCurrentStorageId(storageId);
+  }, [value, storageId]);
 
   const handleFileSelect = useCallback(async (file: File) => {
     const validationError = validateImageFile(file, 5);
@@ -54,7 +62,8 @@ export function ImageUploader({
     setIsUploading(true);
 
     try {
-      const prepared = await prepareImageForUpload(file, { quality });
+      const resolvedNaming = resolveNamingContext(naming, { entityName: folder, field: 'image', index: 1 });
+      const prepared = await prepareImageForUpload(file, { quality, naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(uploadUrl, {
@@ -80,8 +89,8 @@ export function ImageUploader({
       });
 
       setPreview(result.url ?? undefined);
-      setCurrentStorageId(storageId);
-      onChange(result.url ?? undefined, storageId);
+      setCurrentStorageId(storageId as Id<'_storage'>);
+      onChange(result.url ?? undefined, storageId as Id<'_storage'>);
       toast.success('Tải ảnh lên thành công');
 
     } catch (error) {
@@ -90,7 +99,7 @@ export function ImageUploader({
     } finally {
       setIsUploading(false);
     }
-  }, [generateUploadUrl, saveImage, folder, quality, onChange]);
+  }, [generateUploadUrl, saveImage, folder, quality, onChange, naming]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -104,7 +113,7 @@ export function ImageUploader({
   }, [handleFileSelect]);
 
   const handleRemove = useCallback(async () => {
-    if (currentStorageId) {
+    if (deleteMode === 'immediate' && currentStorageId) {
       try {
         await deleteImage({ storageId: currentStorageId as Id<"_storage"> });
       } catch (error) {
@@ -113,7 +122,7 @@ export function ImageUploader({
     }
     setPreview(undefined);
     setCurrentStorageId(undefined);
-    onChange(undefined);
+    onChange(undefined, undefined);
     if (inputRef.current) {
       inputRef.current.value = '';
     }

@@ -268,8 +268,14 @@ export function useModuleConfig(config: ModuleDefinition) {
    }, []);
    
    const handleSettingChange = useCallback((key: string, value: string | number | boolean) => {
-     setLocalSettings(prev => ({ ...prev, [key]: value }));
-   }, []);
+    setLocalSettings(prev => ({ ...prev, [key]: value }));
+    if (moduleKey === 'posts' && key === 'enableAutoPostGenerator' && value === true) {
+      setLocalFeatures(prev => ({ ...prev, enableHtmlRender: true }));
+      setLocalFields(prev => prev.map(field => (
+        field.linkedFeature === 'enableHtmlRender' ? { ...field, enabled: true } : field
+      )));
+    }
+  }, [moduleKey]);
    
    // ============ BATCH SAVE ============
    const handleSave = useCallback(async () => {

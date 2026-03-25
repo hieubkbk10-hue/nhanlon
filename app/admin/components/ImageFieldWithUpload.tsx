@@ -9,6 +9,7 @@ import { Link2, Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Input, Label, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 
 type InputMode = 'upload' | 'url';
 
@@ -17,6 +18,7 @@ interface ImageFieldWithUploadProps {
   onChange: (url: string) => void;
   onStorageIdChange?: (storageId: string | undefined) => void;
   folder?: string;
+  naming?: ImageNamingContext;
   label?: string;
   className?: string;
   aspectRatio?: 'square' | 'video' | 'banner' | 'auto';
@@ -29,6 +31,7 @@ export function ImageFieldWithUpload({
   onChange,
   onStorageIdChange,
   folder = 'home-components',
+  naming,
   label = 'Hình ảnh',
   className,
   aspectRatio = 'video',
@@ -65,7 +68,8 @@ export function ImageFieldWithUpload({
     setIsUploading(true);
 
     try {
-      const prepared = await prepareImageForUpload(file, { quality });
+      const resolvedNaming = resolveNamingContext(naming, { entityName: folder, field: 'image', index: 1 });
+      const prepared = await prepareImageForUpload(file, { quality, naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(uploadUrl, {
@@ -109,7 +113,7 @@ export function ImageFieldWithUpload({
     } finally {
       setIsUploading(false);
     }
-  }, [generateUploadUrl, saveImage, folder, quality, onChange, onStorageIdChange]);
+  }, [generateUploadUrl, saveImage, folder, quality, onChange, onStorageIdChange, naming]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

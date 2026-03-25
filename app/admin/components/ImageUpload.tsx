@@ -9,18 +9,33 @@ import { ImageOff, Loader2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, cn } from './ui';
 import { prepareImageForUpload, type SquareCropSelection, validateImageFile } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 
 interface ImageUploadProps {
   value?: string;
   onChange: (url: string | undefined) => void;
+  onStorageIdChange?: (storageId?: Id<'_storage'>) => void;
+  storageId?: Id<'_storage'>;
   folder?: string;
+  naming?: ImageNamingContext;
   className?: string;
   enableSquareCrop?: boolean;
+  deleteMode?: 'immediate' | 'defer';
 }
 
 const CROP_VIEW_SIZE = 320;
 
-export function ImageUpload({ value, onChange, folder = 'products', className, enableSquareCrop = false }: ImageUploadProps) {
+export function ImageUpload({
+  value,
+  onChange,
+  onStorageIdChange,
+  storageId,
+  folder = 'products',
+  naming,
+  className,
+  enableSquareCrop = false,
+  deleteMode = 'defer',
+}: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -29,15 +44,18 @@ export function ImageUpload({ value, onChange, folder = 'products', className, e
   const [cropXPercent, setCropXPercent] = useState(0.5);
   const [cropYPercent, setCropYPercent] = useState(0.5);
   const [sourceDimensions, setSourceDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [currentStorageId, setCurrentStorageId] = useState<Id<'_storage'> | undefined>();
 
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
   const saveImage = useMutation(api.storage.saveImage);
+  const deleteImage = useMutation(api.storage.deleteImage);
   const inputId = useMemo(() => `image-upload-input-${Math.random().toString(36).slice(2, 9)}`, []);
   const isCropOpen = Boolean(cropFile && cropPreviewUrl);
 
   useEffect(() => {
     setHasError(false);
-  }, [value]);
+    setCurrentStorageId(storageId);
+  }, [value, storageId]);
 
   useEffect(() => {
     return () => {
@@ -50,7 +68,8 @@ export function ImageUpload({ value, onChange, folder = 'products', className, e
   const handleUpload = useCallback(async (file: File, crop?: SquareCropSelection) => {
     setIsUploading(true);
     try {
-      const prepared = await prepareImageForUpload(file, crop ? { crop } : undefined);
+      const resolvedNaming = resolveNamingContext(naming, { entityName: folder, field: 'image', index: 1 });
+      const prepared = await prepareImageForUpload(file, crop ? { crop, naming: resolvedNaming } : { naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(uploadUrl, {
@@ -76,6 +95,8 @@ export function ImageUpload({ value, onChange, folder = 'products', className, e
       });
 
       if (result.url) {
+      setCurrentStorageId(storageId as Id<'_storage'>);
+      onStorageIdChange?.(storageId as Id<'_storage'>);
         onChange(result.url);
         toast.success('Tải ảnh lên thành công');
       }
@@ -85,7 +106,7 @@ export function ImageUpload({ value, onChange, folder = 'products', className, e
     } finally {
       setIsUploading(false);
     }
-  }, [generateUploadUrl, saveImage, folder, onChange]);
+  }, [generateUploadUrl, saveImage, folder, onChange, naming, onStorageIdChange]);
 
   const resetCropState = useCallback(() => {
     if (cropPreviewUrl) {
@@ -153,8 +174,17 @@ export function ImageUpload({ value, onChange, folder = 'products', className, e
     e.preventDefault();
   };
 
-  const handleRemove = () => {
+  const handleRemove = async () => {
+    if (deleteMode === 'immediate' && currentStorageId) {
+      try {
+        await deleteImage({ storageId: currentStorageId as Id<'_storage'> });
+      } catch (error) {
+        console.error('Delete error:', error);
+      }
+    }
     onChange(undefined);
+    onStorageIdChange?.(undefined);
+    setCurrentStorageId(undefined);
   };
 
   const renderedSize = useMemo(() => {
@@ -224,7 +254,7 @@ export function ImageUpload({ value, onChange, folder = 'products', className, e
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              handleRemove();
+              void handleRemove();
             }}
           >
             <X size={16} className="text-red-500" />

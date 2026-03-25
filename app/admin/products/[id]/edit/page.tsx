@@ -57,6 +57,7 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [image, setImage] = useState<string | undefined>();
+  const [imageStorageId, setImageStorageId] = useState<Id<'_storage'> | undefined>();
   const [galleryItems, setGalleryItems] = useState<ImageItem[]>([]);
   const [status, setStatus] = useState<'Draft' | 'Active' | 'Archived'>('Draft');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,6 +98,7 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
     galleryImages: string[];
     hasVariants: boolean;
     image: string;
+    imageStorageId?: Id<'_storage'>;
     metaDescription: string;
     metaTitle: string;
     name: string;
@@ -171,6 +173,7 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
     galleryImages: galleryItems.map(item => item.url).filter(Boolean),
     hasVariants,
     image: image ?? '',
+    imageStorageId,
     metaDescription: metaDescription.trim(),
     metaTitle: metaTitle.trim(),
     name: name.trim(),
@@ -194,6 +197,7 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
     galleryItems,
     hasVariants,
     image,
+    imageStorageId,
     metaDescription,
     metaTitle,
     name,
@@ -244,7 +248,13 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
       setMetaTitle(productData.metaTitle ?? '');
       setMetaDescription(productData.metaDescription ?? '');
       setImage(productData.image);
-      setGalleryItems((productData.images ?? []).map((url, index) => ({ id: `${productData._id}-img-${index}`, url })));
+      setImageStorageId((productData as { imageStorageId?: Id<'_storage'> }).imageStorageId);
+      const galleryStorageIds = (productData as { imageStorageIds?: (Id<'_storage'> | null)[] }).imageStorageIds ?? [];
+      setGalleryItems((productData.images ?? []).map((url, index) => ({
+        id: `${productData._id}-img-${index}`,
+        url,
+        storageId: galleryStorageIds[index] ?? undefined,
+      })));
       setStatus(productData.status);
       setHasVariants(productData.hasVariants ?? false);
       setSelectedOptionIds(productData.optionIds ?? []);
@@ -263,6 +273,7 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
         galleryImages: (productData.images ?? []).filter(Boolean),
         hasVariants: productData.hasVariants ?? false,
         image: productData.image ?? '',
+        imageStorageId: (productData as { imageStorageId?: Id<'_storage'> }).imageStorageId,
         metaDescription: (productData.metaDescription ?? '').trim(),
         metaTitle: (productData.metaTitle ?? '').trim(),
         name: productData.name.trim(),
@@ -383,7 +394,11 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
       const resolvedStock = productType === 'digital' ? 0 : (parseInt(stock) || 0);
       const resolvedMetaTitle = truncateText(name.trim(), 60);
       const resolvedMetaDescription = truncateText(stripHtml(description || ''), 160);
-      const resolvedImages = galleryItems.map(item => item.url).filter(Boolean);
+      const resolvedGalleryItems = galleryItems
+        .map(item => ({ url: item.url, storageId: item.storageId }))
+        .filter(item => Boolean(item.url));
+      const resolvedImages = resolvedGalleryItems.map(item => item.url);
+      const resolvedImageStorageIds = resolvedGalleryItems.map(item => item.storageId ?? null);
       const resolvedSalePrice = hideBasePricing ? undefined : resolveSalePrice(salePrice);
       const resolvedMetaTitleValue = enabledFields.has('metaTitle')
         ? (metaTitle.trim() || resolvedMetaTitle || '')
@@ -401,7 +416,9 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
         id: id as Id<"products">,
         hasVariants: variantEnabled ? hasVariants : undefined,
         image,
+        imageStorageId: image ? (imageStorageId ?? null) : null,
         images: enabledFields.has('images') ? resolvedImages : undefined,
+        imageStorageIds: enabledFields.has('images') ? resolvedImageStorageIds : undefined,
         metaDescription: enabledFields.has('metaDescription')
           ? (resolvedMetaDescriptionValue || undefined)
           : undefined,
@@ -847,7 +864,15 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
           <Card>
             <CardHeader><CardTitle className="text-base">Ảnh sản phẩm</CardTitle></CardHeader>
             <CardContent>
-              <ImageUpload value={image} onChange={setImage} folder="products" enableSquareCrop={enableImageCrop} />
+              <ImageUpload
+                value={image}
+                storageId={imageStorageId}
+                onChange={setImage}
+                onStorageIdChange={setImageStorageId}
+                folder="products"
+                naming={{ entityName: slug.trim() || 'product', style: 'slug-index', index: 1 }}
+                enableSquareCrop={enableImageCrop}
+              />
             </CardContent>
           </Card>
 
@@ -859,6 +884,9 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
                   items={galleryItems}
                   onChange={setGalleryItems}
                   folder="products"
+                  naming={{ entityName: slug.trim() || 'product', style: 'slug-index' }}
+                  namingIndexOffset={image ? 1 : 0}
+                  deleteMode="defer"
                   imageKey="url"
                   minItems={0}
                   maxItems={20}

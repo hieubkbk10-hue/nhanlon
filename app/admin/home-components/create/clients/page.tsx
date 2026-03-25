@@ -5,6 +5,8 @@ import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { toast } from 'sonner';
+import { prepareImageForUpload } from '@/lib/image/uploadPipeline';
+import { resolveNamingContext } from '@/lib/image/uploadNaming';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
@@ -55,16 +57,25 @@ export default function ClientsCreatePage() {
   const handleImageUpload = useCallback(async (itemId: string, file: File) => {
     setUploadingId(itemId);
     try {
+      const itemIndex = clientItems.findIndex(item => item.id === itemId);
+      const resolvedNaming = resolveNamingContext(undefined, {
+        entityName: 'clients',
+        field: 'logo',
+        index: itemIndex >= 0 ? itemIndex + 1 : 1,
+      });
+      const prepared = await prepareImageForUpload(file, { naming: resolvedNaming });
       const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, { body: file, headers: { 'Content-Type': file.type }, method: 'POST' });
+      const result = await fetch(uploadUrl, { body: prepared.file, headers: { 'Content-Type': prepared.mimeType }, method: 'POST' });
       const { storageId } = await result.json();
       
       const saved = await saveImage({
-        filename: file.name,
+        filename: prepared.filename,
         folder: 'clients',
-        mimeType: file.type,
-        size: file.size,
+        height: prepared.height,
+        mimeType: prepared.mimeType,
+        size: prepared.size,
         storageId: storageId as Id<"_storage">,
+        width: prepared.width,
       });
       
       if (saved.url) {
@@ -77,7 +88,7 @@ export default function ClientsCreatePage() {
     } finally {
       setUploadingId(null);
     }
-  }, [generateUploadUrl, saveImage]);
+  }, [generateUploadUrl, saveImage, clientItems]);
 
   const toggleInputMode = (id: string) => {
     setClientItems((items) => items.map((item) => (
