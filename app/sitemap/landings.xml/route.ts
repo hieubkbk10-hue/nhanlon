@@ -3,8 +3,6 @@ import { api } from '@/convex/_generated/api';
 import { collectPaginated } from '@/lib/seo/sitemap';
 import { buildSitemapXml, resolveBaseUrl } from '@/lib/seo/sitemap-xml';
 
-export const dynamic = 'force-dynamic';
-
 const LANDING_TYPE_ROUTES: Record<string, string> = {
   feature: '/features',
   'use-case': '/use-cases',

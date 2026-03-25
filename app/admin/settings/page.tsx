@@ -346,6 +346,22 @@ function SettingsContent() {
       }
 
       await setMultiple({ settings: settingsToSave });
+      const revalidateSecret = process.env.NEXT_PUBLIC_SEO_REVALIDATE_SECRET;
+      if (revalidateSecret) {
+        fetch('/api/internal/seo/revalidate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-seo-revalidate-secret': revalidateSecret,
+          },
+        }).then((response) => {
+          if (!response.ok) {
+            toast.warning('Đã lưu, đồng bộ SEO đang chậm.');
+          }
+        }).catch(() => {
+          toast.warning('Đã lưu, đồng bộ SEO đang chậm.');
+        });
+      }
       setInitialForm({ ...form });
       toast.success('Đã lưu cài đặt thành công!');
     } catch (error) {

@@ -4,8 +4,6 @@ import { api } from '@/convex/_generated/api';
 import { collectPaginated } from '@/lib/seo/sitemap';
 import { resolveSiteUrl } from '@/lib/seo/site-url';
 
-export const dynamic = 'force-dynamic';
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const client = getConvexClient();
   const baseUrl = await resolveSiteUrl();
