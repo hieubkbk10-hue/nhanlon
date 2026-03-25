@@ -1,17 +1,18 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { JsonLd, generateItemListSchema } from '@/components/seo/JsonLd';
+import { JsonLd, generateBreadcrumbSchema, generateItemListSchema } from '@/components/seo/JsonLd';
 import { api } from '@/convex/_generated/api';
 import { getConvexClient } from '@/lib/convex';
-import { getContactSettings, getSEOSettings, getSiteSettings } from '@/lib/get-settings';
+import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
   const client = getConvexClient();
-  const [site, seo, contact, servicesModule] = await Promise.all([
+  const [site, seo, contact, social, servicesModule] = await Promise.all([
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
+    getSocialSettings(),
     client.query(api.admin.modules.getModuleByKey, { key: 'services' }),
   ]);
   const moduleEnabled = Boolean(servicesModule?.enabled);
@@ -27,6 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
       site,
       titleOverride: 'Không tìm thấy dịch vụ',
       useTitleTemplate: true,
+      social,
     });
   }
 
@@ -40,6 +42,7 @@ export async function generateMetadata(): Promise<Metadata> {
     site,
     titleOverride: 'Dịch vụ',
     useTitleTemplate: true,
+    social,
   });
 }
 
@@ -66,9 +69,14 @@ export default async function ServicesListLayout({ children }: { children: React
     name: 'Dịch vụ mới nhất',
     url: `${baseUrl}/services`,
   });
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: 'Trang chủ', url: baseUrl },
+    { name: 'Dịch vụ', url: `${baseUrl}/services` },
+  ]);
 
   return (
     <>
+      <JsonLd data={breadcrumbSchema} />
       {services.length > 0 && <JsonLd data={itemListSchema} />}
       {children}
     </>

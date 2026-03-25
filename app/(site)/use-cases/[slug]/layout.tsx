@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
-import { getContactSettings, getSEOSettings, getSiteSettings } from '@/lib/get-settings';
+import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 import { buildArticleSchema, buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/schema-policy';
 import { JsonLd } from '@/components/seo/JsonLd';
@@ -22,11 +22,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const client = getConvexClient();
 
-  const [page, site, seo, contact] = await Promise.all([
+  const [page, site, seo, contact, social] = await Promise.all([
     client.query(api.landingPages.getBySlug, { slug }),
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
+    getSocialSettings(),
   ]);
 
   if (!page || page.landingType !== LANDING_TYPE) {
@@ -38,6 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       seo,
       site,
       titleOverride: 'Không tìm thấy trang',
+      social,
     });
   }
 
@@ -50,6 +52,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     routeType: 'landing',
     seo,
     site,
+    social,
   });
 }
 

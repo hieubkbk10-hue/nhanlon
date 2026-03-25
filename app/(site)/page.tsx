@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import HomePageClient from './_components/HomePageClient';
-import { getContactSettings, getSEOSettings, getSiteSettings } from '@/lib/get-settings';
+import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [site, seo, contact] = await Promise.all([
+  const [site, seo, contact, social] = await Promise.all([
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
+    getSocialSettings(),
   ]);
 
   return buildSeoMetadata({
@@ -18,6 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
     routeType: 'home',
     seo,
     site,
+    social,
   });
 }
 

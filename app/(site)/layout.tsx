@@ -22,7 +22,8 @@ export const generateMetadata = (): Promise<Metadata> => {
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
-  ]).then(([site, seo, contact]) => {
+    getSocialSettings(),
+  ]).then(([site, seo, contact, social]) => {
     return {
       ...buildSeoMetadata({
         contact,
@@ -32,8 +33,13 @@ export const generateMetadata = (): Promise<Metadata> => {
         site,
         titleOverride: seo.seo_title || site.site_name,
         useTitleTemplate: true,
+        social,
       }),
-      icons: { icon: `/api/favicon?v=${encodeURIComponent(site.site_favicon || '')}` },
+      icons: {
+        icon: `/api/favicon?v=${encodeURIComponent(site.site_favicon || '')}`,
+        apple: `/api/favicon?v=${encodeURIComponent(site.site_favicon || '')}`,
+      },
+      manifest: '/manifest.webmanifest',
     };
   });
 };

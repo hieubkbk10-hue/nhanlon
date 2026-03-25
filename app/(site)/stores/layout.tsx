@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import { JsonLd, generateBreadcrumbSchema } from '@/components/seo/JsonLd';
-import { getSEOSettings, getSiteSettings } from '@/lib/get-settings';
+import { getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildCanonicalUrl, buildMetadata, buildSeoContext } from '@/lib/seo/metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [site, seo] = await Promise.all([
+  const [site, seo, social] = await Promise.all([
     getSiteSettings(),
     getSEOSettings(),
+    getSocialSettings(),
   ]);
 
   const context = buildSeoContext(site, seo);
@@ -19,6 +20,8 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     indexable: true,
     title,
+    twitterSite: social.social_twitter,
+    twitterCreator: social.social_twitter,
   });
 }
 

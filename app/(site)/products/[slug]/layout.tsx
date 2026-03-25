@@ -1,6 +1,6 @@
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
-import { getContactSettings, getSEOSettings, getSiteSettings } from '@/lib/get-settings';
+import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 import { stripHtml, truncateText } from '@/lib/seo';
 import { JsonLd, generateBreadcrumbSchema, generateProductSchema } from '@/components/seo/JsonLd';
@@ -19,10 +19,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const productsModule = await client.query(api.admin.modules.getModuleByKey, { key: 'products' });
     if (productsModule?.enabled === false) {
-      const [site, seo, contact] = await Promise.all([
+      const [site, seo, contact, social] = await Promise.all([
         getSiteSettings(),
         getSEOSettings(),
         getContactSettings(),
+        getSocialSettings(),
       ]);
       return buildSeoMetadata({
         contact,
@@ -33,15 +34,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         seo,
         site,
         titleOverride: 'Không tìm thấy sản phẩm',
+        social,
       });
     }
 
-    const [product, site, seo, contact, saleModeSetting] = await Promise.all([
+    const [product, site, seo, contact, saleModeSetting, social] = await Promise.all([
       client.query(api.products.getBySlug, { slug }),
       getSiteSettings(),
       getSEOSettings(),
       getContactSettings(),
       client.query(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'saleMode' }),
+      getSocialSettings(),
     ]);
 
     if (!product) {
@@ -54,6 +57,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         seo,
         site,
         titleOverride: 'Không tìm thấy sản phẩm',
+        social,
       });
     }
 
@@ -88,12 +92,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       seo,
       site,
       titleOverride: `${title} - ${formattedPrice}`,
+      social,
     });
   } catch {
-    const [site, seo, contact] = await Promise.all([
+    const [site, seo, contact, social] = await Promise.all([
       getSiteSettings(),
       getSEOSettings(),
       getContactSettings(),
+      getSocialSettings(),
     ]);
     return buildSeoMetadata({
       contact,
@@ -104,6 +110,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       seo,
       site,
       titleOverride: 'Sản phẩm',
+      social,
     });
   }
 }

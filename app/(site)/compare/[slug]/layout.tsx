@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
-import { getContactSettings, getSEOSettings, getSiteSettings } from '@/lib/get-settings';
+import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 import { buildArticleSchema, buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/schema-policy';
 import { JsonLd } from '@/components/seo/JsonLd';
@@ -16,14 +16,14 @@ const BREADCRUMB_LABEL = 'So sánh';
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const [page, site, seo, contact] = await Promise.all([
+  const [page, site, seo, contact, social] = await Promise.all([
     getConvexClient().query(api.landingPages.getBySlug, { slug }),
-    getSiteSettings(), getSEOSettings(), getContactSettings()
+    getSiteSettings(), getSEOSettings(), getContactSettings(), getSocialSettings()
   ]);
   if (!page || page.landingType !== LANDING_TYPE) {
-    return buildSeoMetadata({ contact, entityExists: false, pathname: `${ROUTE_PATH}/${slug}`, routeType: 'landing', seo, site, titleOverride: 'Không tìm thấy trang' });
+    return buildSeoMetadata({ contact, entityExists: false, pathname: `${ROUTE_PATH}/${slug}`, routeType: 'landing', seo, site, titleOverride: 'Không tìm thấy trang', social });
   }
-  return buildSeoMetadata({ contact, entity: { content: page.content, heroImage: page.heroImage, summary: page.summary, title: page.title }, entityExists: true, openGraphType: 'article', pathname: `${ROUTE_PATH}/${page.slug}`, routeType: 'landing', seo, site });
+  return buildSeoMetadata({ contact, entity: { content: page.content, heroImage: page.heroImage, summary: page.summary, title: page.title }, entityExists: true, openGraphType: 'article', pathname: `${ROUTE_PATH}/${page.slug}`, routeType: 'landing', seo, site, social });
 }
 
 export default async function CompareLayout({ params, children }: Props) {

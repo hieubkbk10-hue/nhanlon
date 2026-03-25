@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
-import { getContactSettings, getSEOSettings, getSiteSettings } from '@/lib/get-settings';
+import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { JsonLd, generateBreadcrumbSchema, generateServiceSchema } from '@/components/seo/JsonLd';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 
@@ -17,10 +17,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const servicesModule = await client.query(api.admin.modules.getModuleByKey, { key: 'services' });
 
   if (servicesModule?.enabled === false) {
-    const [site, seo, contact] = await Promise.all([
+    const [site, seo, contact, social] = await Promise.all([
       getSiteSettings(),
       getSEOSettings(),
       getContactSettings(),
+      getSocialSettings(),
     ]);
     return buildSeoMetadata({
       contact,
@@ -31,14 +32,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       seo,
       site,
       titleOverride: 'Không tìm thấy dịch vụ',
+      social,
     });
   }
   
-  const [service, site, seo, contact] = await Promise.all([
+  const [service, site, seo, contact, social] = await Promise.all([
     client.query(api.services.getBySlug, { slug }),
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
+    getSocialSettings(),
   ]);
 
   if (!service) {
@@ -51,6 +54,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       seo,
       site,
       titleOverride: 'Không tìm thấy dịch vụ',
+      social,
     });
   }
 
@@ -68,6 +72,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     routeType: 'detail',
     seo,
     site,
+    social,
   });
 }
 

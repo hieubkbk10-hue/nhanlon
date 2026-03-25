@@ -1,23 +1,29 @@
 import type { Metadata } from 'next';
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
-import { getSEOSettings, getSiteSettings, getContactSettings } from '@/lib/get-settings';
+import { getSEOSettings, getSiteSettings, getContactSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildHubMetadata } from '@/lib/seo/metadata';
 import InternalLinkCluster from '@/components/seo/InternalLinkCluster';
 import { getHubInternalLinks } from '@/lib/seo/internal-links';
-import { JsonLd, generateItemListSchema } from '@/components/seo/JsonLd';
+import { JsonLd, generateBreadcrumbSchema, generateItemListSchema } from '@/components/seo/JsonLd';
 import LandingHeroImage from '@/components/seo/LandingHeroImage';
 
 export const revalidate = 1800;
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [site, seo, contact] = await Promise.all([getSiteSettings(), getSEOSettings(), getContactSettings()]);
+  const [site, seo, contact, social] = await Promise.all([
+    getSiteSettings(),
+    getSEOSettings(),
+    getContactSettings(),
+    getSocialSettings(),
+  ]);
   return buildHubMetadata({
     contact,
     description: 'Template mẫu cho mọi trường hợp sử dụng',
     pathname: '/templates',
     seo,
     site,
+    social,
     title: 'Templates',
   });
 }
@@ -34,8 +40,13 @@ export default async function TemplatesPage() {
     name: 'Templates',
     url: `${baseUrl}/templates`,
   });
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: 'Trang chủ', url: baseUrl },
+    { name: 'Templates', url: `${baseUrl}/templates` },
+  ]);
   return (
     <>
+      <JsonLd data={breadcrumbSchema} />
       {result.page.length > 0 && <JsonLd data={itemListSchema} />}
       <div className="container mx-auto px-4 py-12">
         <h1 className="text-4xl font-bold mb-4">Templates</h1>
