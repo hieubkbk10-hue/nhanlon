@@ -396,6 +396,7 @@ export default function PostCreatePage() {
           ? (metaTitle.trim() || resolvedMetaTitle || undefined)
           : undefined,
         slug: slug.trim() || title.toLowerCase().replaceAll(/\s+/g, '-'),
+        publishImmediately: status === 'Published' ? publishImmediately : undefined,
         publishedAt: status === 'Published' ? resolvedPublishedAt : undefined,
         status,
         thumbnail,

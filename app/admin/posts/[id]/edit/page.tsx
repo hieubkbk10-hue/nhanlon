@@ -220,6 +220,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         metaTitle: enabledFields.has('metaTitle')
           ? (resolvedMetaTitleValue || undefined)
           : undefined,
+        publishImmediately: status === 'Published' ? publishImmediately : undefined,
         publishedAt: status === 'Published' ? resolvedPublishedAt : undefined,
         slug: slug.trim(),
         status,

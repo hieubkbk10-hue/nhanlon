@@ -162,6 +162,7 @@ export async function create(
     metaDescription?: string;
     status?: Doc<"posts">["status"];
     order?: number;
+    publishImmediately?: boolean;
     publishedAt?: number;
   }
 ): Promise<Id<"posts">> {
@@ -174,9 +175,16 @@ export async function create(
 
   const order = args.order ?? (await getNextOrder(ctx));
   const status = args.status ?? "Draft";
-  const resolvedPublishedAt = status === "Published"
-    ? (typeof args.publishedAt === "number" && Number.isFinite(args.publishedAt) ? args.publishedAt : Date.now())
-    : undefined;
+  let resolvedPublishedAt: number | undefined = undefined;
+  if (status === "Published") {
+    if (args.publishImmediately === true) {
+      resolvedPublishedAt = Date.now();
+    } else if (typeof args.publishedAt === "number" && Number.isFinite(args.publishedAt)) {
+      resolvedPublishedAt = args.publishedAt;
+    } else if (args.publishImmediately !== false) {
+      resolvedPublishedAt = Date.now();
+    }
+  }
 
   return  ctx.db.insert("posts", {
     authorName: args.authorName,
@@ -221,6 +229,7 @@ export async function update(
     metaDescription?: string;
     status?: Doc<"posts">["status"];
     order?: number;
+    publishImmediately?: boolean;
     publishedAt?: number;
   }
 ): Promise<void> {
@@ -243,6 +252,8 @@ export async function update(
 
   if (nextStatus !== "Published") {
     patchData.publishedAt = undefined;
+  } else if (args.publishImmediately === true) {
+    patchData.publishedAt = Date.now();
   } else if (hasPublishedAt) {
     const resolvedPublishedAt = typeof args.publishedAt === "number" && Number.isFinite(args.publishedAt)
       ? args.publishedAt
