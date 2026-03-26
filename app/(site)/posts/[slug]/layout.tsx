@@ -81,6 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PostLayout({ params, children }: Props) {
   const { slug } = await params;
   const client = getConvexClient();
+  const SCHEDULE_SKEW_MS = 30_000;
 
   const postsModule = await client.query(api.admin.modules.getModuleByKey, { key: 'posts' });
   if (postsModule?.enabled === false) {
@@ -94,7 +95,7 @@ export default async function PostLayout({ params, children }: Props) {
   ]);
 
   if (!post) {return children;}
-  if (post.status !== 'Published' || (post.publishedAt && post.publishedAt > Date.now())) {
+  if (post.status !== 'Published' || (post.publishedAt && post.publishedAt > Date.now() + SCHEDULE_SKEW_MS)) {
     notFound();
   }
 

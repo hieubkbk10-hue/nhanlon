@@ -91,6 +91,7 @@ export default function PostDetailPage({ params }: PageProps) {
   const brandColors = useBrandColors();
   const brandColor = brandColors.primary;
   const secondaryColor = resolveSecondary(brandColors.primary, brandColors.secondary, brandColors.mode || 'single');
+  const SCHEDULE_SKEW_MS = 30_000;
   const postDetailConfig = usePostsDetailConfig();
   const style = postDetailConfig.layoutStyle;
   const enabledFields = useEnabledPostFields();
@@ -106,7 +107,7 @@ export default function PostDetailPage({ params }: PageProps) {
   );
   const isVisiblePost = useMemo(() => {
     if (!post) {return false;}
-    return post.status === 'Published' && (!post.publishedAt || post.publishedAt <= Date.now());
+    return post.status === 'Published' && (!post.publishedAt || post.publishedAt <= Date.now() + SCHEDULE_SKEW_MS);
   }, [post]);
   const incrementViews = useMutation(api.posts.incrementViews);
   const createComment = useMutation(api.comments.create);

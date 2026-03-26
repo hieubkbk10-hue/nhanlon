@@ -31,6 +31,7 @@ const toTimestamp = (value: string) => {
 
 export default function PostEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const SCHEDULE_SKEW_MS = 30_000;
 
   const postData = useQuery(api.posts.getById, { id: id as Id<"posts"> });
   const categoriesData = useQuery(api.postCategories.listAll, {});
@@ -159,7 +160,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
       setAuthorName(postData.authorName ?? '');
       setStatus(postData.status);
       const now = Date.now();
-      const isScheduled = Boolean(postData.publishedAt && postData.publishedAt > now);
+      const isScheduled = Boolean(postData.publishedAt && postData.publishedAt > now + SCHEDULE_SKEW_MS);
       setPublishImmediately(!isScheduled);
       setPublishAtLocal(isScheduled && postData.publishedAt ? toLocalDatetimeInput(postData.publishedAt) : '');
       initialSnapshotRef.current = {
