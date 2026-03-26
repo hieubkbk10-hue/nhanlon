@@ -56,12 +56,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       });
     }
 
-    const [product, site, seo, contact, saleModeSetting, social] = await Promise.all([
+    const [product, site, seo, contact, social] = await Promise.all([
       client.query(api.products.getBySlug, { slug }),
       getSiteSettings(),
       getSEOSettings(),
       getContactSettings(),
-      client.query(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'saleMode' }),
       getSocialSettings(),
     ]);
 
