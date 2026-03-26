@@ -7,7 +7,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { ExternalLink, Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAdminMutationErrorMessage } from '@/app/admin/lib/mutation-error';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Input, Label } from '../../../components/ui';
 import { LexicalEditor } from '../../../components/LexicalEditor';
 import { ImageUploader } from '../../../components/ImageUploader';
 import { QuickCreateCategoryModal } from '../../../components/QuickCreateCategoryModal';
@@ -52,6 +52,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
   const [authorName, setAuthorName] = useState('');
   const [status, setStatus] = useState<'Draft' | 'Published' | 'Archived'>('Draft');
   const [publishAtLocal, setPublishAtLocal] = useState('');
+  const [publishImmediately, setPublishImmediately] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('saved');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -90,8 +91,8 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
 
   const normalizedContent = useMemo(() => normalizeRichText(content), [content]);
   const resolvedPublishedAt = useMemo(
-    () => (status === 'Published' ? toTimestamp(publishAtLocal) : undefined),
-    [publishAtLocal, status],
+    () => (status === 'Published' && !publishImmediately ? toTimestamp(publishAtLocal) : undefined),
+    [publishAtLocal, publishImmediately, status],
   );
 
   const currentSnapshot = useMemo(() => ({
@@ -131,6 +132,13 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
   }, [hasChanges, saveStatus]);
 
   useEffect(() => {
+    if (status !== 'Published') {
+      setPublishImmediately(true);
+      setPublishAtLocal('');
+    }
+  }, [status]);
+
+  useEffect(() => {
     if (postData) {
       setTitle(postData.title);
       setSlug(postData.slug);
@@ -150,7 +158,10 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
       setCategoryId(postData.categoryId);
       setAuthorName(postData.authorName ?? '');
       setStatus(postData.status);
-      setPublishAtLocal(postData.publishedAt ? toLocalDatetimeInput(postData.publishedAt) : '');
+      const now = Date.now();
+      const isScheduled = Boolean(postData.publishedAt && postData.publishedAt > now);
+      setPublishImmediately(!isScheduled);
+      setPublishAtLocal(isScheduled && postData.publishedAt ? toLocalDatetimeInput(postData.publishedAt) : '');
       initialSnapshotRef.current = {
         authorName: (postData.authorName ?? '').trim(),
         categoryId: postData.categoryId,
@@ -163,7 +174,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         metaTitle: (postData.metaTitle ?? '').trim(),
         slug: postData.slug.trim(),
         status: postData.status,
-        publishedAt: postData.publishedAt,
+        publishedAt: isScheduled ? postData.publishedAt : undefined,
         thumbnail: postData.thumbnail ?? '',
         title: postData.title.trim(),
         thumbnailStorageId: (postData as { thumbnailStorageId?: Id<'_storage'> }).thumbnailStorageId,
@@ -175,6 +186,10 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {return;}
+    if (status === 'Published' && schedulingEnabled && !publishImmediately && !publishAtLocal) {
+      toast.error('Vui lòng chọn thời gian xuất bản.');
+      return;
+    }
 
     setIsSubmitting(true);
     setSaveStatus('saving');
@@ -420,14 +435,27 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
                 </select>
               </div>
               {schedulingEnabled && status === 'Published' && (
-                <div className="space-y-2">
-                  <Label>Hẹn giờ xuất bản</Label>
-                  <Input
-                    type="datetime-local"
-                    value={publishAtLocal}
-                    onChange={(e) =>{  setPublishAtLocal(e.target.value); }}
-                  />
-                  <div className="text-xs text-slate-500">Để trống để xuất bản ngay.</div>
+                <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <Checkbox
+                      checked={publishImmediately}
+                      onCheckedChange={(checked) => {
+                        setPublishImmediately(checked);
+                        if (checked) {setPublishAtLocal('');}
+                      }}
+                    />
+                    Xuất bản ngay
+                  </label>
+                  {!publishImmediately && (
+                    <div className="space-y-2">
+                      <Label>Thời gian xuất bản</Label>
+                      <Input
+                        type="datetime-local"
+                        value={publishAtLocal}
+                        onChange={(e) =>{  setPublishAtLocal(e.target.value); }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               <div className="space-y-2">

@@ -8,7 +8,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAdminMutationErrorMessage } from '@/app/admin/lib/mutation-error';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Input, Label } from '../../components/ui';
 import { LexicalEditor } from '../../components/LexicalEditor';
 import { ImageUploader } from '../../components/ImageUploader';
 import { QuickCreateCategoryModal } from '../../components/QuickCreateCategoryModal';
@@ -57,6 +57,7 @@ export default function PostCreatePage() {
   const [authorName, setAuthorName] = useState('');
   const [status, setStatus] = useState<'Draft' | 'Published'>('Draft');
   const [publishAtLocal, setPublishAtLocal] = useState('');
+  const [publishImmediately, setPublishImmediately] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editorResetKey, setEditorResetKey] = useState(0);
@@ -82,6 +83,13 @@ export default function PostCreatePage() {
       }
     }
   }, [settingsData]);
+
+  useEffect(() => {
+    if (status !== 'Published') {
+      setPublishImmediately(true);
+      setPublishAtLocal('');
+    }
+  }, [status]);
 
   // Check which fields are enabled
   const enabledFields = useMemo(() => {
@@ -361,12 +369,18 @@ export default function PostCreatePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !categoryId) {return;}
+    if (status === 'Published' && schedulingEnabled && !publishImmediately && !publishAtLocal) {
+      toast.error('Vui lòng chọn thời gian xuất bản.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const resolvedMetaTitle = truncateText(title.trim(), 60);
       const resolvedMetaDescription = truncateText(stripHtml(excerpt || content || ''), 160);
-      const resolvedPublishedAt = status === 'Published' ? toTimestamp(publishAtLocal) : undefined;
+      const resolvedPublishedAt = status === 'Published' && !publishImmediately
+        ? toTimestamp(publishAtLocal)
+        : undefined;
       await createPost({
         authorName: enabledFields.has('author_name') ? authorName.trim() || undefined : undefined,
         categoryId: categoryId as Id<"postCategories">,
@@ -726,14 +740,27 @@ export default function PostCreatePage() {
                 </select>
               </div>
               {schedulingEnabled && status === 'Published' && (
-                <div className="space-y-2">
-                  <Label>Hẹn giờ xuất bản</Label>
-                  <Input
-                    type="datetime-local"
-                    value={publishAtLocal}
-                    onChange={(e) =>{  setPublishAtLocal(e.target.value); }}
-                  />
-                  <div className="text-xs text-slate-500">Để trống để xuất bản ngay.</div>
+                <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <Checkbox
+                      checked={publishImmediately}
+                      onCheckedChange={(checked) => {
+                        setPublishImmediately(checked);
+                        if (checked) {setPublishAtLocal('');}
+                      }}
+                    />
+                    Xuất bản ngay
+                  </label>
+                  {!publishImmediately && (
+                    <div className="space-y-2">
+                      <Label>Thời gian xuất bản</Label>
+                      <Input
+                        type="datetime-local"
+                        value={publishAtLocal}
+                        onChange={(e) =>{  setPublishAtLocal(e.target.value); }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               <div className="space-y-2">
