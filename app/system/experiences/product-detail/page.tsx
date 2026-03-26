@@ -62,6 +62,7 @@ import { useExperienceConfig, useExampleProductSlug, EXPERIENCE_GROUP, EXPERIENC
 import { useBrandColors } from '@/components/site/hooks';
 
 type ProductsDetailStyle = 'classic' | 'modern' | 'minimal';
+type RelatedProductsMode = 'fixed' | 'infiniteScroll' | 'pagination';
 
 type ProductDetailExperienceConfig = {
   layoutStyle: ProductsDetailStyle;
@@ -71,6 +72,8 @@ type ProductDetailExperienceConfig = {
     minimal: MinimalLayoutConfig;
   };
   showBuyNow: boolean;
+  relatedProductsMode: RelatedProductsMode;
+  relatedProductsPerPage: number;
 };
 
 type ClassicLayoutConfig = {
@@ -150,6 +153,8 @@ const DEFAULT_CONFIG: ProductDetailExperienceConfig = {
     minimal: { showRating: true, showComments: true, showCommentLikes: true, showCommentReplies: true, showWishlist: true, showShare: true, showAddToCart: true, contentWidth: 'medium' },
   },
   showBuyNow: true,
+  relatedProductsMode: 'fixed',
+  relatedProductsPerPage: 8,
 };
 
 const HINTS = [
@@ -325,6 +330,12 @@ export default function ProductDetailExperiencePage() {
         minimal: { ...DEFAULT_CONFIG.layouts.minimal, ...raw?.layouts?.minimal },
       },
       showBuyNow: raw?.showBuyNow ?? true,
+      relatedProductsMode: raw?.relatedProductsMode === 'infiniteScroll' || raw?.relatedProductsMode === 'pagination'
+        ? raw.relatedProductsMode
+        : DEFAULT_CONFIG.relatedProductsMode,
+      relatedProductsPerPage: typeof raw?.relatedProductsPerPage === 'number' && raw.relatedProductsPerPage > 0
+        ? raw.relatedProductsPerPage
+        : DEFAULT_CONFIG.relatedProductsPerPage,
     };
   }, [experienceSetting?.value, legacyStyle, legacyHighlights]);
 
@@ -445,6 +456,8 @@ export default function ProductDetailExperiencePage() {
       brandColor,
       secondaryColor,
       colorMode,
+      relatedProductsMode: config.relatedProductsMode,
+      relatedProductsPerPage: config.relatedProductsPerPage,
     };
 
     return base;
@@ -667,6 +680,31 @@ export default function ProductDetailExperiencePage() {
               href="/system/modules/products"
               moduleName="module Sản phẩm"
             />
+          </ControlCard>
+
+          <ControlCard title="Sản phẩm liên quan">
+            <SelectRow
+              label="Kiểu hiển thị"
+              value={config.relatedProductsMode}
+              options={[
+                { value: 'fixed', label: '4 sản phẩm' },
+                { value: 'infiniteScroll', label: 'Tất cả + cuộn vô hạn' },
+                { value: 'pagination', label: 'Tất cả + phân trang' },
+              ]}
+              onChange={(v) => setConfig(prev => ({ ...prev, relatedProductsMode: v as RelatedProductsMode }))}
+            />
+            {config.relatedProductsMode !== 'fixed' && (
+              <SelectRow
+                label="Sản phẩm mỗi lần"
+                value={String(config.relatedProductsPerPage)}
+                options={[
+                  { value: '8', label: '8' },
+                  { value: '12', label: '12' },
+                  { value: '16', label: '16' },
+                ]}
+                onChange={(v) => setConfig(prev => ({ ...prev, relatedProductsPerPage: Number(v) }))}
+              />
+            )}
           </ControlCard>
 
           <ControlCard title="Bình luận">

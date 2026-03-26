@@ -54,6 +54,8 @@ type ProductDetailPreviewProps = {
   brandColor?: string;
   secondaryColor?: string;
   colorMode?: 'single' | 'dual';
+  relatedProductsMode?: 'fixed' | 'infiniteScroll' | 'pagination';
+  relatedProductsPerPage?: number;
 };
 
 const formatVND = (price: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
@@ -396,6 +398,8 @@ export function ProductDetailPreview({
   brandColor = '#06b6d4',
   secondaryColor,
   colorMode = 'single',
+  relatedProductsMode = 'fixed',
+  relatedProductsPerPage = 8,
 }: ProductDetailPreviewProps) {
   const tokens = getProductDetailColors(brandColor, secondaryColor, colorMode);
   const isMobile = device === 'mobile';
@@ -424,6 +428,12 @@ export function ProductDetailPreview({
   ];
   const highlightItems = classicHighlights.length > 0 ? classicHighlights : fallbackHighlights;
   const showHighlightBlock = showHighlights && highlightItems.length > 0;
+  const relatedCount = relatedProductsMode === 'fixed' ? 4 : relatedProductsPerPage;
+  const relatedItems = Array.from({ length: relatedCount }).map((_, index) => ({
+    name: `Sản phẩm ${index + 1}`,
+    price: formatVND(1250000 + index * 100000),
+    image: PREVIEW_IMAGES[index % PREVIEW_IMAGES.length],
+  }));
   const contentWidthClass = contentWidth === 'narrow'
     ? 'max-w-4xl'
     : contentWidth === 'wide'
@@ -1043,6 +1053,48 @@ export function ProductDetailPreview({
               showReplies={showCommentReplies}
               brandColor={brandColor}
             />
+
+            <section className="mt-12 pt-8 border-t" style={{ borderColor: tokens.divider }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold" style={{ color: tokens.headingColor }}>Sản phẩm liên quan</h2>
+                <span className="text-xs" style={{ color: tokens.metaText }}>
+                  {relatedProductsMode === 'fixed' && '4 sản phẩm'}
+                  {relatedProductsMode === 'infiniteScroll' && `Cuộn vô hạn · ${relatedProductsPerPage}/lần`}
+                  {relatedProductsMode === 'pagination' && `Phân trang · ${relatedProductsPerPage}/trang`}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                {relatedItems.map((item, index) => (
+                  <div key={`${item.name}-${index}`} className="rounded-xl overflow-hidden border" style={{ borderColor: tokens.relatedCardBorder, backgroundColor: tokens.relatedCardBg }}>
+                    <div className="aspect-square overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
+                      <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                    </div>
+                    <div className="p-3">
+                      <p className="text-xs font-medium line-clamp-2" style={{ color: tokens.relatedTitle }}>{item.name}</p>
+                      <p className="text-xs font-semibold mt-2" style={{ color: tokens.relatedPrice }}>{item.price}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {relatedProductsMode === 'infiniteScroll' && (
+                <div className="text-center mt-5 text-xs" style={{ color: tokens.metaText }}>Cuộn để xem thêm...</div>
+              )}
+              {relatedProductsMode === 'pagination' && (
+                <div className="flex items-center justify-center gap-2 mt-5">
+                  {[1, 2, 3].map((page) => (
+                    <span
+                      key={page}
+                      className="h-7 w-7 rounded-md border flex items-center justify-center text-xs"
+                      style={page === 1
+                        ? { backgroundColor: tokens.primary, borderColor: tokens.primary, color: '#fff' }
+                        : { borderColor: tokens.border, color: tokens.metaText }}
+                    >
+                      {page}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         )}
       </div>

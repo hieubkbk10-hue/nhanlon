@@ -3,9 +3,10 @@
 import React, { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { useInView } from 'react-intersection-observer';
 import { api } from '@/convex/_generated/api';
 import { useBrandColors } from '@/components/site/hooks';
 import { getProductDetailColors, type ProductDetailColors } from '@/components/site/products/detail/_lib/colors';
@@ -22,6 +23,7 @@ type ProductDetailStyle = 'classic' | 'modern' | 'minimal';
 type ModernHeroStyle = 'full' | 'split' | 'minimal';
 type MinimalContentWidth = 'narrow' | 'medium' | 'wide';
 type ProductsSaleMode = 'cart' | 'contact' | 'affiliate';
+type RelatedProductsMode = 'fixed' | 'infiniteScroll' | 'pagination';
 
 type ClassicLayoutConfig = {
   showRating: boolean;
@@ -70,6 +72,8 @@ type ProductDetailExperienceConfig = {
   showBuyNow: boolean;
   heroStyle: ModernHeroStyle;
   contentWidth: MinimalContentWidth;
+  relatedProductsMode: RelatedProductsMode;
+  relatedProductsPerPage: number;
 };
 
 type ProductVariantOptionValue = {
@@ -196,6 +200,8 @@ function useProductDetailExperienceConfig(): ProductDetailExperienceConfig {
       showBuyNow: boolean;
       heroStyle: ModernHeroStyle;
       contentWidth: MinimalContentWidth;
+      relatedProductsMode: RelatedProductsMode;
+      relatedProductsPerPage: number;
     }> | undefined;
     const layoutStyle = raw?.layoutStyle ?? legacyStyle;
     const layoutConfig = raw?.layouts?.[layoutStyle];
@@ -215,6 +221,13 @@ function useProductDetailExperienceConfig(): ProductDetailExperienceConfig {
     const showCommentLikes = layoutComments?.showCommentLikes ?? raw?.showCommentLikes ?? true;
     const showCommentReplies = layoutComments?.showCommentReplies ?? raw?.showCommentReplies ?? true;
     const showShare = layoutComments?.showShare ?? raw?.showShare ?? true;
+    const normalizedRelatedMode: RelatedProductsMode =
+      raw?.relatedProductsMode === 'infiniteScroll' || raw?.relatedProductsMode === 'pagination'
+        ? raw.relatedProductsMode
+        : 'fixed';
+    const relatedProductsPerPage = typeof raw?.relatedProductsPerPage === 'number' && raw.relatedProductsPerPage > 0
+      ? raw.relatedProductsPerPage
+      : 8;
     return {
       layoutStyle,
       showAddToCart: configShowAddToCart && cartAvailable,
@@ -233,6 +246,8 @@ function useProductDetailExperienceConfig(): ProductDetailExperienceConfig {
       contentWidth: layoutStyle === 'minimal'
         ? (layoutConfig as Partial<MinimalLayoutConfig>)?.contentWidth ?? raw?.contentWidth ?? 'medium'
         : 'medium',
+      relatedProductsMode: normalizedRelatedMode,
+      relatedProductsPerPage,
     };
   }, [experienceSetting?.value, legacyHighlightsEnabled, legacyStyle, cartAvailable, canUseComments, canUseCommentLikes, canUseCommentReplies, canUseWishlist, ordersEnabled]);
 }
@@ -329,11 +344,25 @@ export default function ProductDetailPage({ params }: PageProps) {
     api.productCategories.getById,
     product?.categoryId ? { id: product.categoryId } : 'skip'
   );
-  
-  const relatedProducts = useQuery(
-    api.products.searchPublished,
-    product?.categoryId ? { categoryId: product.categoryId, limit: 4 } : 'skip'
+
+  const relatedProductsMode = experienceConfig.relatedProductsMode;
+  const relatedProductsPerPage = experienceConfig.relatedProductsPerPage;
+  const [relatedPage, setRelatedPage] = useState(1);
+  const { ref: relatedLoadMoreRef, inView: relatedInView } = useInView({ rootMargin: '120px' });
+
+  const {
+    results: relatedInfiniteResults,
+    status: relatedInfiniteStatus,
+    loadMore: loadMoreRelated,
+  } = usePaginatedQuery(
+    api.products.listPublishedPaginated,
+    { categoryId: product?.categoryId },
+    { initialNumItems: relatedProductsMode === 'fixed' ? 4 : relatedProductsPerPage }
   );
+
+  const relatedTotalCountSource = useQuery(api.products.countPublished, {
+    categoryId: product?.categoryId,
+  });
 
   const variants = useQuery(
     api.productVariants.listByProductActive,
@@ -457,6 +486,70 @@ export default function ProductDetailPage({ params }: PageProps) {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, { content: string; email: string; name: string }>>({});
   const [replySubmittingId, setReplySubmittingId] = useState<string | null>(null);
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setRelatedPage(1);
+  }, [product?._id, relatedProductsMode, relatedProductsPerPage]);
+
+  const relatedCandidates = useMemo<RelatedProduct[]>(() => {
+    if (!relatedInfiniteResults) {
+      return [];
+    }
+    return relatedInfiniteResults
+      .filter(item => item._id !== product?._id)
+      .map((item) => ({
+        _id: item._id,
+        name: item.name,
+        slug: item.slug,
+        price: item.price,
+        salePrice: item.salePrice,
+        image: item.image,
+        hasVariants: item.hasVariants,
+      }));
+  }, [relatedInfiniteResults, product?._id]);
+
+  const relatedTotalCount = Math.max((relatedTotalCountSource ?? 0) - (product ? 1 : 0), 0);
+  const relatedRequiredCount = relatedPage * relatedProductsPerPage;
+  const isRelatedPagination = relatedProductsMode === 'pagination';
+  const isRelatedInfinite = relatedProductsMode === 'infiniteScroll';
+
+  useEffect(() => {
+    if (!isRelatedInfinite) {
+      return;
+    }
+    if (relatedInView && relatedInfiniteStatus === 'CanLoadMore') {
+      loadMoreRelated(relatedProductsPerPage);
+    }
+  }, [isRelatedInfinite, relatedInView, relatedInfiniteStatus, loadMoreRelated, relatedProductsPerPage]);
+
+  useEffect(() => {
+    if (!isRelatedPagination) {
+      return;
+    }
+    if (relatedInfiniteStatus !== 'CanLoadMore') {
+      return;
+    }
+    if (relatedCandidates.length >= relatedRequiredCount) {
+      return;
+    }
+    loadMoreRelated(relatedRequiredCount - relatedCandidates.length);
+  }, [isRelatedPagination, relatedInfiniteStatus, relatedCandidates.length, relatedRequiredCount, loadMoreRelated]);
+
+  const relatedProducts = useMemo(() => {
+    if (relatedProductsMode === 'fixed') {
+      return relatedCandidates.slice(0, 4);
+    }
+    if (isRelatedPagination) {
+      const offset = (relatedPage - 1) * relatedProductsPerPage;
+      return relatedCandidates.slice(offset, offset + relatedProductsPerPage);
+    }
+    return relatedCandidates;
+  }, [relatedCandidates, isRelatedPagination, relatedPage, relatedProductsMode, relatedProductsPerPage]);
+
+  const relatedIsLoading = relatedProductsMode !== 'fixed' && (
+    relatedInfiniteStatus === 'LoadingFirstPage' ||
+    (isRelatedPagination && relatedInfiniteStatus !== 'Exhausted' && relatedCandidates.length < relatedRequiredCount)
+  );
 
   const handleWishlistToggle = async () => {
     if (!isAuthenticated || !customer || !product?._id) {
@@ -695,7 +788,6 @@ export default function ProductDetailPage({ params }: PageProps) {
     );
   }
 
-  const filteredRelated = relatedProducts?.filter(p => p._id !== product._id).slice(0, 4) ?? [];
   const productData = {
     ...product,
     categoryName: category?.name ?? 'Sản phẩm',
@@ -710,7 +802,7 @@ export default function ProductDetailPage({ params }: PageProps) {
           product={productData}
           brandColor={brandColor}
           tokens={tokens}
-          relatedProducts={filteredRelated}
+          relatedProducts={relatedProducts}
           enabledFields={enabledFields}
           variants={variants ?? []}
           variantOptions={variantOptions}
@@ -731,6 +823,14 @@ export default function ProductDetailPage({ params }: PageProps) {
           onAddToCart={handleAddToCart}
           onBuyNow={handlePrimaryAction}
           commentsSection={commentsSection}
+          relatedProductsMode={relatedProductsMode}
+          relatedProductsPerPage={relatedProductsPerPage}
+          relatedProductsPage={relatedPage}
+          relatedProductsTotalCount={relatedTotalCount}
+          onRelatedProductsPageChange={setRelatedPage}
+          relatedLoadMoreRef={relatedLoadMoreRef}
+          relatedInfiniteStatus={relatedInfiniteStatus}
+          relatedIsLoading={relatedIsLoading}
         />
       )}
       {experienceConfig.layoutStyle === 'modern' && (
@@ -738,7 +838,7 @@ export default function ProductDetailPage({ params }: PageProps) {
           product={productData}
           brandColor={brandColor}
           tokens={tokens}
-          relatedProducts={filteredRelated}
+          relatedProducts={relatedProducts}
           enabledFields={enabledFields}
           variants={variants ?? []}
           variantOptions={variantOptions}
@@ -760,6 +860,14 @@ export default function ProductDetailPage({ params }: PageProps) {
           onAddToCart={handleAddToCart}
           onBuyNow={handlePrimaryAction}
           commentsSection={commentsSection}
+          relatedProductsMode={relatedProductsMode}
+          relatedProductsPerPage={relatedProductsPerPage}
+          relatedProductsPage={relatedPage}
+          relatedProductsTotalCount={relatedTotalCount}
+          onRelatedProductsPageChange={setRelatedPage}
+          relatedLoadMoreRef={relatedLoadMoreRef}
+          relatedInfiniteStatus={relatedInfiniteStatus}
+          relatedIsLoading={relatedIsLoading}
         />
       )}
       {experienceConfig.layoutStyle === 'minimal' && (
@@ -767,7 +875,7 @@ export default function ProductDetailPage({ params }: PageProps) {
           product={productData}
           brandColor={brandColor}
           tokens={tokens}
-          relatedProducts={filteredRelated}
+          relatedProducts={relatedProducts}
           enabledFields={enabledFields}
           variants={variants ?? []}
           variantOptions={variantOptions}
@@ -789,6 +897,14 @@ export default function ProductDetailPage({ params }: PageProps) {
           onAddToCart={handleAddToCart}
           onBuyNow={handlePrimaryAction}
           commentsSection={commentsSection}
+          relatedProductsMode={relatedProductsMode}
+          relatedProductsPerPage={relatedProductsPerPage}
+          relatedProductsPage={relatedPage}
+          relatedProductsTotalCount={relatedTotalCount}
+          onRelatedProductsPageChange={setRelatedPage}
+          relatedLoadMoreRef={relatedLoadMoreRef}
+          relatedInfiniteStatus={relatedInfiniteStatus}
+          relatedIsLoading={relatedIsLoading}
         />
       )}
     </>
@@ -826,6 +942,8 @@ interface RelatedProduct {
   hasVariants?: boolean;
 }
 
+type PaginatedStatus = 'LoadingFirstPage' | 'LoadingMore' | 'CanLoadMore' | 'Exhausted';
+
 interface CommentData {
   _id: Id<'comments'>;
   _creationTime: number;
@@ -841,6 +959,14 @@ interface StyleProps {
   brandColor: string;
   tokens: ProductDetailColors;
   relatedProducts: RelatedProduct[];
+  relatedProductsMode: RelatedProductsMode;
+  relatedProductsPerPage: number;
+  relatedProductsPage: number;
+  relatedProductsTotalCount: number;
+  onRelatedProductsPageChange: (page: number) => void;
+  relatedLoadMoreRef: (node?: Element | null) => void;
+  relatedInfiniteStatus: PaginatedStatus;
+  relatedIsLoading: boolean;
   enabledFields: Set<string>;
   variants: ProductVariant[];
   variantOptions: VariantSelectorOption[];
@@ -876,6 +1002,53 @@ interface ClassicStyleProps extends StyleProps, ExperienceBlocksProps {
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('vi-VN', { currency: 'VND', style: 'currency' }).format(price);
+}
+
+function generatePaginationItems(currentPage: number, totalPages: number): (number | 'ellipsis')[] {
+  const items: (number | 'ellipsis')[] = [];
+  const siblingCount = 1;
+
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) {
+      items.push(i);
+    }
+    return items;
+  }
+
+  const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+  const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPages);
+  const shouldShowLeftDots = leftSiblingIndex > 2;
+  const shouldShowRightDots = rightSiblingIndex < totalPages - 2;
+
+  if (!shouldShowLeftDots && shouldShowRightDots) {
+    const leftRange = 3 + 2 * siblingCount;
+    for (let i = 1; i <= leftRange; i++) {
+      items.push(i);
+    }
+    items.push('ellipsis');
+    items.push(totalPages);
+    return items;
+  }
+
+  if (shouldShowLeftDots && !shouldShowRightDots) {
+    items.push(1);
+    items.push('ellipsis');
+    const rightRange = 3 + 2 * siblingCount;
+    for (let i = totalPages - rightRange + 1; i <= totalPages; i++) {
+      items.push(i);
+    }
+    return items;
+  }
+
+  items.push(1);
+  items.push('ellipsis');
+  for (let i = leftSiblingIndex; i <= rightSiblingIndex; i++) {
+    items.push(i);
+  }
+  items.push('ellipsis');
+  items.push(totalPages);
+
+  return items;
 }
 
 function isValidImageSrc(value: unknown): value is string {
@@ -1231,7 +1404,40 @@ function RatingInline({ summary, tokens }: { summary: RatingSummary; tokens: Pro
 // ====================================================================================
 // STYLE 1: CLASSIC - Standard e-commerce product page
 // ====================================================================================
-function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFields, variants, variantOptions, highlights, highlightsEnabled, ratingSummary, saleMode, showAddToCart, showRating, showWishlist, showShare, showBuyNow, buyNowLabel, requireStockForBuyNow, isWishlisted, onToggleWishlist, onShare, onAddToCart, onBuyNow, commentsSection }: ClassicStyleProps) {
+function ClassicStyle({
+  product,
+  brandColor,
+  tokens,
+  relatedProducts,
+  relatedProductsMode,
+  relatedProductsPerPage,
+  relatedProductsPage,
+  relatedProductsTotalCount,
+  onRelatedProductsPageChange,
+  relatedLoadMoreRef,
+  relatedInfiniteStatus,
+  relatedIsLoading,
+  enabledFields,
+  variants,
+  variantOptions,
+  highlights,
+  highlightsEnabled,
+  ratingSummary,
+  saleMode,
+  showAddToCart,
+  showRating,
+  showWishlist,
+  showShare,
+  showBuyNow,
+  buyNowLabel,
+  requireStockForBuyNow,
+  isWishlisted,
+  onToggleWishlist,
+  onShare,
+  onAddToCart,
+  onBuyNow,
+  commentsSection,
+}: ClassicStyleProps) {
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState<VariantSelectionMap>({});
@@ -1554,6 +1760,14 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
           showPrice={enabledFields.has('price') || enabledFields.size === 0}
           showSalePrice={enabledFields.has('salePrice')}
           saleMode={saleMode}
+          mode={relatedProductsMode}
+          page={relatedProductsPage}
+          perPage={relatedProductsPerPage}
+          totalCount={relatedProductsTotalCount}
+          onPageChange={onRelatedProductsPageChange}
+          loadMoreRef={relatedLoadMoreRef}
+          infiniteStatus={relatedInfiniteStatus}
+          isLoading={relatedIsLoading}
         />
 
         <div className="mt-12 pt-8 border-t" style={{ borderColor: tokens.divider }}>
@@ -1569,7 +1783,39 @@ function ClassicStyle({ product, brandColor, tokens, relatedProducts, enabledFie
 // ====================================================================================
 // STYLE 2: MODERN - Landing page style with hero
 // ====================================================================================
-function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFields, variants, variantOptions, highlights, showHighlights, ratingSummary, saleMode, showAddToCart, showRating, showWishlist, showBuyNow, buyNowLabel, requireStockForBuyNow, heroStyle, isWishlisted, onToggleWishlist, onAddToCart, onBuyNow, commentsSection }: StyleProps & ExperienceBlocksProps & HighlightBlockProps & { heroStyle: ModernHeroStyle }) {
+function ModernStyle({
+  product,
+  brandColor,
+  tokens,
+  relatedProducts,
+  relatedProductsMode,
+  relatedProductsPerPage,
+  relatedProductsPage,
+  relatedProductsTotalCount,
+  onRelatedProductsPageChange,
+  relatedLoadMoreRef,
+  relatedInfiniteStatus,
+  relatedIsLoading,
+  enabledFields,
+  variants,
+  variantOptions,
+  highlights,
+  showHighlights,
+  ratingSummary,
+  saleMode,
+  showAddToCart,
+  showRating,
+  showWishlist,
+  showBuyNow,
+  buyNowLabel,
+  requireStockForBuyNow,
+  heroStyle,
+  isWishlisted,
+  onToggleWishlist,
+  onAddToCart,
+  onBuyNow,
+  commentsSection,
+}: StyleProps & ExperienceBlocksProps & HighlightBlockProps & { heroStyle: ModernHeroStyle }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState<VariantSelectionMap>({});
@@ -1995,7 +2241,15 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
             tokens={tokens}
             showPrice={showPrice}
             showSalePrice={showSalePrice}
-          saleMode={saleMode}
+            saleMode={saleMode}
+            mode={relatedProductsMode}
+            page={relatedProductsPage}
+            perPage={relatedProductsPerPage}
+            totalCount={relatedProductsTotalCount}
+            onPageChange={onRelatedProductsPageChange}
+            loadMoreRef={relatedLoadMoreRef}
+            infiniteStatus={relatedInfiniteStatus}
+            isLoading={relatedIsLoading}
           />
         </div>
       </main>
@@ -2006,7 +2260,39 @@ function ModernStyle({ product, brandColor, tokens, relatedProducts, enabledFiel
 // ====================================================================================
 // STYLE 3: MINIMAL - Clean, focused design
 // ====================================================================================
-function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFields, variants, variantOptions, highlights, showHighlights, ratingSummary, saleMode, showAddToCart, showRating, showWishlist, showBuyNow, buyNowLabel, requireStockForBuyNow, contentWidth, isWishlisted, onToggleWishlist, onAddToCart, onBuyNow, commentsSection }: StyleProps & ExperienceBlocksProps & HighlightBlockProps & { contentWidth: MinimalContentWidth }) {
+function MinimalStyle({
+  product,
+  brandColor,
+  tokens,
+  relatedProducts,
+  relatedProductsMode,
+  relatedProductsPerPage,
+  relatedProductsPage,
+  relatedProductsTotalCount,
+  onRelatedProductsPageChange,
+  relatedLoadMoreRef,
+  relatedInfiniteStatus,
+  relatedIsLoading,
+  enabledFields,
+  variants,
+  variantOptions,
+  highlights,
+  showHighlights,
+  ratingSummary,
+  saleMode,
+  showAddToCart,
+  showRating,
+  showWishlist,
+  showBuyNow,
+  buyNowLabel,
+  requireStockForBuyNow,
+  contentWidth,
+  isWishlisted,
+  onToggleWishlist,
+  onAddToCart,
+  onBuyNow,
+  commentsSection,
+}: StyleProps & ExperienceBlocksProps & HighlightBlockProps & { contentWidth: MinimalContentWidth }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState<VariantSelectionMap>({});
 
@@ -2305,6 +2591,14 @@ function MinimalStyle({ product, brandColor, tokens, relatedProducts, enabledFie
           showPrice={showPrice}
           showSalePrice={enabledFields.has('salePrice')}
           saleMode={saleMode}
+          mode={relatedProductsMode}
+          page={relatedProductsPage}
+          perPage={relatedProductsPerPage}
+          totalCount={relatedProductsTotalCount}
+          onPageChange={onRelatedProductsPageChange}
+          loadMoreRef={relatedLoadMoreRef}
+          infiniteStatus={relatedInfiniteStatus}
+          isLoading={relatedIsLoading}
         />
       </main>
     </div>
@@ -2688,6 +2982,14 @@ function RelatedProductsSection({
   showPrice,
   showSalePrice,
   saleMode,
+  mode,
+  page,
+  perPage,
+  totalCount,
+  onPageChange,
+  loadMoreRef,
+  infiniteStatus,
+  isLoading,
 }: {
   products: RelatedProduct[];
   categorySlug?: string;
@@ -2696,8 +2998,17 @@ function RelatedProductsSection({
   showPrice: boolean;
   showSalePrice: boolean;
   saleMode: ProductsSaleMode;
+  mode: RelatedProductsMode;
+  page: number;
+  perPage: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+  loadMoreRef: (node?: Element | null) => void;
+  infiniteStatus: PaginatedStatus;
+  isLoading: boolean;
 }) {
-  if (products.length === 0) {return null;}
+  if (products.length === 0 && !isLoading) {return null;}
+  const totalPages = totalCount > 0 ? Math.max(Math.ceil(totalCount / perPage), 1) : 1;
 
   return (
     <section className="mt-16 pt-12 border-t" style={{ borderColor: tokens.divider }}>
@@ -2710,40 +3021,118 @@ function RelatedProductsSection({
         )}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-        {products.map((p) => {
-          const priceDisplay = getPublicPriceLabel({ saleMode, price: p.price, salePrice: p.salePrice, isRangeFromVariant: p.hasVariants });
-          return (
-          <Link
-            key={p._id}
-            href={`/products/${p.slug}`}
-            className="rounded-xl overflow-hidden border"
-            style={{ borderColor: tokens.relatedCardBorder, backgroundColor: tokens.relatedCardBg }}
-          >
-            <div className="aspect-square overflow-hidden relative" style={{ backgroundColor: tokens.surfaceMuted }}>
-              {p.image ? (
-                <Image src={p.image} alt={p.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center"><Package size={32} style={{ color: tokens.emptyStateIcon }} /></div>
-              )}
-              {showSalePrice && priceDisplay.comparePrice && !priceDisplay.isContactPrice && (
-                <span className="absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded" style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>-{Math.round((1 - p.price / priceDisplay.comparePrice) * 100)}%</span>
-              )}
+        {isLoading && products.length === 0
+          ? Array.from({ length: Math.min(perPage, 8) }).map((_, index) => (
+            <div
+              key={`related-skeleton-${index}`}
+              className="rounded-xl overflow-hidden border animate-pulse"
+              style={{ borderColor: tokens.relatedCardBorder, backgroundColor: tokens.relatedCardBg }}
+            >
+              <div className="aspect-square" style={{ backgroundColor: tokens.surfaceMuted }} />
+              <div className="p-4 space-y-2">
+                <div className="h-3 w-3/4 rounded" style={{ backgroundColor: tokens.surfaceMuted }} />
+                <div className="h-3 w-1/2 rounded" style={{ backgroundColor: tokens.surfaceMuted }} />
+              </div>
             </div>
-            <div className="p-4">
-              <h3 className="font-medium line-clamp-2 transition-colors mb-2 text-sm" style={{ color: tokens.headingColor }}>{p.name}</h3>
-              {showPrice && (
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm" style={{ color: tokens.priceColor }}>{priceDisplay.label}</span>
-                  {showSalePrice && priceDisplay.comparePrice && (
-                    <span className="text-xs line-through" style={{ color: tokens.priceOriginalText }}>{formatPrice(priceDisplay.comparePrice)}</span>
+          ))
+          : products.map((p) => {
+            const priceDisplay = getPublicPriceLabel({ saleMode, price: p.price, salePrice: p.salePrice, isRangeFromVariant: p.hasVariants });
+            return (
+              <Link
+                key={p._id}
+                href={`/products/${p.slug}`}
+                className="rounded-xl overflow-hidden border"
+                style={{ borderColor: tokens.relatedCardBorder, backgroundColor: tokens.relatedCardBg }}
+              >
+                <div className="aspect-square overflow-hidden relative" style={{ backgroundColor: tokens.surfaceMuted }}>
+                  {p.image ? (
+                    <Image src={p.image} alt={p.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><Package size={32} style={{ color: tokens.emptyStateIcon }} /></div>
+                  )}
+                  {showSalePrice && priceDisplay.comparePrice && !priceDisplay.isContactPrice && (
+                    <span className="absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded" style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>-{Math.round((1 - p.price / priceDisplay.comparePrice) * 100)}%</span>
                   )}
                 </div>
-              )}
-            </div>
-          </Link>
-          );
-        })}
+                <div className="p-4">
+                  <h3 className="font-medium line-clamp-2 transition-colors mb-2 text-sm" style={{ color: tokens.headingColor }}>{p.name}</h3>
+                  {showPrice && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm" style={{ color: tokens.priceColor }}>{priceDisplay.label}</span>
+                      {showSalePrice && priceDisplay.comparePrice && (
+                        <span className="text-xs line-through" style={{ color: tokens.priceOriginalText }}>{formatPrice(priceDisplay.comparePrice)}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
       </div>
+      {mode === 'infiniteScroll' && infiniteStatus !== 'Exhausted' && (
+        <div ref={loadMoreRef} className="text-center mt-6 py-6">
+          {infiniteStatus === 'LoadingMore' ? (
+            <div className="flex justify-center gap-1">
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: tokens.primary }} />
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: tokens.borderStrong }} />
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: tokens.border }} />
+            </div>
+          ) : infiniteStatus === 'CanLoadMore' ? (
+            <p className="text-sm" style={{ color: tokens.metaText }}>Cuộn để xem thêm...</p>
+          ) : null}
+        </div>
+      )}
+      {mode === 'infiniteScroll' && infiniteStatus === 'Exhausted' && products.length > 0 && (
+        <div className="text-center mt-6">
+          <p className="text-sm" style={{ color: tokens.metaText }}>Đã hiển thị tất cả {products.length} sản phẩm</p>
+        </div>
+      )}
+      {mode === 'pagination' && totalPages > 1 && (
+        <div className="mt-8 flex items-center justify-center gap-2">
+          <button
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            disabled={page === 1}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: tokens.border, color: tokens.metaText }}
+            aria-label="Trang trước"
+          >
+            <ChevronDown className="h-4 w-4 rotate-90" />
+          </button>
+          {generatePaginationItems(page, totalPages).map((item, index) => {
+            if (item === 'ellipsis') {
+              return (
+                <div key={`ellipsis-${index}`} className="flex h-8 w-8 items-center justify-center" style={{ color: tokens.metaText }}>
+                  …
+                </div>
+              );
+            }
+            const pageNum = item as number;
+            const isActive = pageNum === page;
+            return (
+              <button
+                key={pageNum}
+                onClick={() => onPageChange(pageNum)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm transition-all duration-200 border"
+                style={isActive
+                  ? { backgroundColor: tokens.primary, borderColor: tokens.primary, color: '#ffffff' }
+                  : { backgroundColor: tokens.surface, borderColor: tokens.border, color: tokens.metaText }}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+            disabled={page >= totalPages}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: tokens.border, color: tokens.metaText }}
+            aria-label="Trang sau"
+          >
+            <ChevronDown className="h-4 w-4 -rotate-90" />
+          </button>
+        </div>
+      )}
     </section>
   );
 }
