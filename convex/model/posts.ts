@@ -244,7 +244,7 @@ export async function update(
     }
   }
 
-  const { id, ...updates } = args;
+  const { id, publishImmediately, ...updates } = args;
   const patchData: Record<string, unknown> = { ...updates };
 
   const hasPublishedAt = Object.prototype.hasOwnProperty.call(args, "publishedAt");
@@ -252,7 +252,7 @@ export async function update(
 
   if (nextStatus !== "Published") {
     patchData.publishedAt = undefined;
-  } else if (args.publishImmediately === true) {
+  } else if (publishImmediately === true) {
     patchData.publishedAt = Date.now();
   } else if (hasPublishedAt) {
     const resolvedPublishedAt = typeof args.publishedAt === "number" && Number.isFinite(args.publishedAt)
