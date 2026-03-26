@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { BrandColorProvider } from "@/components/providers/BrandColorProvider";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
@@ -151,6 +152,7 @@ export default async function RootLayout({
             <BrandColorProvider />
             <PageViewTracker />
             {children}
+            <Analytics />
           </InitialBrandColorsProvider>
         </ConvexClientProvider>
       </body>

@@ -20,6 +20,7 @@
     "@lexical/rich-text": "^0.39.0",
     "@lexical/selection": "^0.39.0",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@vercel/analytics": "^2.0.1",
     "apca-w3": "^0.1.9",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
