@@ -6,7 +6,25 @@ import { stripHtml, truncateText } from '@/lib/seo';
 import { JsonLd, generateBreadcrumbSchema, generateProductSchema } from '@/components/seo/JsonLd';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getPublicPriceLabel } from '@/lib/products/public-price';
+
+const resolveProductTitle = (value: string): string => truncateText(value.trim(), 70);
+
+const resolveProductDescription = (params: {
+  metaDescription?: string | null;
+  description?: string | null;
+  seoDescription?: string | null;
+}): string => {
+  if (params.metaDescription?.trim()) {
+    return truncateText(params.metaDescription.trim(), 160);
+  }
+  if (params.description?.trim()) {
+    return truncateText(stripHtml(params.description), 160);
+  }
+  if (params.seoDescription?.trim()) {
+    return truncateText(params.seoDescription.trim(), 160);
+  }
+  return '';
+};
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -61,21 +79,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       });
     }
 
-    const title = product.metaTitle ?? product.name;
-    const description = product.metaDescription
-      ?? (product.description ? truncateText(stripHtml(product.description), 160) : '')
-      ?? seo.seo_description;
-    
-    const saleModeValue = saleModeSetting?.value;
-    const saleMode = saleModeValue === 'contact' || saleModeValue === 'affiliate' ? saleModeValue : 'cart';
-    const formattedPrice = getPublicPriceLabel({
-      saleMode,
-      price: product.price,
-      salePrice: product.salePrice,
-      isRangeFromVariant: product.hasVariants,
-    }).label;
+    const title = resolveProductTitle(product.metaTitle ?? product.name);
+    const description = resolveProductDescription({
+      metaDescription: product.metaDescription,
+      description: product.description,
+      seoDescription: seo.seo_description,
+    });
 
-    return buildSeoMetadata({
+    const metadata = buildSeoMetadata({
       contact,
       descriptionOverride: description,
       entity: {
@@ -91,9 +102,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       routeType: 'detail',
       seo,
       site,
-      titleOverride: `${title} - ${formattedPrice}`,
+      titleOverride: title,
       social,
     });
+
+    return {
+      ...metadata,
+      robots: {
+        ...(typeof metadata.robots === 'string' ? {} : metadata.robots),
+        googleBot: {
+          ...(typeof metadata.robots === 'string'
+            ? { index: true, follow: true }
+            : { index: metadata.robots?.index ?? true, follow: metadata.robots?.follow ?? true }),
+          'max-snippet': -1,
+          'max-image-preview': 'large',
+          'max-video-preview': -1,
+        },
+      },
+    };
   } catch {
     const [site, seo, contact, social] = await Promise.all([
       getSiteSettings(),
@@ -149,7 +175,11 @@ export default async function ProductLayout({ params, children }: Props) {
         ? { ratingValue: Number(ratingSummary.average.toFixed(2)), reviewCount: ratingSummary.count }
         : undefined,
       brand: site.site_name,
-      description: (product.metaDescription ?? product.description?.replace(/<[^>]*>/g, '').slice(0, 160)) ?? seo.seo_description,
+      description: resolveProductDescription({
+        metaDescription: product.metaDescription,
+        description: product.description,
+        seoDescription: seo.seo_description,
+      }),
       image,
       inStock: showStock ? product.stock > 0 : true,
       name: product.metaTitle ?? product.name,

@@ -124,12 +124,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   // Generate product URLs
-  const productUrls: MetadataRoute.Sitemap = products.map((product) => ({
-    changeFrequency: 'weekly' as const,
-    lastModified: new Date(product._creationTime),
-    priority: 0.7,
-    url: `${baseUrl}/products/${product.slug}`,
-  }));
+  const productUrls: MetadataRoute.Sitemap = products.map((product) => {
+    const productUpdatedAt = (product as { updatedAt?: number }).updatedAt;
+    return {
+      changeFrequency: 'weekly' as const,
+      lastModified: new Date(productUpdatedAt ?? product._creationTime),
+      priority: 0.7,
+      url: `${baseUrl}/products/${product.slug}`,
+    };
+  });
 
   // Generate service URLs
   const serviceUrls: MetadataRoute.Sitemap = services.map((service) => ({
