@@ -162,6 +162,7 @@ export async function create(
     metaDescription?: string;
     status?: Doc<"posts">["status"];
     order?: number;
+    publishedAt?: number;
   }
 ): Promise<Id<"posts">> {
   if (await isSlugExists(ctx, { slug: args.slug })) {
@@ -173,6 +174,9 @@ export async function create(
 
   const order = args.order ?? (await getNextOrder(ctx));
   const status = args.status ?? "Draft";
+  const resolvedPublishedAt = status === "Published"
+    ? (typeof args.publishedAt === "number" && Number.isFinite(args.publishedAt) ? args.publishedAt : Date.now())
+    : undefined;
 
   return  ctx.db.insert("posts", {
     authorName: args.authorName,
@@ -185,7 +189,7 @@ export async function create(
     metaDescription: args.metaDescription,
     metaTitle: args.metaTitle,
     order,
-    publishedAt: status === "Published" ? Date.now() : undefined,
+    publishedAt: resolvedPublishedAt,
     slug: args.slug,
     status,
     thumbnail: args.thumbnail,
@@ -217,6 +221,7 @@ export async function update(
     metaDescription?: string;
     status?: Doc<"posts">["status"];
     order?: number;
+    publishedAt?: number;
   }
 ): Promise<void> {
   const post = await getByIdOrThrow(ctx, { id: args.id });
@@ -233,7 +238,17 @@ export async function update(
   const { id, ...updates } = args;
   const patchData: Record<string, unknown> = { ...updates };
 
-  if (args.status === "Published" && post.status !== "Published") {
+  const hasPublishedAt = Object.prototype.hasOwnProperty.call(args, "publishedAt");
+  const nextStatus = args.status ?? post.status;
+
+  if (nextStatus !== "Published") {
+    patchData.publishedAt = undefined;
+  } else if (hasPublishedAt) {
+    const resolvedPublishedAt = typeof args.publishedAt === "number" && Number.isFinite(args.publishedAt)
+      ? args.publishedAt
+      : Date.now();
+    patchData.publishedAt = resolvedPublishedAt;
+  } else if (post.status !== "Published") {
     patchData.publishedAt = Date.now();
   }
 

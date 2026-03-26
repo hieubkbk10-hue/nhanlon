@@ -104,6 +104,10 @@ export default function PostDetailPage({ params }: PageProps) {
     api.postCategories.getById, 
     post?.categoryId ? { id: post.categoryId } : 'skip'
   );
+  const isVisiblePost = useMemo(() => {
+    if (!post) {return false;}
+    return post.status === 'Published' && (!post.publishedAt || post.publishedAt <= Date.now());
+  }, [post]);
   const incrementViews = useMutation(api.posts.incrementViews);
   const createComment = useMutation(api.comments.create);
   const shouldShowAuthor = enabledFields.has('author_name') && postDetailConfig.showAuthor;
@@ -162,23 +166,23 @@ export default function PostDetailPage({ params }: PageProps) {
   // Related posts - lấy cùng category
   const relatedPosts = useQuery(
     api.posts.listByCategory,
-    post?.categoryId 
+    post?.categoryId && isVisiblePost
       ? { categoryId: post.categoryId, paginationOpts: { cursor: null, numItems: 4 }, status: 'Published' }
       : 'skip'
   );
 
   // Increment views on mount
   useEffect(() => {
-    if (post?._id) {
+    if (post?._id && isVisiblePost) {
       void incrementViews({ id: post._id });
     }
-  }, [post?._id, incrementViews]);
+  }, [post?._id, incrementViews, isVisiblePost]);
 
   if (post === undefined) {
     return <PostDetailSkeleton />;
   }
 
-  if (post === null) {
+  if (post === null || (!isVisiblePost && post)) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">

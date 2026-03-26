@@ -94,6 +94,9 @@ export default async function PostLayout({ params, children }: Props) {
   ]);
 
   if (!post) {return children;}
+  if (post.status !== 'Published' || (post.publishedAt && post.publishedAt > Date.now())) {
+    notFound();
+  }
 
   const baseUrl = (site.site_url || process.env.NEXT_PUBLIC_SITE_URL) ?? '';
   const postUrl = `${baseUrl}/posts/${post.slug}`;

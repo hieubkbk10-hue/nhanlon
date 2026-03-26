@@ -218,12 +218,20 @@ export const listByCategory = query({
   },
   handler: async (ctx, args) => {
     if (args.status) {
-      return  ctx.db
+      const result = await ctx.db
         .query("posts")
         .withIndex("by_category_status", (q) =>
           q.eq("categoryId", args.categoryId).eq("status", args.status!)
         )
         .paginate(args.paginationOpts);
+      if (args.status !== "Published") {
+        return result;
+      }
+      const now = Date.now();
+      return {
+        ...result,
+        page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+      };
     }
     return  ctx.db
       .query("posts")
@@ -241,12 +249,20 @@ export const listByAuthor = query({
   },
   handler: async (ctx, args) => {
     if (args.status) {
-      return  ctx.db
+      const result = await ctx.db
         .query("posts")
         .withIndex("by_author_name_status", (q) =>
           q.eq("authorName", args.authorName).eq("status", args.status!)
         )
         .paginate(args.paginationOpts);
+      if (args.status !== "Published") {
+        return result;
+      }
+      const now = Date.now();
+      return {
+        ...result,
+        page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+      };
     }
     return  ctx.db
       .query("posts")
@@ -258,21 +274,35 @@ export const listByAuthor = query({
 
 export const listPublished = query({
   args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, args) => ctx.db
+  handler: async (ctx, args) => {
+    const result = await ctx.db
       .query("posts")
       .withIndex("by_status_publishedAt", (q) => q.eq("status", "Published"))
       .order("desc")
-      .paginate(args.paginationOpts),
+      .paginate(args.paginationOpts);
+    const now = Date.now();
+    return {
+      ...result,
+      page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+    };
+  },
   returns: paginatedPosts,
 });
 
 export const listMostViewed = query({
   args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, args) => ctx.db
+  handler: async (ctx, args) => {
+    const result = await ctx.db
       .query("posts")
       .withIndex("by_status_views", (q) => q.eq("status", "Published"))
       .order("desc")
-      .paginate(args.paginationOpts),
+      .paginate(args.paginationOpts);
+    const now = Date.now();
+    return {
+      ...result,
+      page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+    };
+  },
   returns: paginatedPosts,
 });
 
@@ -320,6 +350,9 @@ export const searchPublished = query({
       }
     }
     
+    const now = Date.now();
+    posts = posts.filter((post) => !post.publishedAt || post.publishedAt <= now);
+
     // Client-side text search (Convex doesn't have full-text search built-in)
     if (args.search && args.search.trim()) {
       const searchLower = args.search.toLowerCase().trim();
@@ -362,11 +395,13 @@ export const listFeatured = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit ?? 5, 20);
-    return  ctx.db
+    const posts = await ctx.db
       .query("posts")
       .withIndex("by_status_views", (q) => q.eq("status", "Published"))
       .order("desc")
-      .take(limit);
+      .take(limit * 2);
+    const now = Date.now();
+    return posts.filter((post) => !post.publishedAt || post.publishedAt <= now).slice(0, limit);
   },
   returns: v.array(postDoc),
 });
@@ -375,6 +410,7 @@ export const listFeatured = query({
 export const countPublished = query({
   args: { categoryId: v.optional(v.id("postCategories")) },
   handler: async (ctx, args) => {
+    const now = Date.now();
     if (args.categoryId) {
       const posts = await ctx.db
         .query("posts")
@@ -382,13 +418,13 @@ export const countPublished = query({
           q.eq("categoryId", args.categoryId!).eq("status", "Published")
         )
         .take(1000);
-      return posts.length;
+      return posts.filter((post) => !post.publishedAt || post.publishedAt <= now).length;
     }
     const posts = await ctx.db
       .query("posts")
       .withIndex("by_status_publishedAt", (q) => q.eq("status", "Published"))
       .take(1000);
-    return posts.length;
+    return posts.filter((post) => !post.publishedAt || post.publishedAt <= now).length;
   },
   returns: v.number(),
 });
@@ -408,28 +444,43 @@ export const listPublishedPaginated = query({
     const sortBy = args.sortBy ?? "newest";
     
     if (args.categoryId) {
-      return ctx.db
+      const result = await ctx.db
         .query("posts")
         .withIndex("by_category_status", (q) => 
           q.eq("categoryId", args.categoryId!).eq("status", "Published")
         )
         .order("desc")
         .paginate(args.paginationOpts);
+      const now = Date.now();
+      return {
+        ...result,
+        page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+      };
     }
     
     if (sortBy === "popular") {
-      return ctx.db
+      const result = await ctx.db
         .query("posts")
         .withIndex("by_status_views", (q) => q.eq("status", "Published"))
         .order("desc")
         .paginate(args.paginationOpts);
+      const now = Date.now();
+      return {
+        ...result,
+        page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+      };
     }
     
-    return ctx.db
+    const result = await ctx.db
       .query("posts")
       .withIndex("by_status_publishedAt", (q) => q.eq("status", "Published"))
       .order(sortBy === "oldest" ? "asc" : "desc")
       .paginate(args.paginationOpts);
+    const now = Date.now();
+    return {
+      ...result,
+      page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+    };
   },
   returns: paginatedPosts,
 });
@@ -488,6 +539,9 @@ export const listPublishedWithOffset = query({
         .take(fetchLimit);
     }
     
+    const now = Date.now();
+    posts = posts.filter((post) => !post.publishedAt || post.publishedAt <= now);
+
     if (args.search?.trim() && posts.length > 0) {
       const ranked = rankByFuzzyMatches(
         posts,
@@ -566,7 +620,8 @@ export const searchPublishedPaginated = query({
         .paginate(paginationOpts);
     }
     
-    let posts = result.page;
+    const now = Date.now();
+    let posts = result.page.filter((post) => !post.publishedAt || post.publishedAt <= now);
     
     // Client-side text search filter
     if (args.search && args.search.trim()) {
@@ -611,6 +666,7 @@ export const create = mutation({
     metaDescription: v.optional(v.string()),
     metaTitle: v.optional(v.string()),
     order: v.optional(v.number()),
+    publishedAt: v.optional(v.number()),
     slug: v.string(),
     status: v.optional(contentStatus),
     thumbnail: v.optional(v.string()),
@@ -642,6 +698,7 @@ export const update = mutation({
     metaDescription: v.optional(v.string()),
     metaTitle: v.optional(v.string()),
     order: v.optional(v.number()),
+    publishedAt: v.optional(v.number()),
     slug: v.optional(v.string()),
     status: v.optional(contentStatus),
     thumbnail: v.optional(v.string()),

@@ -25,6 +25,12 @@ const COC_TARGET_OPTIONS: Array<{ key: GeneratorRequest['templateKey']; label: s
   { key: 'top_best_sellers', label: 'Top bán chạy', description: 'Danh sách sản phẩm bán chạy, dễ chọn.' },
 ];
 
+const toTimestamp = (value: string) => {
+  if (!value) {return undefined;}
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 export default function PostCreatePage() {
   const router = useRouter();
   const categoriesData = useQuery(api.postCategories.listAll, {});
@@ -34,6 +40,7 @@ export default function PostCreatePage() {
   const fieldsData = useQuery(api.admin.modules.listEnabledModuleFields, { moduleKey: MODULE_KEY });
 
   const settingsData = useQuery(api.admin.modules.listModuleSettings, { moduleKey: MODULE_KEY });
+  const schedulingFeature = useQuery(api.admin.modules.getModuleFeature, { featureKey: 'enableScheduling', moduleKey: MODULE_KEY });
 
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
@@ -49,6 +56,7 @@ export default function PostCreatePage() {
   const [categoryId, setCategoryId] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [status, setStatus] = useState<'Draft' | 'Published'>('Draft');
+  const [publishAtLocal, setPublishAtLocal] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editorResetKey, setEditorResetKey] = useState(0);
@@ -85,6 +93,7 @@ export default function PostCreatePage() {
   const hasMarkdownRender = enabledFields.has('markdownRender');
   const hasHtmlRender = enabledFields.has('htmlRender');
   const showAdvancedRenderCard = hasMarkdownRender || hasHtmlRender;
+  const schedulingEnabled = enabledFields.has('publish_date') && (schedulingFeature?.enabled ?? false);
 
   const generatorEnabled = Boolean(settingsData?.find(s => s.settingKey === 'enableAutoPostGenerator')?.value);
   const cocTarget = useMemo(
@@ -357,6 +366,7 @@ export default function PostCreatePage() {
     try {
       const resolvedMetaTitle = truncateText(title.trim(), 60);
       const resolvedMetaDescription = truncateText(stripHtml(excerpt || content || ''), 160);
+      const resolvedPublishedAt = status === 'Published' ? toTimestamp(publishAtLocal) : undefined;
       await createPost({
         authorName: enabledFields.has('author_name') ? authorName.trim() || undefined : undefined,
         categoryId: categoryId as Id<"postCategories">,
@@ -372,6 +382,7 @@ export default function PostCreatePage() {
           ? (metaTitle.trim() || resolvedMetaTitle || undefined)
           : undefined,
         slug: slug.trim() || title.toLowerCase().replaceAll(/\s+/g, '-'),
+        publishedAt: status === 'Published' ? resolvedPublishedAt : undefined,
         status,
         thumbnail,
         thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
@@ -714,6 +725,17 @@ export default function PostCreatePage() {
                   <option value="Published">Đã xuất bản</option>
                 </select>
               </div>
+              {schedulingEnabled && status === 'Published' && (
+                <div className="space-y-2">
+                  <Label>Hẹn giờ xuất bản</Label>
+                  <Input
+                    type="datetime-local"
+                    value={publishAtLocal}
+                    onChange={(e) =>{  setPublishAtLocal(e.target.value); }}
+                  />
+                  <div className="text-xs text-slate-500">Để trống để xuất bản ngay.</div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Danh mục <span className="text-red-500">*</span></Label>
                 <div className="flex gap-2">

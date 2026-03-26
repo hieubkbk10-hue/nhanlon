@@ -16,6 +16,19 @@ import { normalizeRichText } from '@/app/admin/lib/normalize-rich-text';
 
 const MODULE_KEY = 'posts';
 
+const toLocalDatetimeInput = (timestamp?: number) => {
+  if (!timestamp) {return '';}
+  const date = new Date(timestamp);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
+const toTimestamp = (value: string) => {
+  if (!value) {return undefined;}
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 export default function PostEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
@@ -38,6 +51,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
   const [categoryId, setCategoryId] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [status, setStatus] = useState<'Draft' | 'Published' | 'Archived'>('Draft');
+  const [publishAtLocal, setPublishAtLocal] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('saved');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -58,6 +72,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
     categoryId: string;
     authorName: string;
     status: 'Draft' | 'Published' | 'Archived';
+    publishedAt?: number;
   } | null>(null);
 
   // Check which fields are enabled
@@ -70,8 +85,14 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
   const hasMarkdownRender = enabledFields.has('markdownRender');
   const hasHtmlRender = enabledFields.has('htmlRender');
   const showAdvancedRenderCard = hasMarkdownRender || hasHtmlRender;
+  const schedulingFeature = useQuery(api.admin.modules.getModuleFeature, { featureKey: 'enableScheduling', moduleKey: MODULE_KEY });
+  const schedulingEnabled = enabledFields.has('publish_date') && (schedulingFeature?.enabled ?? false);
 
   const normalizedContent = useMemo(() => normalizeRichText(content), [content]);
+  const resolvedPublishedAt = useMemo(
+    () => (status === 'Published' ? toTimestamp(publishAtLocal) : undefined),
+    [publishAtLocal, status],
+  );
 
   const currentSnapshot = useMemo(() => ({
     authorName: authorName.trim(),
@@ -85,10 +106,11 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
     metaTitle: metaTitle.trim(),
     slug: slug.trim(),
     status,
+    publishedAt: resolvedPublishedAt,
     thumbnail: thumbnail ?? '',
     title: title.trim(),
     thumbnailStorageId,
-  }), [authorName, categoryId, normalizedContent, renderType, markdownRender, htmlRender, excerpt, metaDescription, metaTitle, slug, status, thumbnail, title]);
+  }), [authorName, categoryId, normalizedContent, renderType, markdownRender, htmlRender, excerpt, metaDescription, metaTitle, slug, status, resolvedPublishedAt, thumbnail, title]);
 
   const hasChanges = useMemo(() => {
     if (!initialSnapshotRef.current) {return false;}
@@ -128,6 +150,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
       setCategoryId(postData.categoryId);
       setAuthorName(postData.authorName ?? '');
       setStatus(postData.status);
+      setPublishAtLocal(postData.publishedAt ? toLocalDatetimeInput(postData.publishedAt) : '');
       initialSnapshotRef.current = {
         authorName: (postData.authorName ?? '').trim(),
         categoryId: postData.categoryId,
@@ -140,6 +163,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         metaTitle: (postData.metaTitle ?? '').trim(),
         slug: postData.slug.trim(),
         status: postData.status,
+        publishedAt: postData.publishedAt,
         thumbnail: postData.thumbnail ?? '',
         title: postData.title.trim(),
         thumbnailStorageId: (postData as { thumbnailStorageId?: Id<'_storage'> }).thumbnailStorageId,
@@ -181,6 +205,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         metaTitle: enabledFields.has('metaTitle')
           ? (resolvedMetaTitleValue || undefined)
           : undefined,
+        publishedAt: status === 'Published' ? resolvedPublishedAt : undefined,
         slug: slug.trim(),
         status,
         thumbnail,
@@ -394,6 +419,17 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
                   <option value="Archived">Lưu trữ</option>
                 </select>
               </div>
+              {schedulingEnabled && status === 'Published' && (
+                <div className="space-y-2">
+                  <Label>Hẹn giờ xuất bản</Label>
+                  <Input
+                    type="datetime-local"
+                    value={publishAtLocal}
+                    onChange={(e) =>{  setPublishAtLocal(e.target.value); }}
+                  />
+                  <div className="text-xs text-slate-500">Để trống để xuất bản ngay.</div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Danh mục</Label>
                 <div className="flex gap-2">
