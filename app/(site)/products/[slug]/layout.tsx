@@ -162,6 +162,10 @@ export default async function ProductLayout({ params, children }: Props) {
     const baseUrl = (site.site_url || process.env.NEXT_PUBLIC_SITE_URL) ?? '';
     const productUrl = `${baseUrl}/products/${product.slug}`;
     const image = (product.image ?? (product.images && product.images[0])) ?? seo.seo_og_image;
+    const productImages = product.images && product.images.length > 0
+      ? product.images
+      : (product.image ? [product.image] : undefined);
+    const productUpdatedAt = (product as { updatedAt?: number }).updatedAt;
 
     const ratingSummary = await client.query(api.comments.getRatingSummary, {
       targetId: product._id,
@@ -181,12 +185,15 @@ export default async function ProductLayout({ params, children }: Props) {
         seoDescription: seo.seo_description,
       }),
       image,
+      images: productImages,
       inStock: showStock ? product.stock > 0 : true,
       name: product.metaTitle ?? product.name,
       price: product.price,
       salePrice: product.salePrice,
       sku: product.sku,
       url: productUrl,
+      createdAt: product._creationTime,
+      updatedAt: productUpdatedAt,
     });
 
     const breadcrumbSchema = generateBreadcrumbSchema([

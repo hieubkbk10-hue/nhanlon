@@ -120,10 +120,13 @@ export const buildProductSchema = (params: {
   inStock: boolean;
   description?: string;
   image?: string;
+  images?: string[];
   salePrice?: number;
   currency?: string;
   brand?: string;
   aggregateRating?: { ratingValue: number; reviewCount: number };
+  createdAt?: number;
+  updatedAt?: number;
 }): SchemaRecord => ({
   '@context': 'https://schema.org',
   '@type': 'Product',
@@ -132,7 +135,11 @@ export const buildProductSchema = (params: {
   sku: params.sku,
   mainEntityOfPage: { '@type': 'WebPage', '@id': params.url },
   ...(params.description && { description: params.description }),
-  ...(params.image && { image: params.image }),
+  ...(params.images && params.images.length > 0
+    ? { image: params.images }
+    : (params.image ? { image: params.image } : {})),
+  ...(params.createdAt && { dateCreated: new Date(params.createdAt).toISOString() }),
+  ...(params.updatedAt && { dateModified: new Date(params.updatedAt).toISOString() }),
   ...(params.brand && { brand: { '@type': 'Brand', name: params.brand } }),
   offers: {
     '@type': 'Offer',
