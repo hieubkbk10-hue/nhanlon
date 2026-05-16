@@ -6,13 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ChevronDown, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { GalleryForm } from '../../_components/GalleryForm';
 import { GalleryPreview } from '../../_components/GalleryPreview';
@@ -20,6 +22,16 @@ import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/c
 import { DEFAULT_GALLERY_ITEMS } from '../../_lib/constants';
 import { getGalleryPersistSafeColors, normalizeGalleryHarmony } from '../../_lib/colors';
 import type { GalleryItem, GalleryStyle } from '../../_types';
+import { AiDemoGalleryImport } from '../../../product-list/_components/AiDemoProductsImport';
+
+const DEMO_GALLERY_ITEMS: GalleryItem[] = [
+  { id: 'demo-1', link: '', url: '/demo/gallery/gallery-1.png' },
+  { id: 'demo-2', link: '', url: '/demo/gallery/gallery-2.png' },
+  { id: 'demo-3', link: '', url: '/demo/gallery/gallery-3.png' },
+  { id: 'demo-4', link: '', url: '/demo/gallery/gallery-4.png' },
+  { id: 'demo-5', link: '', url: '/demo/gallery/gallery-5.png' },
+  { id: 'demo-6', link: '', url: '/demo/gallery/gallery-6.png' },
+];
 
 const COMPONENT_TYPE = 'Gallery';
 
@@ -37,9 +49,24 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
   const [active, setActive] = useState(true);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(DEFAULT_GALLERY_ITEMS);
   const [galleryStyle, setGalleryStyle] = useState<GalleryStyle>('grid');
+  const [fullWidthDesktop, setFullWidthDesktop] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Header state
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [subtitle, setSubtitle] = useState('');
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [galleryExpanded, setGalleryExpanded] = useState(false);
 
   const harmony = normalizeGalleryHarmony((component?.config as { harmony?: string } | undefined)?.harmony);
 
@@ -73,6 +100,21 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
     const nextGalleryStyle = (config.style as GalleryStyle) || 'grid';
     setGalleryStyle(nextGalleryStyle);
 
+    // Load header config
+    const headerConfig = extractSectionHeaderConfig(config);
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitle(headerConfig.showTitle ?? true);
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setSubtitle(headerConfig.subtitle ?? '');
+    setHeaderAlign(headerConfig.headerAlign ?? 'left');
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
+    const nextFullWidthDesktop = (config.fullWidthDesktop as boolean) ?? false;
+    setFullWidthDesktop(nextFullWidthDesktop);
+
     setInitialSnapshot(JSON.stringify({
       title: component.title,
       active: component.active,
@@ -80,6 +122,17 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
       style: nextGalleryStyle,
       harmony,
       type: component.type,
+      hideHeader: headerConfig.hideHeader,
+      showTitle: headerConfig.showTitle,
+      showSubtitle: headerConfig.showSubtitle,
+      subtitle: headerConfig.subtitle,
+      headerAlign: headerConfig.headerAlign,
+      titleColorPrimary: headerConfig.titleColorPrimary,
+      subtitleAboveTitle: headerConfig.subtitleAboveTitle,
+      uppercaseText: headerConfig.uppercaseText,
+      showBadge: headerConfig.showBadge,
+      badgeText: headerConfig.badgeText,
+      fullWidthDesktop: nextFullWidthDesktop,
     }));
   }, [component, id, router]);
 
@@ -104,9 +157,20 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
       style: galleryStyle,
       harmony,
       type: component.type,
+      hideHeader,
+      showTitle,
+      showSubtitle,
+      subtitle,
+      headerAlign,
+      titleColorPrimary,
+      subtitleAboveTitle,
+      uppercaseText,
+      showBadge,
+      badgeText,
+      fullWidthDesktop,
     });
     setHasChanges(snapshot !== initialSnapshot || customChanged || customFontChanged);
-  }, [title, active, galleryItems, galleryStyle, harmony, component, initialSnapshot, customChanged, customFontChanged]);
+  }, [title, active, galleryItems, galleryStyle, harmony, component, initialSnapshot, customChanged, customFontChanged, hideHeader, showTitle, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, fullWidthDesktop]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +205,17 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
           harmony,
           items: galleryItems.map((item) => ({ link: item.link, name: item.name, url: item.url })),
           style: galleryStyle,
+          hideHeader,
+          showTitle,
+          subtitle,
+          showSubtitle,
+          headerAlign,
+          titleColorPrimary,
+          subtitleAboveTitle,
+          uppercaseText,
+          showBadge,
+          badgeText,
+          fullWidthDesktop,
         },
         id: id as Id<'homeComponents'>,
         title,
@@ -170,6 +245,17 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
         style: galleryStyle,
         harmony,
         type: component?.type,
+        hideHeader,
+        showTitle,
+        showSubtitle,
+        subtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
+        fullWidthDesktop,
       }));
       if (showCustomBlock) {
         setInitialCustom({
@@ -216,51 +302,89 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <form onSubmit={handleSubmit}>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
+
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ImageIcon size={20} />
-              Thư viện ảnh
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) =>{  setTitle(e.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
+          <CardHeader
+            className="cursor-pointer select-none"
+            onClick={() => setGalleryExpanded((prev) => !prev)}
+          >
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ImageIcon size={20} />
+                Thư viện ảnh
+              </CardTitle>
+              <ChevronDown
+                size={18}
+                className={cn('transition-transform text-slate-400', galleryExpanded && 'rotate-180')}
               />
             </div>
+          </CardHeader>
+          {galleryExpanded && (
+            <CardContent className="space-y-4">
+<GalleryForm
+                galleryItems={galleryItems}
+                setGalleryItems={setGalleryItems}
+                componentType="Gallery"
+                style={galleryStyle}
+                headerPrimary={effectiveColors.primary}
+                headerSecondary={effectiveColors.secondary}
+              />
 
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5'
-                )}></div>
+              <div className="flex justify-start gap-2">
+                <Button type="button" variant="outline" onClick={() => setGalleryItems(DEMO_GALLERY_ITEMS)}>
+                  Dùng ảnh demo
+                </Button>
+                <AiDemoGalleryImport buttonClassName="h-10" onApply={setGalleryItems} />
               </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
 
-        <GalleryForm
-          galleryItems={galleryItems}
-          setGalleryItems={setGalleryItems}
-          componentType="Gallery"
-          style={galleryStyle}
-          headerPrimary={effectiveColors.primary}
-          headerSecondary={effectiveColors.secondary}
-        />
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Label className="text-sm text-slate-600 dark:text-slate-400">Full width desktop</Label>
+                <div
+                  className={cn(
+                    'cursor-pointer inline-flex items-center justify-center rounded-full w-10 h-5 transition-colors',
+                    fullWidthDesktop ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                  )}
+                  onClick={(e) => { e.stopPropagation(); setFullWidthDesktop(!fullWidthDesktop); }}
+                >
+                  <div className={cn(
+                    'w-4 h-4 bg-white rounded-full transition-transform shadow',
+                    fullWidthDesktop ? 'translate-x-2' : '-translate-x-2'
+                  )} />
+                </div>
+                <span className="text-xs text-slate-400">{fullWidthDesktop ? 'Toàn màn hình' : 'Giới hạn'}</span>
+              </div>
+            </CardContent>
+          )}
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
@@ -316,6 +440,17 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
               title={title}
               fontStyle={fontStyle}
               fontClassName="font-active"
+              hideHeader={hideHeader}
+              showTitle={showTitle}
+              subtitle={subtitle}
+              showSubtitle={showSubtitle}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              showBadge={showBadge}
+              badgeText={badgeText}
+              fullWidthDesktop={fullWidthDesktop}
             />
           </div>
         </div>
@@ -325,6 +460,8 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
           hasChanges={hasChanges}
           onCancel={() =>{  router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

@@ -1,5 +1,41 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { getExtensionFromMime } from "../lib/image/uploadNaming";
+
+const collectReferencedUrls = (value: unknown, acc: Set<string>) => {
+  if (typeof value === "string" && /^https?:\/\//.test(value)) {
+    acc.add(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectReferencedUrls(item, acc));
+    return;
+  }
+  if (value && typeof value === "object") {
+    Object.values(value as Record<string, unknown>).forEach((item) => collectReferencedUrls(item, acc));
+  }
+};
+
+const getExtensionFromFilename = (filename: string) => {
+  const match = filename.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1];
+};
+
+const resolveExtension = (filename: string, mimeType: string) => {
+  const byName = getExtensionFromFilename(filename);
+  if (byName) {
+    return byName;
+  }
+  const ext = getExtensionFromMime(mimeType);
+  if (ext !== "bin") {
+    return ext;
+  }
+  const fallback = mimeType.split("/")[1];
+  if (!fallback) {
+    return "bin";
+  }
+  return fallback.replace("+xml", "").replace("jpeg", "jpg");
+};
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -29,9 +65,11 @@ export const saveImage = mutation({
     folder: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const extension = resolveExtension(args.filename, args.mimeType);
     const id = await ctx.db.insert("images", {
       storageId: args.storageId,
       filename: args.filename,
+      extension,
       mimeType: args.mimeType,
       size: args.size,
       width: args.width,
@@ -331,4 +369,46 @@ export const cleanupHomeComponentImages = mutation({
     return { deleted: toDelete.length, hasMore: remaining !== null };
   },
   returns: v.object({ deleted: v.number(), hasMore: v.boolean() }),
+});
+
+export const cleanupImportedBinOrphans = mutation({
+  args: {
+    folders: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const images = await ctx.db.query("images").take(5000);
+    const candidates = images.filter((image) => {
+      const isBinExt = image.extension === "bin";
+      const isBinName = image.filename.toLowerCase().endsWith(".bin");
+      const inFolder = !args.folders || args.folders.length === 0 || args.folders.includes(image.folder ?? "");
+      return inFolder && (isBinExt || isBinName);
+    });
+
+    if (candidates.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const urls = await Promise.all(candidates.map(async (image) => ({
+      image,
+      url: await ctx.storage.getUrl(image.storageId),
+    })));
+
+    const referencedUrls = new Set<string>();
+    const [settings, homeComponents] = await Promise.all([
+      ctx.db.query("settings").take(5000),
+      ctx.db.query("homeComponents").take(5000),
+    ]);
+
+    settings.forEach((item) => collectReferencedUrls(item.value, referencedUrls));
+    homeComponents.forEach((item) => collectReferencedUrls(item.config, referencedUrls));
+
+    const toDelete = urls.filter(({ url }) => url && !referencedUrls.has(url));
+    await Promise.all(toDelete.map(async ({ image }) => {
+      await ctx.storage.delete(image.storageId);
+      await ctx.db.delete(image._id);
+    }));
+
+    return { deleted: toDelete.length };
+  },
+  returns: v.object({ deleted: v.number() }),
 });

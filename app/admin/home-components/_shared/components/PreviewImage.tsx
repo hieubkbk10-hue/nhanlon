@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 
 export type PreviewImageProps = Omit<React.ComponentProps<typeof Image>, 'width' | 'height' | 'src'> & {
   src?: React.ComponentProps<typeof Image>['src'];
@@ -25,3 +25,4 @@ export const PreviewImage = ({ src, alt = '', width = 1200, height = 800, ...res
     />
   );
 };
+

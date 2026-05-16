@@ -5,6 +5,7 @@ import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { productStatus } from "./lib/validators";
 import { rankByFuzzyMatches } from "./lib/search";
+import { resolveUniqueSlug } from "./lib/iaSlugs";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const productDoc = v.object({
@@ -136,6 +137,53 @@ const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const normalizeSku = (value: string) => value.trim().toLowerCase();
 const normalizeSlug = (value: string) => value.trim().toLowerCase();
+
+const buildCopiedName = (baseName: string, attempt: number) =>
+  attempt <= 1 ? `${baseName} (copy)` : `${baseName} (copy ${attempt})`;
+
+const buildCopyCode = (baseCode: string, attempt: number) => {
+  const normalized = baseCode.trim().toLowerCase();
+  const fallback = normalized || "item";
+  return attempt <= 1 ? `${fallback}-copy` : `${fallback}-copy-${attempt}`;
+};
+
+async function generateUniqueProductSlug(ctx: MutationCtx, baseSlug: string): Promise<string> {
+  const resolved = await resolveUniqueSlug(ctx, { scope: "record", slug: baseSlug });
+  return resolved.slug;
+}
+
+async function generateUniqueProductSku(ctx: MutationCtx, baseSku: string): Promise<string> {
+  for (let attempt = 1; attempt <= 500; attempt += 1) {
+    const candidate = buildCopyCode(baseSku, attempt);
+    const existing = await ctx.db.query("products").withIndex("by_sku", (q) => q.eq("sku", candidate)).unique();
+    if (!existing) {
+      return candidate;
+    }
+  }
+  throw new ConvexError({ code: "UNIQUE_SKU_GENERATION_FAILED", message: "Không thể tạo SKU duy nhất cho bản sao" });
+}
+
+async function generateUniqueVariantSku(ctx: MutationCtx, baseSku: string): Promise<string> {
+  for (let attempt = 1; attempt <= 500; attempt += 1) {
+    const candidate = buildCopyCode(baseSku, attempt);
+    const existing = await ctx.db.query("productVariants").withIndex("by_sku", (q) => q.eq("sku", candidate)).unique();
+    if (!existing) {
+      return candidate;
+    }
+  }
+  throw new ConvexError({ code: "UNIQUE_VARIANT_SKU_GENERATION_FAILED", message: "Không thể tạo SKU biến thể duy nhất cho bản sao" });
+}
+
+async function generateUniqueCopiedName(ctx: MutationCtx, baseName: string): Promise<string> {
+  for (let attempt = 1; attempt <= 500; attempt += 1) {
+    const candidate = buildCopiedName(baseName, attempt);
+    const existing = await ctx.db.query("products").withSearchIndex("search_name", (q) => q.search("name", candidate.toLowerCase())).take(20);
+    if (!existing.some((item) => item.name.trim().toLowerCase() === candidate.trim().toLowerCase())) {
+      return candidate;
+    }
+  }
+  throw new ConvexError({ code: "UNIQUE_NAME_GENERATION_FAILED", message: "Không thể tạo tên bản sao" });
+}
 
 async function getVariantSettings(ctx: VariantCtx): Promise<VariantSettings> {
   const [variantEnabled, variantPricing, variantStock] = await Promise.all([
@@ -1282,17 +1330,10 @@ export const create = mutation({
       });
     }
 
-    // Validate unique slug
-    const existingSlug = await ctx.db
-      .query("products")
-      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
-      .unique();
-    if (existingSlug) {
-      throw new ConvexError({
-        code: "DUPLICATE_SLUG",
-        message: "Slug đã tồn tại, vui lòng chọn slug khác",
-      });
-    }
+    const resolvedSlug = await resolveUniqueSlug(ctx, {
+      scope: "record",
+      slug: args.slug,
+    });
 
     // FIX #3: Get next order from stats instead of fetching ALL
     const nextOrder = await getNextOrder(ctx);
@@ -1348,6 +1389,7 @@ export const create = mutation({
     }
     const productId = await ctx.db.insert("products", {
       ...restArgs,
+      slug: resolvedSlug.slug,
       renderType: renderType ?? "content",
       markdownRender,
       htmlRender,
@@ -1441,18 +1483,14 @@ export const update = mutation({
       }
     }
 
-    // Validate unique slug if changing
     if (args.slug && args.slug !== product.slug) {
-      const newSlug = args.slug;
-      const existing = await ctx.db
-        .query("products")
-        .withIndex("by_slug", (q) => q.eq("slug", newSlug))
-        .unique();
-      if (existing) {
-        throw new ConvexError({
-          code: "DUPLICATE_SLUG",
-          message: "Slug đã tồn tại, vui lòng chọn slug khác",
-        });
+      const resolvedSlug = await resolveUniqueSlug(ctx, {
+        scope: "record",
+        slug: args.slug,
+        exclude: { id: args.id, table: "products" },
+      });
+      if (resolvedSlug.slug !== args.slug) {
+        (args as { slug?: string }).slug = resolvedSlug.slug;
       }
     }
 
@@ -1666,6 +1704,114 @@ export const remove = mutation({
     return null;
   },
   returns: v.null(),
+});
+
+export const duplicate = mutation({
+  args: { id: v.id("products") },
+  handler: async (ctx, args) => {
+    const source = await ctx.db.get(args.id);
+    if (!source) {
+      throw new Error("Product not found");
+    }
+
+    const copiedName = await generateUniqueCopiedName(ctx, source.name);
+    const copiedSlug = await generateUniqueProductSlug(ctx, source.slug);
+    const copiedSku = await generateUniqueProductSku(ctx, source.sku);
+    const nextOrder = await getNextOrder(ctx);
+
+    const newProductId = await ctx.db.insert("products", {
+      affiliateLink: source.affiliateLink,
+      categoryId: source.categoryId,
+      description: source.description,
+      digitalCredentialsTemplate: source.digitalCredentialsTemplate,
+      digitalDeliveryType: source.digitalDeliveryType,
+      hasVariants: source.hasVariants,
+      htmlRender: source.htmlRender,
+      image: source.image,
+      images: source.images,
+      imageStorageId: source.imageStorageId,
+      imageStorageIds: source.imageStorageIds,
+      markdownRender: source.markdownRender,
+      metaDescription: source.metaDescription,
+      metaTitle: source.metaTitle,
+      name: copiedName,
+      optionIds: source.optionIds,
+      order: nextOrder,
+      price: source.price,
+      productType: source.productType,
+      renderType: source.renderType,
+      salePrice: source.salePrice,
+      sales: 0,
+      sku: copiedSku,
+      slug: copiedSlug,
+      status: source.status,
+      stock: source.stock,
+    });
+
+    if (source.hasVariants) {
+      const sourceVariants = await ctx.db
+        .query("productVariants")
+        .withIndex("by_product", (q) => q.eq("productId", source._id))
+        .collect();
+
+      for (const variant of sourceVariants) {
+        const copiedVariantSku = await generateUniqueVariantSku(ctx, variant.sku);
+        await ctx.db.insert("productVariants", {
+          allowBackorder: variant.allowBackorder,
+          barcode: variant.barcode,
+          image: variant.image,
+          images: variant.images,
+          optionValues: variant.optionValues,
+          order: variant.order,
+          price: variant.price,
+          productId: newProductId,
+          salePrice: variant.salePrice,
+          sku: copiedVariantSku,
+          status: variant.status,
+          stock: variant.stock,
+        });
+      }
+    }
+
+    await updateStats(ctx, { new: source.status });
+    await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "product" });
+
+    return { id: newProductId, name: copiedName };
+  },
+  returns: v.object({ id: v.id("products"), name: v.string() }),
+});
+
+export const bulkUpdateStatus = mutation({
+  args: {
+    ids: v.array(v.id("products")),
+    status: productStatus,
+  },
+  handler: async (ctx, args) => {
+    let updated = 0;
+    let skipped = 0;
+
+    for (const id of args.ids) {
+      const product = await ctx.db.get(id);
+      if (!product) {
+        skipped += 1;
+        continue;
+      }
+      if (product.status === args.status) {
+        skipped += 1;
+        continue;
+      }
+      await ctx.db.patch(id, { status: args.status });
+      await updateStats(ctx, { old: product.status, new: args.status });
+      updated += 1;
+    }
+
+    if (updated > 0) {
+      await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "product" });
+    }
+
+    return { updated, skipped };
+  },
+  returns: v.object({ skipped: v.number(), updated: v.number() }),
 });
 
 export const getDeleteInfo = query({

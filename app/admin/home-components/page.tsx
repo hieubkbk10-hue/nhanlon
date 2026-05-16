@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Edit, Grid, GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Edit, Grid, GripVertical, Loader2, Plus, Trash2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
@@ -12,6 +12,7 @@ import { BulkActionBar, SelectCheckbox } from '../components/TableUtilities';
 import { ModuleGuard } from '../components/ModuleGuard';
 import { COMPONENT_TYPES } from './create/shared';
 import { getEditRoute as getEditRouteByType } from './_shared/lib/componentRoutes';
+import { HomepageSnapshotDialog } from '@/components/modules/homepage/HomepageSnapshotDialog';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -99,9 +100,13 @@ function HomeComponentsPage() {
   const components = useQuery(api.homeComponents.listAll);
   const removeMutation = useMutation(api.homeComponents.remove);
   const toggleMutation = useMutation(api.homeComponents.toggle);
+  const updateMutation = useMutation(api.homeComponents.update);
   const reorderMutation = useMutation(api.homeComponents.reorder);
+  const wizardSetting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'homepage', settingKey: 'enableSmartWizard' });
   
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [openWizard, setOpenWizard] = useState(false);
+  const [statusLoading, setStatusLoading] = useState<'show' | 'hide' | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -168,6 +173,48 @@ function HomeComponentsPage() {
     }
   };
 
+  const handleBulkShow = async () => {
+    setStatusLoading('show');
+    try {
+      await Promise.all(
+        selectedIds.map( async id => {
+          const comp = sortedComponents.find(c => c._id === id);
+          if (comp && !comp.active) {
+            await updateMutation({ id: id as Id<"homeComponents">, active: true });
+          }
+        })
+      );
+      setSelectedIds([]);
+      toast.success(`Đã hiển thị ${selectedIds.length} component`);
+    } catch {
+      toast.error('Lỗi khi hiển thị components');
+    } finally {
+      setStatusLoading(null);
+    }
+  };
+
+  const handleBulkHide = async () => {
+    setStatusLoading('hide');
+    try {
+      await Promise.all(
+        selectedIds.map( async id => {
+          const comp = sortedComponents.find(c => c._id === id);
+          if (comp && comp.active) {
+            await updateMutation({ id: id as Id<"homeComponents">, active: false });
+          }
+        })
+      );
+      setSelectedIds([]);
+      toast.success(`Đã ẩn ${selectedIds.length} component`);
+    } catch {
+      toast.error('Lỗi khi ẩn components');
+    } finally {
+      setStatusLoading(null);
+    }
+  };
+
+  const showWizard = wizardSetting?.value !== false;
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -175,16 +222,33 @@ function HomeComponentsPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Giao diện Trang chủ</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">Quản lý các khối nội dung hiển thị trên trang chủ</p>
         </div>
-        <Link href="/admin/home-components/create">
-          <Button className="gap-2" variant="accent">
-            <Plus size={16} /> Thêm Component
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {showWizard && (
+            <Button className="gap-2" variant="outline" onClick={() => setOpenWizard(true)}>
+              <Wand2 size={16} /> Tạo nhanh
+            </Button>
+          )}
+          <Link href="/admin/home-components/snapshots/clone">
+            <Button className="gap-2" variant="outline">
+              <Wand2 size={16} /> Từ snapshot cũ
+            </Button>
+          </Link>
+          <Link href="/admin/home-components/create">
+            <Button className="gap-2" variant="accent">
+              <Plus size={16} /> Thêm Component
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      {showWizard && <HomepageSnapshotDialog open={openWizard} onOpenChange={setOpenWizard} />}
 
       <BulkActionBar
         selectedCount={selectedIds.length}
         entityLabel="component"
+        onShow={handleBulkShow}
+        onHide={handleBulkHide}
+        isStatusLoading={statusLoading}
         onDelete={handleBulkDelete}
         onClearSelection={() =>{  setSelectedIds([]); }}
       />

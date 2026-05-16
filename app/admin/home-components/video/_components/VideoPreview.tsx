@@ -26,6 +26,18 @@ interface VideoPreviewProps {
   mode?: VideoBrandMode;
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
+  // Header config props
+  title?: string;
+  subtitle?: string;
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  showSubtitle?: boolean;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }
 
 const getPreviewInfo = (style: VideoStyle, videoUrl: string) => {
@@ -55,6 +67,18 @@ export const VideoPreview = ({
   mode = 'dual',
   fontStyle,
   fontClassName,
+  // Header config
+  title,
+  subtitle,
+  hideHeader,
+  showTitle,
+  showSubtitle,
+  headerAlign,
+  titleColorPrimary,
+  subtitleAboveTitle,
+  uppercaseText,
+  showBadge,
+  badgeText,
 }: VideoPreviewProps) => {
   const { device, setDevice } = usePreviewDevice();
 
@@ -91,8 +115,19 @@ export const VideoPreview = ({
             device={device}
             config={{ ...config, style: previewStyle }}
             style={previewStyle}
-            title={config.heading}
+            title={title ?? config.heading}
             tokens={tokens}
+            brandColor={brandColor}
+            hideHeader={hideHeader}
+            showTitle={showTitle}
+            showSubtitle={showSubtitle}
+            subtitle={subtitle}
+            headerAlign={headerAlign}
+            titleColorPrimary={titleColorPrimary}
+            subtitleAboveTitle={subtitleAboveTitle}
+            uppercaseText={uppercaseText}
+            showBadge={showBadge}
+            badgeText={badgeText}
           />
         </BrowserFrame>
       </PreviewWrapper>

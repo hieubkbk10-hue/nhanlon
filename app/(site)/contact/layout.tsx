@@ -20,8 +20,8 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     indexable: true,
     title,
-    twitterSite: social.social_twitter,
     twitterCreator: social.social_twitter,
+    twitterSite: social.social_twitter,
   });
 }
 

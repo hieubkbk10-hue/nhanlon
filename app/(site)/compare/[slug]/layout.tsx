@@ -18,7 +18,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const [page, site, seo, contact, social] = await Promise.all([
     getConvexClient().query(api.landingPages.getBySlug, { slug }),
-    getSiteSettings(), getSEOSettings(), getContactSettings(), getSocialSettings()
+    getSiteSettings(),
+    getSEOSettings(),
+    getContactSettings(),
+    getSocialSettings(),
   ]);
   if (!page || page.landingType !== LANDING_TYPE) {
     return buildSeoMetadata({ contact, entityExists: false, pathname: `${ROUTE_PATH}/${slug}`, routeType: 'landing', seo, site, titleOverride: 'Không tìm thấy trang', social });

@@ -1,4 +1,5 @@
 import { buildImageFilename, getExtensionFromMime, slugify, type ImageNamingContext } from './uploadNaming';
+import { getProductImageAspectRatioValue, isAspectRatioMatch, type ProductImageAspectRatio } from '@/lib/products/image-aspect-ratio';
 
 export const WEBP_UPLOAD_QUALITY = 0.85;
 
@@ -8,14 +9,15 @@ type PrepareImageOptions = {
   quality?: number;
   preserveGif?: boolean;
   preservePngWithTransparency?: boolean;
-  crop?: SquareCropSelection;
+  crop?: ImageCropSelection;
   naming?: ImageNamingContext;
 };
 
-export type SquareCropSelection = {
+export type ImageCropSelection = {
   scale: number;
   xPercent: number;
   yPercent: number;
+  aspectRatio: ProductImageAspectRatio;
 };
 
 export type PreparedUploadImage = {
@@ -134,7 +136,7 @@ async function convertToWebP(file: File, quality: number): Promise<Blob | null> 
   });
 }
 
-async function cropImageToSquare(file: File, selection: SquareCropSelection): Promise<File> {
+async function cropImageToAspectRatio(file: File, selection: ImageCropSelection): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     const objectUrl = URL.createObjectURL(file);
@@ -142,12 +144,16 @@ async function cropImageToSquare(file: File, selection: SquareCropSelection): Pr
     img.onload = () => {
       const sourceWidth = img.width;
       const sourceHeight = img.height;
-      const minSide = Math.min(sourceWidth, sourceHeight);
       const safeScale = Number.isFinite(selection.scale) ? Math.max(1, selection.scale) : 1;
-      const cropSize = minSide / safeScale;
+      const targetRatio = getProductImageAspectRatioValue(selection.aspectRatio);
+      const sourceRatio = sourceWidth / sourceHeight;
+      const baseWidth = sourceRatio >= targetRatio ? sourceHeight * targetRatio : sourceWidth;
+      const baseHeight = sourceRatio >= targetRatio ? sourceHeight : sourceWidth / targetRatio;
+      const cropWidth = baseWidth / safeScale;
+      const cropHeight = baseHeight / safeScale;
 
-      const maxX = Math.max(0, sourceWidth - cropSize);
-      const maxY = Math.max(0, sourceHeight - cropSize);
+      const maxX = Math.max(0, sourceWidth - cropWidth);
+      const maxY = Math.max(0, sourceHeight - cropHeight);
       const xRatio = Number.isFinite(selection.xPercent) ? Math.min(1, Math.max(0, selection.xPercent)) : 0;
       const yRatio = Number.isFinite(selection.yPercent) ? Math.min(1, Math.max(0, selection.yPercent)) : 0;
 
@@ -162,10 +168,11 @@ async function cropImageToSquare(file: File, selection: SquareCropSelection): Pr
         return;
       }
 
-      const outputSize = Math.max(1, Math.round(cropSize));
-      canvas.width = outputSize;
-      canvas.height = outputSize;
-      ctx.drawImage(img, srcX, srcY, cropSize, cropSize, 0, 0, outputSize, outputSize);
+      const outputWidth = Math.max(1, Math.round(cropWidth));
+      const outputHeight = Math.max(1, Math.round(cropHeight));
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      ctx.drawImage(img, srcX, srcY, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
 
       const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
       const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
@@ -213,11 +220,15 @@ export async function prepareImageForUpload(
   const preserveGif = options.preserveGif ?? true;
   const preservePngWithTransparency = options.preservePngWithTransparency ?? true;
 
-  const sourceFile = 'crop' in options && options.crop
-    ? await cropImageToSquare(file, options.crop as SquareCropSelection)
-    : file;
+  const cropSelection = 'crop' in options ? options.crop : undefined;
+  const initialDimensions = await getImageDimensions(file);
+  let sourceFile = file;
+  let dimensions = initialDimensions;
 
-  const dimensions = await getImageDimensions(sourceFile);
+  if (cropSelection && !isAspectRatioMatch(initialDimensions, cropSelection.aspectRatio)) {
+    sourceFile = await cropImageToAspectRatio(file, cropSelection);
+    dimensions = await getImageDimensions(sourceFile);
+  }
 
   let targetMimeType = sourceFile.type;
   let targetBlob: Blob = sourceFile;

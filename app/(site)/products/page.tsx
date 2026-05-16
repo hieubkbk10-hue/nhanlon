@@ -2,7 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useInView } from 'react-intersection-observer';
@@ -12,14 +12,23 @@ import { getProductsListColors, type ProductsListColors } from '@/components/sit
 import { useCartConfig, useCheckoutConfig, useProductsListConfig } from '@/lib/experiences';
 import { useCustomerAuth } from '@/app/(site)/auth/context';
 import { notifyAddToCart, useCart } from '@/lib/cart';
+import { buildCategoryPath, buildDetailPath, buildModuleListPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 import { QuickAddVariantModal } from '@/components/products/QuickAddVariantModal';
+import { ProductImageFrameOverlay, useProductFrameConfig } from '@/components/shared/ProductImageFrameBox';
 import { ChevronDown, Heart, Package, Search, ShoppingCart, SlidersHorizontal, X } from 'lucide-react';
 import type { Id } from '@/convex/_generated/dataModel';
 import { getPublicPriceLabel } from '@/lib/products/public-price';
+import { getProductImageAspectRatioCssValue, resolveProductImageAspectRatio } from '@/lib/products/image-aspect-ratio';
+import type { ProductImageFrame } from '@/lib/products/product-frame';
 
 type ProductSortOption = 'newest' | 'oldest' | 'popular' | 'price_asc' | 'price_desc' | 'name';
 type ProductsListLayout = 'grid' | 'list' | 'catalog';
 type ProductsSaleMode = 'cart' | 'contact' | 'affiliate';
+
+function useProductImageAspectRatioSetting() {
+  const setting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'defaultImageAspectRatio' });
+  return useMemo(() => resolveProductImageAspectRatio(setting?.value), [setting?.value]);
+}
 
 function useEnabledProductFields(): Set<string> {
   const fields = useQuery(api.admin.modules.listEnabledModuleFields, { moduleKey: 'products' });
@@ -31,9 +40,14 @@ function useEnabledProductFields(): Set<string> {
 
 function ProductsListSkeleton() {
   const brandColors = useBrandColors();
+  const imageAspectRatio = useProductImageAspectRatioSetting();
   const tokens = useMemo(
     () => getProductsListColors(brandColors.primary, brandColors.secondary, brandColors.mode || 'single'),
     [brandColors.primary, brandColors.secondary, brandColors.mode]
+  );
+  const imageAspectRatioStyle = useMemo(
+    () => ({ aspectRatio: getProductImageAspectRatioCssValue(imageAspectRatio) }),
+    [imageAspectRatio]
   );
 
   return (
@@ -55,14 +69,14 @@ function ProductsListSkeleton() {
             </div>
           </div>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <div
               key={i}
               className="rounded-xl overflow-hidden border"
               style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
             >
-              <div className="aspect-square" style={{ backgroundColor: tokens.filterChipBg }} />
+              <div style={{ ...imageAspectRatioStyle, backgroundColor: tokens.filterChipBg }} />
               <div className="p-4 space-y-3">
                 <div className="h-4 w-full rounded" style={{ backgroundColor: tokens.filterChipBg }} />
                 <div className="h-5 w-24 rounded" style={{ backgroundColor: tokens.filterChipBg }} />
@@ -127,6 +141,11 @@ function generatePaginationItems(currentPage: number, totalPages: number): (numb
 }
 
 function ProductsGridSkeleton({ count = 8, tokens }: { count?: number; tokens: ProductsListColors }) {
+  const imageAspectRatio = useProductImageAspectRatioSetting();
+  const imageAspectRatioStyle = useMemo(
+    () => ({ aspectRatio: getProductImageAspectRatioCssValue(imageAspectRatio) }),
+    [imageAspectRatio]
+  );
   return (
     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
       {Array.from({ length: count }).map((_, i) => (
@@ -135,7 +154,7 @@ function ProductsGridSkeleton({ count = 8, tokens }: { count?: number; tokens: P
           className="rounded-xl overflow-hidden border"
           style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
         >
-          <div className="aspect-square" style={{ backgroundColor: tokens.filterChipBg }} />
+          <div style={{ ...imageAspectRatioStyle, backgroundColor: tokens.filterChipBg }} />
           <div className="p-4 space-y-3">
             <div className="h-4 w-full rounded" style={{ backgroundColor: tokens.filterChipBg }} />
             <div className="h-5 w-24 rounded" style={{ backgroundColor: tokens.filterChipBg }} />
@@ -161,6 +180,12 @@ function ProductsContent() {
     () => getProductsListColors(brandColors.primary, brandColors.secondary, brandColors.mode || 'single'),
     [brandColors.primary, brandColors.secondary, brandColors.mode]
   );
+  const imageAspectRatio = useProductImageAspectRatioSetting();
+  const imageAspectRatioStyle = useMemo(
+    () => ({ aspectRatio: getProductImageAspectRatioCssValue(imageAspectRatio) }),
+    [imageAspectRatio]
+  );
+  const { frame: productFrame } = useProductFrameConfig();
   const listConfig = useProductsListConfig();
   const layout: ProductsListLayout = listConfig.layoutStyle === 'sidebar' ? 'catalog' : listConfig.layoutStyle;
   const enableQuickAddVariant = listConfig.enableQuickAddVariant ?? true;
@@ -177,6 +202,8 @@ function ProductsContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const saleModeSetting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'saleMode' });
+  const routeModeSetting = useQuery(api.settings.getValue, { key: 'ia_route_mode', defaultValue: 'unified' });
+  const routeMode = useMemo(() => normalizeRouteMode(routeModeSetting), [routeModeSetting]);
 
   const saleMode = useMemo<ProductsSaleMode>(() => {
     const value = saleModeSetting?.value;
@@ -234,12 +261,19 @@ function ProductsContent() {
     [visibleCategories, categories]
   );
 
+  const categorySlugFromPath = useMemo(() => {
+    if (routeMode !== 'unified') {return null;}
+    const segment = pathname.split('/').filter(Boolean)[0];
+    if (!segment || segment === 'products') {return null;}
+    return segment;
+  }, [pathname, routeMode]);
+
   const categoryFromUrl = useMemo(() => {
-    const catSlug = searchParams.get('category');
+    const catSlug = categorySlugFromPath ?? searchParams.get('category');
     if (!catSlug || categoryOptions.length === 0) {return null;}
     const matchedCategory = categoryOptions.find((c) => c.slug === catSlug);
     return matchedCategory?._id ?? null;
-  }, [searchParams, categoryOptions]);
+  }, [categorySlugFromPath, searchParams, categoryOptions]);
 
   const activeCategory = categoryFromUrl;
 
@@ -309,6 +343,18 @@ function ProductsContent() {
     return new Map(categories.map((c) => [c._id, c.name]));
   }, [categories]);
 
+  const categorySlugMap = useMemo(() => {
+    if (!categories) {return new Map<string, string>();}
+    return new Map(categories.map((c) => [c._id, c.slug]));
+  }, [categories]);
+
+  const getProductDetailHref = useCallback((product: ProductCardProps['product']) => buildDetailPath({
+    categorySlug: categorySlugMap.get(product.categoryId),
+    mode: routeMode,
+    moduleKey: 'products',
+    recordSlug: product.slug,
+  }), [categorySlugMap, routeMode]);
+
   const requiredCount = urlPage * postsPerPage;
 
   useEffect(() => {
@@ -333,14 +379,20 @@ function ProductsContent() {
     if (categoryId && categoryOptions.length > 0) {
       const category = categoryOptions.find(c => c._id === categoryId);
       if (category) {
+        if (routeMode === 'unified') {
+          router.push(buildCategoryPath({ categorySlug: category.slug, mode: routeMode, moduleKey: 'products' }), { scroll: false });
+          return;
+        }
         params.set('category', category.slug);
       }
     } else {
       params.delete('category');
     }
-    const newUrl = params.toString() ? `/products?${params.toString()}` : '/products';
+    const newUrl = params.toString()
+      ? `${buildModuleListPath('products')}?${params.toString()}`
+      : buildModuleListPath('products');
     router.push(newUrl, { scroll: false });
-  }, [searchParams, categoryOptions, router]);
+  }, [searchParams, categoryOptions, router, routeMode]);
 
   const handlePageSizeChange = useCallback((value: number) => {
     setPageSizeOverride(value);
@@ -362,15 +414,19 @@ function ProductsContent() {
   }, [searchParams, pathname, router]);
 
   useEffect(() => {
-    const catSlug = searchParams.get('category');
+    const catSlug = categorySlugFromPath ?? searchParams.get('category');
     if (!catSlug || categoryOptions.length === 0) {return;}
     const hasMatch = categoryOptions.some((category) => category.slug === catSlug);
     if (hasMatch) {return;}
+    if (routeMode === 'unified' && categorySlugFromPath) {
+      router.replace(buildModuleListPath('products'), { scroll: false });
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete('category');
     const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.replace(nextUrl, { scroll: false });
-  }, [categoryOptions, pathname, router, searchParams]);
+  }, [categoryOptions, categorySlugFromPath, pathname, router, routeMode, searchParams]);
 
 
   const filterKey = `${activeCategory ?? ''}|${debouncedSearchQuery}|${sortBy}|${postsPerPage}`;
@@ -456,7 +512,7 @@ function ProductsContent() {
         openQuickAdd(product, 'addToCart');
         return;
       }
-      router.push(`/products/${product.slug}`);
+      router.push(getProductDetailHref(product));
       return;
     }
 
@@ -484,7 +540,7 @@ function ProductsContent() {
         openQuickAdd(product, 'buyNow');
         return;
       }
-      router.push(`/products/${product.slug}`);
+      router.push(getProductDetailHref(product));
       return;
     }
 
@@ -507,7 +563,7 @@ function ProductsContent() {
         window.open(affiliateLink, '_blank', 'noopener,noreferrer');
         return;
       }
-      router.push(`/products/${product.slug}`);
+      router.push(getProductDetailHref(product));
       return;
     }
 
@@ -690,6 +746,9 @@ function ProductsContent() {
           onAddToCart={handleAddToCart}
           onBuyNow={handlePrimaryAction}
           canUseWishlist={canUseWishlist}
+          imageAspectRatioStyle={imageAspectRatioStyle}
+          frame={productFrame}
+          getDetailHref={getProductDetailHref}
         />
         {quickAddModal}
       </>
@@ -726,6 +785,9 @@ function ProductsContent() {
           onAddToCart={handleAddToCart}
           onBuyNow={handlePrimaryAction}
           canUseWishlist={canUseWishlist}
+          imageAspectRatioStyle={imageAspectRatioStyle}
+          frame={productFrame}
+          getDetailHref={getProductDetailHref}
         />
         {quickAddModal}
       </>
@@ -858,6 +920,9 @@ function ProductsContent() {
             onAddToCart={handleAddToCart}
             onBuyNow={handlePrimaryAction}
             canUseWishlist={canUseWishlist}
+            imageAspectRatioStyle={imageAspectRatioStyle}
+            frame={productFrame}
+            getDetailHref={getProductDetailHref}
           />
         )}
 
@@ -927,7 +992,7 @@ function ProductCardActions({ product, tokens, showStock, showAddToCartButton, s
   );
 }
 
-function ProductGrid({ products, categoryMap, tokens, showPrice, showSalePrice, showStock, saleMode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist }: { products: ProductCardProps['product'][]; categoryMap: Map<string, string>; tokens: ProductsListColors; showPrice: boolean; showSalePrice: boolean; showStock: boolean; saleMode: ProductsSaleMode; showWishlistButton: boolean; showAddToCartButton: boolean; showBuyNowButton: boolean; buyNowLabel: string; showPromotionBadge: boolean; wishlistIdSet: Set<Id<'products'>>; onToggleWishlist: (id: Id<'products'>) => void; onAddToCart: (product: ProductCardProps['product']) => void; onBuyNow: (product: ProductCardProps['product']) => void; canUseWishlist: boolean }) {
+function ProductGrid({ products, categoryMap, tokens, showPrice, showSalePrice, showStock, saleMode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist, imageAspectRatioStyle, frame, getDetailHref }: { products: ProductCardProps['product'][]; categoryMap: Map<string, string>; tokens: ProductsListColors; showPrice: boolean; showSalePrice: boolean; showStock: boolean; saleMode: ProductsSaleMode; showWishlistButton: boolean; showAddToCartButton: boolean; showBuyNowButton: boolean; buyNowLabel: string; showPromotionBadge: boolean; wishlistIdSet: Set<Id<'products'>>; onToggleWishlist: (id: Id<'products'>) => void; onAddToCart: (product: ProductCardProps['product']) => void; onBuyNow: (product: ProductCardProps['product']) => void; canUseWishlist: boolean; imageAspectRatioStyle: React.CSSProperties; frame: ProductImageFrame | null; getDetailHref: (product: ProductCardProps['product']) => string }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
       {products.map((product) => (
@@ -936,16 +1001,17 @@ function ProductGrid({ products, categoryMap, tokens, showPrice, showSalePrice, 
           return (
         <Link
           key={product._id}
-          href={`/products/${product.slug}`}
+          href={getDetailHref(product)}
           className="group rounded-xl overflow-hidden border transition-colors flex flex-col h-full"
           style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
         >
-          <div className="aspect-square overflow-hidden relative" style={{ backgroundColor: tokens.filterChipBg }}>
+          <div className="overflow-hidden relative" style={{ ...imageAspectRatioStyle, backgroundColor: tokens.filterChipBg }}>
             {product.image ? (
-                <Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <Image mode="thumb" src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><Package size={48} style={{ color: tokens.neutralTextLight }} /></div>
             )}
+            <ProductImageFrameOverlay frame={frame} />
             {showPromotionBadge && showSalePrice && priceDisplay.comparePrice && !priceDisplay.isContactPrice && (
               <span
                 className="absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded"
@@ -1003,7 +1069,7 @@ function ProductGrid({ products, categoryMap, tokens, showPrice, showSalePrice, 
   );
 }
 
-function ProductList({ products, categoryMap, tokens, showPrice, showSalePrice, showStock, saleMode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist }: { products: ProductCardProps['product'][]; categoryMap: Map<string, string>; tokens: ProductsListColors; showPrice: boolean; showSalePrice: boolean; showStock: boolean; saleMode: ProductsSaleMode; showWishlistButton: boolean; showAddToCartButton: boolean; showBuyNowButton: boolean; buyNowLabel: string; showPromotionBadge: boolean; wishlistIdSet: Set<Id<'products'>>; onToggleWishlist: (id: Id<'products'>) => void; onAddToCart: (product: ProductCardProps['product']) => void; onBuyNow: (product: ProductCardProps['product']) => void; canUseWishlist: boolean }) {
+function ProductList({ products, categoryMap, tokens, showPrice, showSalePrice, showStock, saleMode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist, imageAspectRatioStyle, frame, getDetailHref }: { products: ProductCardProps['product'][]; categoryMap: Map<string, string>; tokens: ProductsListColors; showPrice: boolean; showSalePrice: boolean; showStock: boolean; saleMode: ProductsSaleMode; showWishlistButton: boolean; showAddToCartButton: boolean; showBuyNowButton: boolean; buyNowLabel: string; showPromotionBadge: boolean; wishlistIdSet: Set<Id<'products'>>; onToggleWishlist: (id: Id<'products'>) => void; onAddToCart: (product: ProductCardProps['product']) => void; onBuyNow: (product: ProductCardProps['product']) => void; canUseWishlist: boolean; imageAspectRatioStyle: React.CSSProperties; frame: ProductImageFrame | null; getDetailHref: (product: ProductCardProps['product']) => string }) {
   return (
     <div className="space-y-4">
       {products.map((product) => (
@@ -1012,16 +1078,17 @@ function ProductList({ products, categoryMap, tokens, showPrice, showSalePrice, 
           return (
         <Link
           key={product._id}
-          href={`/products/${product.slug}`}
+          href={getDetailHref(product)}
           className="group flex gap-4 rounded-xl overflow-hidden border transition-colors p-4"
           style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
         >
-          <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 overflow-hidden rounded-lg relative" style={{ backgroundColor: tokens.filterChipBg }}>
+          <div className="w-32 md:w-40 shrink-0 overflow-hidden rounded-lg relative" style={{ ...imageAspectRatioStyle, backgroundColor: tokens.filterChipBg }}>
             {product.image ? (
-                <Image src={product.image} alt={product.name} fill sizes="160px" className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <Image mode="thumb" src={product.image} alt={product.name} fill sizes="160px" className="object-cover group-hover:scale-110 transition-transform duration-500" />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><Package size={32} style={{ color: tokens.neutralTextLight }} /></div>
             )}
+            <ProductImageFrameOverlay frame={frame} />
             {showPromotionBadge && showSalePrice && priceDisplay.comparePrice && !priceDisplay.isContactPrice && (
               <span
                 className="absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded"
@@ -1143,6 +1210,9 @@ interface LayoutProps {
   onAddToCart: (product: ProductCardProps['product']) => void;
   onBuyNow: (product: ProductCardProps['product']) => void;
   canUseWishlist: boolean;
+  imageAspectRatioStyle: React.CSSProperties;
+  frame: ProductImageFrame | null;
+  getDetailHref: (product: ProductCardProps['product']) => string;
 }
 
 interface MobileProductsFiltersProps {
@@ -1277,7 +1347,7 @@ function MobileProductsFilters({
   );
 }
 
-function CatalogLayout({ products, categories, selectedCategory, onCategoryChange, searchQuery, onSearchChange, sortBy, onSortChange, tokens, showPrice, showSalePrice, showStock, saleMode, totalCount, paginationNode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist }: LayoutProps) {
+function CatalogLayout({ products, categories, selectedCategory, onCategoryChange, searchQuery, onSearchChange, sortBy, onSortChange, tokens, showPrice, showSalePrice, showStock, saleMode, totalCount, paginationNode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist, imageAspectRatioStyle, getDetailHref }: LayoutProps) {
   return (
     <div className="py-8 md:py-12 px-4">
       <div className="max-w-7xl mx-auto">
@@ -1388,13 +1458,13 @@ function CatalogLayout({ products, categories, selectedCategory, onCategoryChang
                     return (
                   <Link
                     key={product._id}
-                    href={`/products/${product.slug}`}
+                    href={getDetailHref(product)}
                     className="group rounded-xl overflow-hidden border transition-colors flex flex-col h-full"
                     style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
                   >
-                    <div className="aspect-square overflow-hidden relative" style={{ backgroundColor: tokens.filterChipBg }}>
+                    <div className="overflow-hidden relative" style={{ ...imageAspectRatioStyle, backgroundColor: tokens.filterChipBg }}>
                       {product.image ? (
-                        <Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                        <Image mode="thumb" src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center"><Package size={32} style={{ color: tokens.neutralTextLight }} /></div>
                       )}
@@ -1454,7 +1524,7 @@ function CatalogLayout({ products, categories, selectedCategory, onCategoryChang
 
 // ========== LIST LAYOUT (Full width list view) ==========
 
-function ListLayout({ products, categories, categoryMap, selectedCategory, onCategoryChange, searchQuery, onSearchChange, sortBy, onSortChange, tokens, showPrice, showSalePrice, showStock, saleMode, totalCount, paginationNode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist }: LayoutProps) {
+function ListLayout({ products, categories, categoryMap, selectedCategory, onCategoryChange, searchQuery, onSearchChange, sortBy, onSortChange, tokens, showPrice, showSalePrice, showStock, saleMode, totalCount, paginationNode, showWishlistButton, showAddToCartButton, showBuyNowButton, buyNowLabel, showPromotionBadge, wishlistIdSet, onToggleWishlist, onAddToCart, onBuyNow, canUseWishlist, imageAspectRatioStyle, frame, getDetailHref }: LayoutProps) {
   return (
     <div className="py-8 md:py-12 px-4">
       <div className="max-w-5xl mx-auto">
@@ -1553,6 +1623,9 @@ function ListLayout({ products, categories, categoryMap, selectedCategory, onCat
             onAddToCart={onAddToCart}
             onBuyNow={onBuyNow}
             canUseWishlist={canUseWishlist}
+            imageAspectRatioStyle={imageAspectRatioStyle}
+            frame={frame}
+            getDetailHref={getDetailHref}
           />
         )}
 

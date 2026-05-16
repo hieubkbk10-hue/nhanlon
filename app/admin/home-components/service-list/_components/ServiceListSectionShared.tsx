@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import Link from 'next/link';
+import useEmblaCarousel from 'embla-carousel-react';
 import { ArrowRight, ArrowUpRight, Briefcase, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import type { ServiceListColorTokens } from '../_lib/colors';
@@ -28,6 +29,16 @@ interface ServiceListSectionSharedProps {
   showViewAll?: boolean;
   viewAllHref?: string;
   onItemClick?: (item: ServiceListSharedItem) => void;
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  showSubtitle?: boolean;
+  subtitle?: string;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
   imagePriorityCount?: number;
 }
 
@@ -141,6 +152,16 @@ export function ServiceListSectionShared({
   showViewAll = true,
   viewAllHref = '/services',
   onItemClick,
+  hideHeader = false,
+  showTitle = true,
+  showSubtitle = true,
+  subtitle = '',
+  headerAlign = 'left',
+  titleColorPrimary = false,
+  subtitleAboveTitle = false,
+  uppercaseText = false,
+  showBadge = true,
+  badgeText = '',
   imagePriorityCount = 0,
 }: ServiceListSectionSharedProps) {
   const isPreview = context === 'preview';
@@ -148,47 +169,44 @@ export function ServiceListSectionShared({
   const isTabletPreview = isPreview && device === 'tablet';
   const heading = sectionTitle.trim() || 'Dịch vụ';
   const shouldShowViewAll = showViewAll && items.length >= 3;
-  const carouselId = React.useId().replaceAll(':', '');
-  const carouselElementId = `service-list-carousel-${carouselId}`;
-  const [activeCarouselDot, setActiveCarouselDot] = React.useState(0);
-  const [isCarouselDown, setIsCarouselDown] = React.useState(false);
-  const [isCarouselDragging, setIsCarouselDragging] = React.useState(false);
-  const [carouselStartX, setCarouselStartX] = React.useState(0);
-  const [carouselScrollLeft, setCarouselScrollLeft] = React.useState(0);
-  const carouselScrollRef = React.useRef<HTMLDivElement>(null);
+  const shouldRenderHeaderContent = !hideHeader && (showTitle || showSubtitle || showBadge);
 
-  const handleCarouselMouseDown = (event: React.MouseEvent) => {
-    if (!carouselScrollRef.current) {return;}
-    setIsCarouselDown(true);
-    setIsCarouselDragging(false);
-    setCarouselStartX(event.pageX - carouselScrollRef.current.offsetLeft);
-    setCarouselScrollLeft(carouselScrollRef.current.scrollLeft);
-  };
 
-  const handleCarouselMouseMove = (event: React.MouseEvent) => {
-    if (!isCarouselDown || !carouselScrollRef.current) {return;}
-    event.preventDefault();
-
-    const x = event.pageX - carouselScrollRef.current.offsetLeft;
-    const walk = (x - carouselStartX) * 1.2;
-    carouselScrollRef.current.scrollLeft = carouselScrollLeft - walk;
-
-    if (Math.abs(x - carouselStartX) > 5) {
-      setIsCarouselDragging(true);
+  const showcasePageSize = 8;
+  const [showcasePage, setShowcasePage] = React.useState(0);
+  const showcaseItems = React.useMemo(
+    () => (style === 'showcase' ? items : items.slice(0, 8)),
+    [items, style],
+  );
+  const showcaseTotalPages = React.useMemo(
+    () => (style === 'showcase' ? Math.ceil(showcaseItems.length / showcasePageSize) : 1),
+    [showcaseItems.length, style],
+  );
+  const showcaseCanPaginate = style === 'showcase' && showcaseItems.length > showcasePageSize;
+  const showcasePagedItems = React.useMemo(() => {
+    if (style !== 'showcase') {
+      return items.slice(0, 8);
     }
-  };
 
-  const handleCarouselMouseUp = () => {
-    setIsCarouselDown(false);
-    window.setTimeout(() => {
-      setIsCarouselDragging(false);
-    }, 50);
-  };
+    const startIndex = showcasePage * showcasePageSize;
+    return showcaseItems.slice(startIndex, startIndex + showcasePageSize);
+  }, [showcaseItems, showcasePage, style, items]);
 
-  const handleCarouselMouseLeave = () => {
-    setIsCarouselDown(false);
-    setIsCarouselDragging(false);
-  };
+  React.useEffect(() => {
+    if (style !== 'showcase') {
+      if (showcasePage !== 0) {
+        setShowcasePage(0);
+      }
+      return;
+    }
+
+    const lastPage = Math.max(showcaseTotalPages - 1, 0);
+    if (showcasePage > lastPage) {
+      setShowcasePage(lastPage);
+    }
+  }, [showcasePage, showcaseTotalPages, style]);
+
+
 
   const baseSectionPadding = isPreview
     ? cn('py-7 md:py-8', isMobilePreview ? 'px-3' : 'px-4 md:px-6')
@@ -217,6 +235,78 @@ export function ServiceListSectionShared({
     )
     : null;
 
+  const alignClass = headerAlign === 'center' ? 'text-center' : headerAlign === 'right' ? 'text-right' : 'text-left';
+  const flexAlignClass = headerAlign === 'center' ? 'justify-center' : headerAlign === 'right' ? 'justify-end' : 'justify-start';
+
+  const renderHeader = ({
+    maxWidthClass = 'max-w-7xl',
+    marginClass = 'mb-6 md:mb-8',
+  }: {
+    maxWidthClass?: string;
+    marginClass?: string;
+  }) => {
+    if (!shouldRenderHeaderContent) {return null;}
+
+    const textTransform = uppercaseText ? 'uppercase' as const : undefined;
+
+    const titleEl = showTitle && (
+      <h2
+        className={cn(
+          'tracking-tight font-bold leading-tight text-balance',
+          isPreview
+            ? (isMobilePreview ? 'text-xl' : 'text-2xl')
+            : 'text-2xl md:text-3xl',
+        )}
+        style={{ color: titleColorPrimary ? tokens.primary : tokens.heading, textTransform }}
+      >
+        {heading}
+      </h2>
+    );
+
+    const subtitleEl = showSubtitle && subtitle && (
+      <p
+        className="text-sm leading-relaxed"
+        style={{ color: tokens.descriptionText, textTransform }}
+      >
+        {subtitle}
+      </p>
+    );
+
+    const badgeEl = showBadge && badgeText && (
+      <span
+        className="inline-block rounded-full px-3 py-0.5 text-xs font-semibold uppercase tracking-wider"
+        style={{ backgroundColor: `${tokens.primary}15`, color: tokens.primary }}
+      >
+        {badgeText}
+      </span>
+    );
+
+    return (
+      <div className={cn(maxWidthClass, 'mx-auto', marginClass, alignClass)}>
+        <div className={cn('space-y-2', headerAlign === 'center' ? 'mx-auto max-w-2xl' : '')}>
+          {subtitleAboveTitle ? (
+            <>
+              {badgeEl}
+              {subtitleEl}
+              {titleEl}
+            </>
+          ) : (
+            <>
+              {badgeEl}
+              {titleEl}
+              {subtitleEl}
+            </>
+          )}
+        </div>
+        {shouldShowViewAll && headerAlign !== 'center' && (
+          <div className={cn('mt-3 flex', flexAlignClass)}>
+            {viewAllAction}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const wrapItem = ({
     item,
     className,
@@ -234,13 +324,8 @@ export function ServiceListSectionShared({
           key={key}
           href={item.href ?? viewAllHref}
           className={cn(className, 'no-underline text-inherit')}
-          onClick={(event) => {
-            if (isCarouselDragging) {
-              event.preventDefault();
-              return;
-            }
-            onItemClick?.(item);
-          }}
+          onClick={() => { onItemClick?.(item); }}
+          draggable={false}
         >
           {children}
         </Link>
@@ -261,31 +346,6 @@ export function ServiceListSectionShared({
   const renderFallback = (size: number) => (
     <div className="h-full w-full flex items-center justify-center" style={{ backgroundColor: tokens.imageFallbackBg }}>
       <Briefcase size={size} style={{ color: tokens.imageFallbackIcon }} />
-    </div>
-  );
-
-  const renderHeader = ({
-    maxWidthClass = 'max-w-7xl',
-    marginClass = 'mb-6',
-  }: {
-    maxWidthClass?: string;
-    marginClass?: string;
-  }) => (
-    <div className={cn(maxWidthClass, 'mx-auto', marginClass)}>
-      <div className="flex flex-row items-center justify-between gap-3 border-b pb-3" style={{ borderColor: tokens.neutralBorder }}>
-        <h2
-          className={cn(
-            'tracking-tight font-semibold',
-            isPreview
-              ? (isMobilePreview ? 'text-xl' : 'text-2xl')
-              : 'text-2xl md:text-3xl',
-          )}
-          style={{ color: tokens.heading }}
-        >
-          {heading}
-        </h2>
-        {viewAllAction}
-      </div>
     </div>
   );
 
@@ -576,191 +636,128 @@ export function ServiceListSectionShared({
 
   const renderCarousel = () => {
     const displayedItems = items.slice(0, 8);
-    const cardWidth = isPreview
-      ? (isMobilePreview ? 0.76 * 375 : (isTabletPreview ? 260 : 290))
-      : 300;
-    const gap = isPreview ? (isMobilePreview ? 12 : 16) : 16;
-    const pageWidth = Math.max(cardWidth + gap, 1);
-    const dotCount = Math.max(1, Math.min(3, displayedItems.length));
 
-    const scrollToDot = (dotIndex: number) => {
-      const container = document.getElementById(carouselElementId);
-      if (!container) {return;}
+    const EmblaServiceCarousel = () => {
+      const [emblaRef, emblaApi] = useEmblaCarousel({
+        align: 'start',
+        dragFree: true,
+        containScroll: 'trimSnaps',
+      });
+      const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+      const [canScrollNext, setCanScrollNext] = React.useState(false);
 
-      const maxScrollLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
-      const targetRaw = dotIndex * pageWidth;
-      const target = Math.min(targetRaw, maxScrollLeft);
+      React.useEffect(() => {
+        if (!emblaApi) { return; }
+        const update = () => {
+          setCanScrollPrev(emblaApi.canScrollPrev());
+          setCanScrollNext(emblaApi.canScrollNext());
+        };
+        update();
+        emblaApi.on('select', update);
+        emblaApi.on('reInit', update);
+        return () => { emblaApi.off('select', update); emblaApi.off('reInit', update); };
+      }, [emblaApi]);
 
-      container.scrollTo({ left: target, behavior: 'smooth' });
-      setActiveCarouselDot(dotIndex);
-    };
-
-    return (
-      <section className={baseSectionPadding} data-mode={mode}>
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-4 flex flex-col gap-3 md:mb-6 md:flex-row md:items-end md:justify-between">
-            <div className="flex items-center justify-between gap-3">
-              <h2
-                className={cn(
-                  'tracking-tight font-semibold',
-                  isPreview
-                    ? (isMobilePreview ? 'text-xl' : 'text-2xl')
-                    : 'text-2xl md:text-3xl',
-                )}
-                style={{ color: tokens.heading }}
-              >
-                {heading}
-              </h2>
-              {isPreview && shouldShowViewAll ? viewAllAction : null}
-            </div>
-
-            <div className="flex items-center gap-2 md:gap-3">
-              {!isPreview ? viewAllAction : null}
-
-              {displayedItems.length > 1 ? (
-                <>
+      return (
+        <section className={baseSectionPadding} data-mode={mode}>
+          <div className="max-w-7xl mx-auto">
+            <div className={cn('flex items-end justify-between gap-3', (shouldRenderHeaderContent || canScrollPrev || canScrollNext) && 'mb-4 md:mb-6')}>
+              <div className="min-w-0 flex-1">
+                {renderHeader({ maxWidthClass: '', marginClass: 'mb-0' })}
+              </div>
+              {(canScrollPrev || canScrollNext) ? (
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    className="h-11 w-11 rounded-full border inline-flex items-center justify-center"
+                    disabled={!canScrollPrev}
+                    onClick={() => emblaApi?.scrollPrev()}
+                    className={cn(
+                      'inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all',
+                      canScrollPrev
+                        ? 'hover:shadow-sm'
+                        : 'cursor-not-allowed opacity-40',
+                    )}
                     style={{
                       backgroundColor: tokens.navButtonBg,
                       borderColor: tokens.navButtonBorder,
                       color: tokens.navButtonText,
-                    }}
-                    onClick={() => {
-                      const next = Math.max(activeCarouselDot - 1, 0);
-                      scrollToDot(next);
                     }}
                     aria-label="Cuộn trái"
                   >
                     <ChevronLeft size={18} />
                   </button>
-
                   <button
                     type="button"
-                    className="h-11 w-11 rounded-full border inline-flex items-center justify-center"
+                    disabled={!canScrollNext}
+                    onClick={() => emblaApi?.scrollNext()}
+                    className={cn(
+                      'inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all',
+                      canScrollNext
+                        ? 'hover:shadow-sm'
+                        : 'cursor-not-allowed opacity-40',
+                    )}
                     style={{
                       backgroundColor: tokens.navButtonBg,
                       borderColor: tokens.navButtonBorder,
                       color: tokens.navButtonText,
                     }}
-                    onClick={() => {
-                      const next = Math.min(activeCarouselDot + 1, dotCount - 1);
-                      scrollToDot(next);
-                    }}
                     aria-label="Cuộn phải"
                   >
                     <ChevronRight size={18} />
                   </button>
-                </>
+                </div>
               ) : null}
             </div>
-          </div>
 
-          <div className="overflow-hidden">
-            <div
-              id={carouselElementId}
-              ref={carouselScrollRef}
-              className={cn(
-                'flex snap-x snap-mandatory gap-3 md:gap-4 overflow-x-auto pb-2',
-                context === 'site' ? 'select-none' : '',
-                context === 'site' && isCarouselDown ? 'cursor-grabbing' : (context === 'site' ? 'cursor-grab' : ''),
-              )}
-              style={{
-                WebkitOverflowScrolling: 'touch',
-                msOverflowStyle: 'none',
-                scrollbarWidth: 'none',
-                scrollBehavior: 'auto',
-              }}
-              onMouseDown={(event) => {
-                if (context === 'site') {
-                  handleCarouselMouseDown(event);
-                }
-              }}
-              onMouseMove={(event) => {
-                if (context === 'site') {
-                  handleCarouselMouseMove(event);
-                }
-              }}
-              onMouseUp={() => {
-                if (context === 'site') {
-                  handleCarouselMouseUp();
-                }
-              }}
-              onMouseLeave={() => {
-                if (context === 'site') {
-                  handleCarouselMouseLeave();
-                }
-              }}
-              onScroll={(event) => {
-                const container = event.currentTarget;
-                const maxScrollLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
-                const current = Math.min(container.scrollLeft, maxScrollLeft);
-                const nextDot = Math.max(0, Math.min(dotCount - 1, Math.round(current / pageWidth)));
-                if (nextDot !== activeCarouselDot) {
-                  setActiveCarouselDot(nextDot);
-                }
-              }}
-            >
-              {displayedItems.map((item, index) => wrapItem({
-                item,
-                className: cn(
-                  'group snap-start flex-shrink-0 block',
-                  isPreview
-                    ? (isMobilePreview ? 'w-[76vw]' : (isTabletPreview ? 'w-[260px]' : 'w-[290px]'))
-                    : 'w-[76vw] sm:w-[280px] lg:w-[300px]',
-                ),
-                children: (
-                  <article
-                    className="h-full rounded-xl border p-3"
-                    style={{
-                      backgroundColor: tokens.cardBackground,
-                      borderColor: tokens.cardBorder,
-                    }}
-                  >
-                    <div className="relative mb-3 overflow-hidden rounded-lg aspect-[4/3]">
-                      {item.image ? (
-                        <ServiceImage
-                          context={context}
-                          src={item.image}
-                          alt={item.name}
-                          className="h-full w-full object-cover"
-                          sizes="(max-width: 768px) 100vw, 300px"
-                          priority={!isPreview && index < imagePriorityCount}
-                        />
-                      ) : renderFallback(28)}
+            <div className="overflow-hidden" ref={emblaRef}>
+              <div className="flex gap-3 md:gap-4 backface-hidden touch-pan-y">
+                {displayedItems.map((item, index) => wrapItem({
+                  item,
+                  className: cn(
+                    'group flex-none block select-none',
+                    isPreview
+                      ? (isMobilePreview ? 'w-[72%]' : (isTabletPreview ? 'w-[260px]' : 'w-[290px]'))
+                      : 'w-[76vw] sm:w-[280px] lg:w-[300px]',
+                  ),
+                  children: (
+                    <article
+                      className="h-full rounded-xl border p-3"
+                      style={{
+                        backgroundColor: tokens.cardBackground,
+                        borderColor: tokens.cardBorder,
+                      }}
+                    >
+                      <div className="relative mb-3 overflow-hidden rounded-lg aspect-[4/3]">
+                        {item.image ? (
+                          <ServiceImage
+                            context={context}
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                            sizes="(max-width: 768px) 100vw, 300px"
+                            priority={!isPreview && index < imagePriorityCount}
+                          />
+                        ) : renderFallback(28)}
 
-                      {item.tag ? (
-                        <div className="absolute left-2 top-2 z-10">
-                          <ServiceBadge tag={item.tag} tokens={tokens} />
-                        </div>
-                      ) : null}
-                    </div>
+                        {item.tag ? (
+                          <div className="absolute left-2 top-2 z-10">
+                            <ServiceBadge tag={item.tag} tokens={tokens} />
+                          </div>
+                        ) : null}
+                      </div>
 
-                    {renderCardContent(item)}
-                  </article>
-                ),
-              }))}
+                      {renderCardContent(item)}
+                    </article>
+                  ),
+                }))}
+              </div>
             </div>
           </div>
+        </section>
+      );
+    };
 
-          {displayedItems.length > 1 ? (
-            <div className="mt-4 flex justify-center gap-2">
-              {Array.from({ length: dotCount }).map((_, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  aria-label={`Đi tới trang ${index + 1}`}
-                  onClick={() => { scrollToDot(index); }}
-                  className={cn('h-2 rounded-full transition-all', index === activeCarouselDot ? 'w-6' : 'w-2')}
-                  style={{ backgroundColor: index === activeCarouselDot ? tokens.dotActive : tokens.dotInactive }}
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </section>
-    );
+    return <EmblaServiceCarousel />;
   };
 
   const renderMinimal = () => {
@@ -835,156 +832,77 @@ export function ServiceListSectionShared({
   };
 
   const renderShowcase = () => {
-    const featuredItem = items[0];
-    const otherItems = items.slice(1, 5);
+    const canGoToPreviousShowcasePage = showcasePage > 0;
+    const canGoToNextShowcasePage = showcasePage < showcaseTotalPages - 1;
 
-    if (isPreview && isMobilePreview) {
-      return (
-        <section className={baseSectionPadding} data-mode={mode}>
-          {renderHeader({})}
+    const showcaseWrapperPaddingClassName = isPreview
+      ? (isMobilePreview ? 'p-4' : (isTabletPreview ? 'p-6' : 'p-8'))
+      : 'p-4 md:p-6 lg:p-8';
 
-          <div className="max-w-7xl mx-auto space-y-4">
-            {featuredItem ? wrapItem({
-              item: featuredItem,
-              className: 'group block',
-              children: (
-                <article className="relative overflow-hidden rounded-2xl border aspect-[4/3]" style={{ borderColor: tokens.cardBorder }}>
-                  {featuredItem.image ? (
-                    <ServiceImage
-                      context={context}
-                      src={featuredItem.image}
-                      alt={featuredItem.name}
-                      className="h-full w-full object-cover"
-                      sizes="100vw"
-                      priority={!isPreview && imagePriorityCount > 0}
-                    />
-                  ) : renderFallback(44)}
+    const showcaseGapClassName = isPreview
+      ? (isMobilePreview ? 'gap-x-3 gap-y-5' : 'gap-x-6 gap-y-8')
+      : 'gap-x-3 gap-y-5 md:gap-x-6 md:gap-y-8';
 
-                  <div className="absolute inset-0" style={{ backgroundImage: tokens.featuredOverlayScrim }} />
+    const showcaseTitleClassName = isPreview
+      ? (isMobilePreview ? 'text-sm' : 'text-base')
+      : 'text-sm md:text-base';
 
-                  <div className="absolute bottom-0 left-0 right-0 p-4">
-                    {featuredItem.tag ? (
-                      <div className="mb-2"><ServiceBadge tag={featuredItem.tag} tokens={tokens} /></div>
-                    ) : null}
-
-                    <h3 className="text-lg font-semibold text-white line-clamp-2">{featuredItem.name}</h3>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-white">{formatServicePrice(featuredItem.price)}</span>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: tokens.featuredOverlaySubtle }}>
-                        Xem chi tiết <ArrowUpRight size={14} />
-                      </span>
-                    </div>
-                  </div>
-                </article>
-              ),
-            }) : null}
-
-            <div className="grid grid-cols-2 gap-3">
-              {otherItems.map((item, index) => wrapItem({
-                item,
-                className: 'group block',
-                children: (
-                  <article className="rounded-xl border p-2.5" style={{ borderColor: tokens.cardBorder, backgroundColor: tokens.cardBackground }}>
-                    <div className="relative mb-2 overflow-hidden rounded-lg aspect-square">
-                      {item.image ? (
-                        <ServiceImage
-                          context={context}
-                          src={item.image}
-                          alt={item.name}
-                          className="h-full w-full object-cover"
-                          sizes="(max-width: 768px) 50vw, 180px"
-                          priority={!isPreview && index < Math.max(imagePriorityCount - 1, 0)}
-                        />
-                      ) : renderFallback(22)}
-                    </div>
-
-                    <h4 className="text-sm font-semibold line-clamp-2" style={{ color: tokens.titleText }}>{item.name}</h4>
-                    <span className="mt-1 block text-xs font-semibold" style={{ color: tokens.priceText }}>
-                      {formatServicePrice(item.price)}
-                    </span>
-                  </article>
-                ),
-              }))}
-            </div>
-          </div>
-        </section>
-      );
-    }
+    const showcaseGridClassName = isPreview
+      ? (isMobilePreview ? 'grid-cols-2' : (isTabletPreview ? 'grid-cols-3' : 'grid-cols-4'))
+      : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
 
     return (
       <section className={baseSectionPadding} data-mode={mode}>
-        {renderHeader({})}
+        <div className={cn('max-w-7xl mx-auto rounded-md border bg-white shadow-sm', showcaseWrapperPaddingClassName)} style={{ borderColor: `${tokens.cardBorder}80`, backgroundColor: tokens.cardBackground }}>
+          <div className={cn('flex items-start justify-between gap-3', (shouldRenderHeaderContent || showcaseCanPaginate) && 'mb-6 md:mb-8')}>
+            <div className="min-w-0 flex-1">
+              {renderHeader({ maxWidthClass: '', marginClass: 'mb-0' })}
+            </div>
+            {showcaseCanPaginate ? (
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowcasePage((current) => Math.max(current - 1, 0)); }}
+                  disabled={!canGoToPreviousShowcasePage}
+                  aria-label="Trang trước"
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                    canGoToPreviousShowcasePage ? 'bg-gray-200 text-gray-500 hover:bg-gray-300' : 'cursor-not-allowed bg-gray-200 text-gray-500 opacity-50',
+                  )}
+                >
+                  <ChevronRight size={18} className="rotate-180" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowcasePage((current) => Math.min(current + 1, showcaseTotalPages - 1)); }}
+                  disabled={!canGoToNextShowcasePage}
+                  aria-label="Trang sau"
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                    canGoToNextShowcasePage ? 'bg-gray-300 text-gray-700 hover:bg-gray-400' : 'cursor-not-allowed bg-gray-300 text-gray-700 opacity-50',
+                  )}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            ) : null}
+          </div>
 
-        <div className={cn('max-w-7xl mx-auto grid gap-4', isPreview ? (isTabletPreview ? 'grid-cols-2' : 'grid-cols-3') : 'grid-cols-1 lg:grid-cols-3')}>
-          {featuredItem ? wrapItem({
-            item: featuredItem,
-            className: cn('group block', !isPreview && 'lg:row-span-2'),
-            children: (
-              <article className="relative h-full min-h-[320px] md:min-h-[440px] overflow-hidden rounded-2xl border" style={{ borderColor: tokens.cardBorder }}>
-                {featuredItem.image ? (
-                  <ServiceImage
-                    context={context}
-                    src={featuredItem.image}
-                    alt={featuredItem.name}
-                    className="h-full w-full object-cover"
-                    sizes="(max-width: 1024px) 100vw, 66vw"
-                    priority={!isPreview && imagePriorityCount > 0}
-                  />
-                ) : renderFallback(56)}
-
-                <div className="absolute inset-0" style={{ backgroundImage: tokens.featuredOverlayScrim }} />
-
-                <div className="absolute bottom-0 left-0 right-0 p-5 md:p-6">
-                  <span className="text-xs font-medium uppercase tracking-wide" style={{ color: tokens.featuredOverlaySubtle }}>
-                    Dịch vụ nổi bật
-                  </span>
-
-                  <h3 className="mt-2 text-xl md:text-2xl font-semibold text-white line-clamp-2">
-                    {featuredItem.name}
-                  </h3>
-
-                  {featuredItem.description ? (
-                    <p className="mt-2 text-sm text-white/85 line-clamp-2">
-                      {stripHtml(featuredItem.description)}
-                    </p>
-                  ) : null}
-
-                  <div className="mt-4 flex items-center justify-between gap-2">
-                    <span className="text-base md:text-lg font-semibold text-white">
-                      {formatServicePrice(featuredItem.price)}
-                    </span>
-
-                    <span
-                      className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm font-medium"
-                      style={{
-                        backgroundColor: tokens.ctaSolidBg,
-                        borderColor: tokens.ctaSolidBg,
-                        color: tokens.ctaSolidText,
-                      }}
-                    >
-                      Xem chi tiết <ArrowRight size={15} />
-                    </span>
-                  </div>
-                </div>
-              </article>
-            ),
-          }) : null}
-
-          <div className={cn('grid grid-cols-2 gap-3', !isPreview && 'lg:col-span-2')}>
-            {otherItems.map((item, index) => wrapItem({
+          <div className={cn('mb-8 grid', showcaseGridClassName, showcaseGapClassName)}>
+            {showcasePagedItems.map((item, index) => wrapItem({
               item,
-              className: 'group block',
+              className: 'group cursor-pointer',
               children: (
-                <article className="h-full rounded-xl border p-3" style={{ borderColor: tokens.cardBorder, backgroundColor: tokens.cardBackground }}>
-                  <div className="relative mb-3 overflow-hidden rounded-lg aspect-[4/3]">
+                <article className="flex flex-col">
+                  <div className="relative mb-3 aspect-[16/10] w-full overflow-hidden rounded-md bg-slate-100">
                     {item.image ? (
                       <ServiceImage
                         context={context}
                         src={item.image}
                         alt={item.name}
-                        className="h-full w-full object-cover"
-                        sizes="(max-width: 1024px) 50vw, 260px"
-                        priority={!isPreview && index < Math.max(imagePriorityCount - 1, 0)}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw"
+                        priority={!isPreview && index < imagePriorityCount}
                       />
                     ) : renderFallback(28)}
 
@@ -994,21 +912,34 @@ export function ServiceListSectionShared({
                       </div>
                     ) : null}
                   </div>
-
-                  <h4 className="text-sm font-semibold line-clamp-2" style={{ color: tokens.titleText }}>
-                    {item.name}
-                  </h4>
-
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold" style={{ color: tokens.priceText }}>
-                      {formatServicePrice(item.price)}
-                    </span>
-                    <ArrowUpRight size={16} style={{ color: tokens.inlineMetaText }} />
+                  <div className="flex flex-1 flex-col">
+                    <h3 className={cn('mb-2 line-clamp-2 font-semibold leading-snug', showcaseTitleClassName)} style={{ color: tokens.titleText }}>
+                      {item.name}
+                    </h3>
+                    <div className="mt-auto inline-flex items-center gap-1.5 text-[13px]" style={{ color: tokens.priceText }}>
+                      <span className="font-semibold">{formatServicePrice(item.price)}</span>
+                    </div>
                   </div>
                 </article>
               ),
             }))}
           </div>
+
+          {shouldShowViewAll ? (
+            context === 'site' ? (
+              <Link href={viewAllHref} className="flex justify-center pt-2">
+                <div className="rounded px-6 py-2.5 text-white" style={{ backgroundColor: tokens.ctaSolidBg }}>
+                  Xem tất cả
+                </div>
+              </Link>
+            ) : (
+              <div className="flex justify-center pt-2">
+                <div className="rounded px-6 py-2.5 text-white" style={{ backgroundColor: tokens.ctaSolidBg }}>
+                  Xem tất cả
+                </div>
+              </div>
+            )
+          ) : null}
         </div>
       </section>
     );
@@ -1018,7 +949,9 @@ export function ServiceListSectionShared({
     return (
       <section className={baseSectionPadding} data-mode={mode}>
         <div className="max-w-7xl mx-auto text-center py-10 rounded-xl border" style={{ borderColor: tokens.neutralBorder, backgroundColor: tokens.neutralBackground }}>
-          <h2 className="text-xl font-semibold" style={{ color: tokens.heading }}>{heading}</h2>
+          {shouldRenderHeaderContent ? (
+            <h2 className="text-xl font-semibold" style={{ color: tokens.heading }}>{heading}</h2>
+          ) : null}
           <p className="mt-2 text-sm" style={{ color: tokens.mutedText }}>Chưa có dịch vụ nào.</p>
         </div>
       </section>
@@ -1032,3 +965,4 @@ export function ServiceListSectionShared({
   if (style === 'minimal') {return renderMinimal();}
   return renderShowcase();
 }
+

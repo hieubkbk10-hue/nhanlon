@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import Link from 'next/link';
 import { Clock, Minus, Package, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
 import { useQuery } from 'convex/react';
@@ -310,7 +310,7 @@ export default function CartPage() {
                               style={{ backgroundColor: tokens.thumbBg }}
                             >
                               {item.productImage ? (
-                                <Image src={item.productImage} alt={item.productName} width={48} height={48} className="w-full h-full object-cover" />
+                                <Image src={item.productImage} alt={item.productName} width={48} height={48} className="w-full h-full object-cover" mode="thumb" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                   <Package className="w-5 h-5" style={{ color: tokens.thumbIcon }} />
@@ -388,7 +388,7 @@ export default function CartPage() {
                   >
                     <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0" style={{ backgroundColor: tokens.thumbBg }}>
                       {item.productImage ? (
-                        <Image src={item.productImage} alt={item.productName} width={96} height={96} className="w-full h-full object-cover" />
+                        <Image src={item.productImage} alt={item.productName} width={96} height={96} className="w-full h-full object-cover" mode="thumb" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Package className="w-6 h-6" style={{ color: tokens.thumbIcon }} />
@@ -521,7 +521,7 @@ export default function CartPage() {
                 <div key={item._id} className="flex flex-col sm:flex-row gap-4 py-3 border-b last:border-0" style={{ borderColor: tokens.itemDivider }}>
                   <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0" style={{ backgroundColor: tokens.thumbBg }}>
                     {item.productImage ? (
-                      <Image src={item.productImage} alt={item.productName} width={80} height={80} className="w-full h-full object-cover" />
+                      <Image src={item.productImage} alt={item.productName} width={80} height={80} className="w-full h-full object-cover" mode="thumb" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="w-5 h-5" style={{ color: tokens.thumbIcon }} />

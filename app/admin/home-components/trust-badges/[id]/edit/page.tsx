@@ -6,22 +6,59 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Loader2, Shield } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../../components/ui';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
+import { extractSectionHeaderConfig, useSectionHeaderState } from '../../../_shared/hooks/useSectionHeaderState';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { GalleryForm } from '../../../gallery/_components/GalleryForm';
 import { TrustBadgesPreview } from '../../../gallery/_components/TrustBadgesPreview';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { DEFAULT_GALLERY_ITEMS } from '../../../gallery/_lib/constants';
 import { getGalleryPersistSafeColors, normalizeGalleryHarmony } from '../../../gallery/_lib/colors';
-import type { GalleryItem, TrustBadgesStyle } from '../../../gallery/_types';
+import { normalizeTrustBadgesStyle, type GalleryItem, type TrustBadgesStyle } from '../../../gallery/_types';
 
 const COMPONENT_TYPE = 'TrustBadges';
+
+const buildHeaderSnapshot = ({
+  badgeText,
+  headerAlign,
+  hideHeader,
+  showBadge,
+  showSubtitle,
+  showTitle,
+  subtitle,
+  subtitleAboveTitle,
+  titleColorPrimary,
+  uppercaseText,
+}: {
+  badgeText?: string;
+  headerAlign?: 'left' | 'center' | 'right';
+  hideHeader?: boolean;
+  showBadge?: boolean;
+  showSubtitle?: boolean;
+  showTitle?: boolean;
+  subtitle?: string;
+  subtitleAboveTitle?: boolean;
+  titleColorPrimary?: boolean;
+  uppercaseText?: boolean;
+}) => ({
+  hideHeader: hideHeader ?? false,
+  showTitle: showTitle ?? true,
+  subtitle: subtitle ?? '',
+  showSubtitle: showSubtitle ?? true,
+  headerAlign: headerAlign ?? 'left',
+  titleColorPrimary: titleColorPrimary ?? false,
+  subtitleAboveTitle: subtitleAboveTitle ?? false,
+  uppercaseText: uppercaseText ?? false,
+  showBadge: showBadge ?? true,
+  badgeText: badgeText ?? '',
+});
 
 export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -37,6 +74,9 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
   const [active, setActive] = useState(true);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(DEFAULT_GALLERY_ITEMS);
   const [trustBadgesStyle, setTrustBadgesStyle] = useState<TrustBadgesStyle>('cards');
+  const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
+  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const headerState = useSectionHeaderState();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
@@ -56,14 +96,29 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
     const normalizedItems = items.map((item, idx) => ({ id: `item-${idx + 1}`, link: item.link || '', name: item.name ?? '', url: item.url }));
     setGalleryItems(normalizedItems);
 
-    const nextStyle = (config.style as TrustBadgesStyle) || 'cards';
+    const nextStyle = normalizeTrustBadgesStyle(config.style);
     setTrustBadgesStyle(nextStyle);
+    setDesktopColumns(config.desktopColumns === 3 ? 3 : 4);
+
+    const headerConfig = extractSectionHeaderConfig(config);
+    headerState.setHideHeader(headerConfig.hideHeader ?? false);
+    headerState.setShowTitle(headerConfig.showTitle ?? true);
+    headerState.setSubtitle(headerConfig.subtitle ?? '');
+    headerState.setShowSubtitle(headerConfig.showSubtitle ?? true);
+    headerState.setHeaderAlign(headerConfig.headerAlign ?? 'center');
+    headerState.setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    headerState.setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    headerState.setUppercaseText(headerConfig.uppercaseText ?? false);
+    headerState.setShowBadge(headerConfig.showBadge ?? true);
+    headerState.setBadgeText(headerConfig.badgeText ?? '');
 
     setInitialSnapshot(JSON.stringify({
       title: component.title,
       active: component.active,
       items: normalizedItems,
       style: nextStyle,
+      desktopColumns: config.desktopColumns === 3 ? 3 : 4,
+      header: buildHeaderSnapshot(headerConfig),
       type: component.type,
     }));
   }, [component, id, router]);
@@ -75,6 +130,19 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
       active,
       items: galleryItems,
       style: trustBadgesStyle,
+      desktopColumns,
+      header: buildHeaderSnapshot({
+        badgeText: headerState.badgeText,
+        headerAlign: headerState.headerAlign,
+        hideHeader: headerState.hideHeader,
+        showBadge: headerState.showBadge,
+        showSubtitle: headerState.showSubtitle,
+        showTitle: headerState.showTitle,
+        subtitle: headerState.subtitle,
+        subtitleAboveTitle: headerState.subtitleAboveTitle,
+        titleColorPrimary: headerState.titleColorPrimary,
+        uppercaseText: headerState.uppercaseText,
+      }),
       type: component.type,
     });
     const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
@@ -89,7 +157,7 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
         || customFontState.fontKey !== initialFontCustom.fontKey
       : false;
     setHasChanges(snapshot !== initialSnapshot || customChanged || customFontChanged);
-  }, [title, active, galleryItems, trustBadgesStyle, component, initialSnapshot, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock]);
+  }, [title, active, galleryItems, trustBadgesStyle, desktopColumns, headerState.hideHeader, headerState.showTitle, headerState.subtitle, headerState.showSubtitle, headerState.headerAlign, headerState.titleColorPrimary, headerState.subtitleAboveTitle, headerState.uppercaseText, headerState.showBadge, headerState.badgeText, component, initialSnapshot, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +192,17 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
         config: {
           items: galleryItems.map((item) => ({ link: item.link, name: item.name, url: item.url })),
           style: trustBadgesStyle,
+          desktopColumns,
+          hideHeader: headerState.hideHeader,
+          showTitle: headerState.showTitle,
+          subtitle: headerState.subtitle,
+          showSubtitle: headerState.showSubtitle,
+          headerAlign: headerState.headerAlign,
+          titleColorPrimary: headerState.titleColorPrimary,
+          subtitleAboveTitle: headerState.subtitleAboveTitle,
+          uppercaseText: headerState.uppercaseText,
+          showBadge: headerState.showBadge,
+          badgeText: headerState.badgeText,
         },
         id: id as Id<'homeComponents'>,
         title,
@@ -151,6 +230,19 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
         active,
         items: galleryItems,
         style: trustBadgesStyle,
+        desktopColumns,
+        header: buildHeaderSnapshot({
+          badgeText: headerState.badgeText,
+          headerAlign: headerState.headerAlign,
+          hideHeader: headerState.hideHeader,
+          showBadge: headerState.showBadge,
+          showSubtitle: headerState.showSubtitle,
+          showTitle: headerState.showTitle,
+          subtitle: headerState.subtitle,
+          subtitleAboveTitle: headerState.subtitleAboveTitle,
+          titleColorPrimary: headerState.titleColorPrimary,
+          uppercaseText: headerState.uppercaseText,
+        }),
         type: component?.type,
       }));
       if (showCustomBlock) {
@@ -198,39 +290,66 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
       </div>
 
       <form onSubmit={handleSubmit}>
+        <HeaderConfigSection
+          hideHeader={headerState.hideHeader}
+          title={title}
+          showTitle={headerState.showTitle}
+          subtitle={headerState.subtitle}
+          showSubtitle={headerState.showSubtitle}
+          headerAlign={headerState.headerAlign}
+          titleColorPrimary={headerState.titleColorPrimary}
+          subtitleAboveTitle={headerState.subtitleAboveTitle}
+          uppercaseText={headerState.uppercaseText}
+          showBadge={headerState.showBadge}
+          badgeText={headerState.badgeText}
+          onHideHeaderChange={headerState.setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={headerState.setShowTitle}
+          onSubtitleChange={headerState.setSubtitle}
+          onShowSubtitleChange={headerState.setShowSubtitle}
+          onHeaderAlignChange={headerState.setHeaderAlign}
+          onTitleColorPrimaryChange={headerState.setTitleColorPrimary}
+          onSubtitleAboveTitleChange={headerState.setSubtitleAboveTitle}
+          onUppercaseTextChange={headerState.setUppercaseText}
+          onShowBadgeChange={headerState.setShowBadge}
+          onBadgeTextChange={headerState.setBadgeText}
+          expanded={expandedSections.header}
+          onExpandedChange={(value) => setExpandedSections({ header: value })}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <ImageIcon size={20} />
-              Chứng nhận
+              <Shield size={20} />
+              Cấu hình hiển thị
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) =>{  setTitle(e.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5'
-                )}></div>
+              <Label>Số cột desktop</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[3, 4].map((option) => {
+                  const selected = desktopColumns === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setDesktopColumns(option as 3 | 4)}
+                      className={cn(
+                        'h-9 rounded-md border text-xs transition-colors',
+                        selected
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      )}
+                    >
+                      {option} cột
+                    </button>
+                  );
+                })}
               </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
             </div>
           </CardContent>
         </Card>
@@ -240,6 +359,7 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
           setGalleryItems={setGalleryItems}
           componentType="TrustBadges"
           style="grid"
+          onAiImport={setGalleryItems}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
@@ -292,6 +412,20 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
               mode={effectiveColors.mode}
               selectedStyle={trustBadgesStyle}
               onStyleChange={setTrustBadgesStyle}
+              desktopColumns={desktopColumns}
+              config={{
+                badgeText: headerState.badgeText,
+                headerAlign: headerState.headerAlign,
+                heading: title,
+                hideHeader: headerState.hideHeader,
+                showBadge: headerState.showBadge,
+                showSubtitle: headerState.showSubtitle,
+                showTitle: headerState.showTitle,
+                subHeading: headerState.subtitle,
+                subtitleAboveTitle: headerState.subtitleAboveTitle,
+                titleColorPrimary: headerState.titleColorPrimary,
+                uppercaseText: headerState.uppercaseText,
+              }}
               fontStyle={fontStyle}
               fontClassName="font-active"
             />
@@ -303,6 +437,8 @@ export default function TrustBadgesEditPage({ params }: { params: Promise<{ id: 
           hasChanges={hasChanges}
           onCancel={() =>{  router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

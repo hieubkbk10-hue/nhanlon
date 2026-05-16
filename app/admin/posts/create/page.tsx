@@ -15,6 +15,8 @@ import { QuickCreateCategoryModal } from '../../components/QuickCreateCategoryMo
 import { stripHtml, truncateText } from '@/lib/seo';
 import { getMacroTemplate, getTemplateFieldSpec, type GeneratorFieldKey } from '@/lib/posts/generator/macro-templates';
 import type { GeneratorRequest, GeneratedArticlePayload } from '@/lib/posts/generator/types';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
+import { AiEntityImportDialog, type AiEntityImportPayload } from '@/app/admin/components/AiEntityImportDialog';
 
 const MODULE_KEY = 'posts';
 const COC_TARGET_OPTIONS: Array<{ key: GeneratorRequest['templateKey']; label: string; description: string }> = [
@@ -363,6 +365,34 @@ export default function PostCreatePage() {
     setMetaDescription(generatorPreview.metaDescription);
     setThumbnail(generatorPreview.thumbnail);
     setThumbnailStorageId(undefined);
+    setEditorResetKey((prev) => prev + 1);
+  };
+
+  const handleApplyAiPost = (item: AiEntityImportPayload) => {
+    const nextTitle = item.title?.trim() || item.name?.trim() || '';
+    if (!nextTitle) {return;}
+
+    setTitle(nextTitle);
+    setSlug(item.slug?.trim() || generateSlugFromTitle(nextTitle));
+    const nextContent = item.content || item.description || '';
+    setContent(nextContent);
+    if (item.htmlRender) {
+      setRenderType('html');
+      setHtmlRender(item.htmlRender);
+      setMarkdownRender('');
+    } else if (item.markdownRender) {
+      setRenderType('markdown');
+      setMarkdownRender(item.markdownRender);
+      setHtmlRender('');
+    }
+    setExcerpt(item.excerpt || item.description || truncateText(stripHtml(nextContent), 180));
+    setMetaTitle(item.metaTitle || truncateText(nextTitle, 60));
+    setMetaDescription(item.metaDescription || truncateText(stripHtml(item.excerpt || nextContent), 160));
+    if (item.thumbnail) {
+      setThumbnail(item.thumbnail);
+      setThumbnailStorageId(undefined);
+    }
+    if (item.authorName) {setAuthorName(item.authorName);}
     setEditorResetKey((prev) => prev + 1);
   };
 
@@ -822,12 +852,20 @@ export default function PostCreatePage() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 lg:left-[280px] right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-end items-center z-10">
-        <Button type="submit" variant="accent" disabled={isSubmitting || !title.trim() || !categoryId}>
-          {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
-          Đăng bài
-        </Button>
-      </div>
+      <HomeComponentStickyFooter
+        isSubmitting={isSubmitting}
+        submitLabel="Đăng bài"
+        align="end"
+        disableSave={isSubmitting || !title.trim() || !categoryId}
+      >
+        <div className="flex flex-wrap justify-end gap-2">
+          <AiEntityImportDialog kind="post" enabledFields={enabledFields} onApply={handleApplyAiPost} />
+          <Button type="submit" variant="accent" disabled={isSubmitting || !title.trim() || !categoryId}>
+            {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
+            Đăng bài
+          </Button>
+        </div>
+      </HomeComponentStickyFooter>
     </form>
     {galleryModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4" onClick={handleCloseGallery}>

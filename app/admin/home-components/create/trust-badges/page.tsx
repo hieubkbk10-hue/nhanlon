@@ -2,10 +2,13 @@
 
 import React, { useState } from 'react';
 import { Shield } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../components/ui';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
+import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
+import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
+import { AiTrustBadgesImport } from '../../gallery/_components/AiTrustBadgesImport';
 import { TrustBadgesPreview } from '../../gallery/_components/TrustBadgesPreview';
 import type { TrustBadgesStyle } from '../../gallery/_types';
 import type { ImageItem } from '../../../components/MultiImageUploader';
@@ -31,11 +34,31 @@ export default function TrustBadgesCreatePage() {
     { id: 'item-2', link: '', name: '', url: '' }
   ]);
   const [trustBadgesStyle, setTrustBadgesStyle] = useState<TrustBadgesStyle>('cards');
+  const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
+  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const headerState = useSectionHeaderState({
+    badgeText: 'Được tin chọn',
+    headerAlign: 'center',
+    showBadge: true,
+    subtitle: 'Những cam kết và chứng nhận giúp khách hàng yên tâm mua sắm.',
+    titleColorPrimary: true,
+  });
 
   const onSubmit = (e: React.FormEvent) => {
     void handleSubmit(e, {
       items: trustBadgeItems.map((item) => ({ link: item.link, name: item.name, url: item.url })),
       style: trustBadgesStyle,
+      desktopColumns,
+      hideHeader: headerState.hideHeader,
+      showTitle: headerState.showTitle,
+      subtitle: headerState.subtitle,
+      showSubtitle: headerState.showSubtitle,
+      headerAlign: headerState.headerAlign,
+      titleColorPrimary: headerState.titleColorPrimary,
+      subtitleAboveTitle: headerState.subtitleAboveTitle,
+      uppercaseText: headerState.uppercaseText,
+      showBadge: headerState.showBadge,
+      badgeText: headerState.badgeText,
     });
   };
 
@@ -55,10 +78,76 @@ export default function TrustBadgesCreatePage() {
       customFontState={customFontState}
       showFontCustomBlock={showFontCustomBlock}
       setCustomFontState={setCustomFontState}
+      skipTitleInput={true}
     >
+      <HeaderConfigSection
+        hideHeader={headerState.hideHeader}
+        title={title}
+        showTitle={headerState.showTitle}
+        subtitle={headerState.subtitle}
+        showSubtitle={headerState.showSubtitle}
+        headerAlign={headerState.headerAlign}
+        titleColorPrimary={headerState.titleColorPrimary}
+        subtitleAboveTitle={headerState.subtitleAboveTitle}
+        uppercaseText={headerState.uppercaseText}
+        showBadge={headerState.showBadge}
+        badgeText={headerState.badgeText}
+        onHideHeaderChange={headerState.setHideHeader}
+        onTitleChange={setTitle}
+        onShowTitleChange={headerState.setShowTitle}
+        onSubtitleChange={headerState.setSubtitle}
+        onShowSubtitleChange={headerState.setShowSubtitle}
+        onHeaderAlignChange={headerState.setHeaderAlign}
+        onTitleColorPrimaryChange={headerState.setTitleColorPrimary}
+        onSubtitleAboveTitleChange={headerState.setSubtitleAboveTitle}
+        onUppercaseTextChange={headerState.setUppercaseText}
+        onShowBadgeChange={headerState.setShowBadge}
+        onBadgeTextChange={headerState.setBadgeText}
+        expanded={expandedSections.header}
+        onExpandedChange={(value) => setExpandedSections({ header: value })}
+        titleRequired={true}
+        titleLabel="Tiêu đề hiển thị"
+        titlePlaceholder="Nhập tiêu đề component..."
+      />
+
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-base">Danh sách chứng nhận</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield size={20} />
+            Cấu hình hiển thị
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label>Số cột desktop</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {[3, 4].map((option) => {
+              const selected = desktopColumns === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setDesktopColumns(option as 3 | 4)}
+                  className={cn(
+                    'h-9 rounded-md border text-xs transition-colors',
+                    selected
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                      : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                  )}
+                >
+                  {option} cột
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between gap-3">
+            <span>Danh sách chứng nhận</span>
+            <AiTrustBadgesImport onApply={(items) => setTrustBadgeItems(items as TrustBadgeItem[])} />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <MultiImageUploader<TrustBadgeItem>
@@ -101,11 +190,11 @@ export default function TrustBadgesCreatePage() {
                   <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Feature cards lớn, hover zoom effect</p>
                 </div>
               )}
-              {trustBadgesStyle === 'marquee' && (
+              {trustBadgesStyle === 'stack' && (
                 <div className="space-y-1">
-                  <p><strong className="text-emerald-900 dark:text-emerald-100">Marquee</strong></p>
-                  <p>• Ảnh: <strong>200×120px</strong> (tỷ lệ 5:3)</p>
-                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Auto scroll slider, hover pause</p>
+                  <p><strong className="text-emerald-900 dark:text-emerald-100">Stack</strong></p>
+                  <p>• Ảnh: <strong>240×160px</strong> (tỷ lệ 3:2)</p>
+                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Trust proof strips kiểu SaaS, dễ scan</p>
                 </div>
               )}
               {trustBadgesStyle === 'wall' && (
@@ -122,12 +211,11 @@ export default function TrustBadgesCreatePage() {
                   <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Horizontal carousel với arrows</p>
                 </div>
               )}
-              {trustBadgesStyle === 'featured' && (
+              {trustBadgesStyle === 'seal' && (
                 <div className="space-y-1">
-                  <p><strong className="text-emerald-900 dark:text-emerald-100">Featured</strong></p>
-                  <p>• Featured: <strong>600×450px</strong> (tỷ lệ 4:3)</p>
-                  <p>• Others: <strong>200×200px</strong> (tỷ lệ 1:1)</p>
-                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: 1 badge nổi bật + grid nhỏ bên cạnh</p>
+                  <p><strong className="text-emerald-900 dark:text-emerald-100">Seal</strong></p>
+                  <p>• Ảnh: <strong>240×240px</strong> (tỷ lệ 1:1)</p>
+                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Hub xác thực trung tâm + badge vệ tinh</p>
                 </div>
               )}
             </div>
@@ -142,6 +230,20 @@ export default function TrustBadgesCreatePage() {
         mode={mode}
         selectedStyle={trustBadgesStyle}
         onStyleChange={setTrustBadgesStyle}
+        desktopColumns={desktopColumns}
+        config={{
+          badgeText: headerState.badgeText,
+          headerAlign: headerState.headerAlign,
+          heading: title,
+          hideHeader: headerState.hideHeader,
+          showBadge: headerState.showBadge,
+          showSubtitle: headerState.showSubtitle,
+          showTitle: headerState.showTitle,
+          subHeading: headerState.subtitle,
+          subtitleAboveTitle: headerState.subtitleAboveTitle,
+          titleColorPrimary: headerState.titleColorPrimary,
+          uppercaseText: headerState.uppercaseText,
+        }}
         fontStyle={fontStyle}
         fontClassName="font-active"
       />

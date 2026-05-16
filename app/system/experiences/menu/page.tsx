@@ -20,10 +20,12 @@ import {
   DeviceToggle,
   deviceWidths,
   LayoutTabs,
+  SelectRow,
   ToggleRow,
   type DeviceType,
   type LayoutOption,
 } from '@/components/experiences/editor';
+import type { MenuLayerColorChoice } from '@/components/site/header/colors';
 import { HeaderMenuPreview, type HeaderLayoutStyle, type HeaderMenuConfig } from '@/components/experiences/previews/HeaderMenuPreview';
 import { MESSAGES, useExperienceConfig } from '@/lib/experiences';
 
@@ -74,7 +76,7 @@ const HINTS = [
 
 const clampLogoSizeLevel = (level?: number): HeaderMenuConfig['logoSizeLevel'] => {
   const value = Number.isFinite(level) ? Math.round(level as number) : 2;
-  return Math.min(20, Math.max(1, value)) as HeaderMenuConfig['logoSizeLevel'];
+  return Math.min(30, Math.max(1, value)) as HeaderMenuConfig['logoSizeLevel'];
 };
 
 const clampHeaderSpacingLevel = (level?: number): HeaderMenuConfig['headerSpacingLevel'] => {
@@ -256,6 +258,24 @@ export default function HeaderMenuExperiencePage() {
     setConfig(prev => ({ ...prev, logoBackgroundStyle: value }));
   };
 
+  const updateLayerColor = (layer: 'topnav' | 'navbar' | 'menu', value: MenuLayerColorChoice) => {
+    setConfig(prev => ({
+      ...prev,
+      layerColors: { ...prev.layerColors, [layer]: value },
+    }));
+  };
+
+  const layerColorOptions = useMemo(() => {
+    const base: { value: string; label: string }[] = [
+      { value: 'white', label: 'Trắng' },
+      { value: 'primary', label: 'Màu chính' },
+    ];
+    if (colorMode === 'dual') {
+      base.push({ value: 'secondary', label: 'Màu phụ' });
+    }
+    return base;
+  }, [colorMode]);
+
   const normalizedConfig = useMemo(() => ({
     ...config,
     brandName: resolvedBrandName,
@@ -314,7 +334,7 @@ export default function HeaderMenuExperiencePage() {
   const showLoginToggle = Boolean(config.login?.show);
   const showCtaToggle = Boolean(config.cta?.show);
   const logoSizeOptions = useMemo(
-    () => Array.from({ length: 20 }, (_, index) => ({
+    () => Array.from({ length: 30 }, (_, index) => ({
       value: (index + 1) as HeaderMenuConfig['logoSizeLevel'],
       label: `Nấc ${index + 1}`,
     })),
@@ -438,6 +458,30 @@ export default function HeaderMenuExperiencePage() {
               onSecondaryChange={setSecondaryColor}
               onModeChange={setColorMode}
             />
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-1">
+              <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Phối màu header</p>
+              <SelectRow
+                label="Topbar"
+                value={config.layerColors?.topnav ?? 'primary'}
+                options={layerColorOptions}
+                onChange={(v) => updateLayerColor('topnav', v as MenuLayerColorChoice)}
+              />
+              <SelectRow
+                label="Navbar"
+                value={config.layerColors?.navbar ?? 'white'}
+                options={layerColorOptions}
+                onChange={(v) => updateLayerColor('navbar', v as MenuLayerColorChoice)}
+              />
+              <SelectRow
+                label="Menu bar"
+                value={config.layerColors?.menu ?? 'white'}
+                options={layerColorOptions}
+                onChange={(v) => updateLayerColor('menu', v as MenuLayerColorChoice)}
+              />
+              <p className="text-[11px] leading-4 text-slate-400 pt-1">
+                Màu chữ tự tính theo APCA để đảm bảo dễ đọc.
+              </p>
+            </div>
           </ControlCard>
           <ControlCard title="Hiển thị">
             <ToggleRow

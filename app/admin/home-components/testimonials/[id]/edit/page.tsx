@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Loader2, Star, AlertTriangle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, Input, Label } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -20,50 +22,29 @@ import { TestimonialsForm } from '../../_components/TestimonialsForm';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { DEFAULT_TESTIMONIALS_CONFIG } from '../../_lib/constants';
 import {
-  buildTestimonialsWarningMessages,
   getTestimonialsValidationResult,
   resolveSecondaryForMode,
 } from '../../_lib/colors';
 import type {
   TestimonialsConfig,
+  TestimonialsDesktopColumns,
   TestimonialsItem,
-  TestimonialsPersistItem,
   TestimonialsStyle,
   TestimonialsBrandMode,
 } from '../../_types';
+import {
+  normalizeTestimonialsDesktopColumns,
+  normalizeTestimonialsItem,
+  normalizeTestimonialsStyle,
+  toTestimonialsPersistItem,
+} from '../../_types';
 
 const COMPONENT_TYPE = 'Testimonials';
-
-const normalizeStyle = (style: unknown): TestimonialsStyle => {
-  if (
-    style === 'cards'
-    || style === 'slider'
-    || style === 'masonry'
-    || style === 'quote'
-    || style === 'carousel'
-    || style === 'minimal'
-  ) {
-    return style;
-  }
-  return 'cards';
+const normalizeSplitOverlayOpacity = (value: unknown) => {
+  const opacity = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(opacity)) {return DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundOverlayOpacity ?? 62;}
+  return Math.max(0, Math.min(90, Math.round(opacity)));
 };
-
-const toUiItem = (item: TestimonialsPersistItem, idx: number): TestimonialsItem => ({
-  avatar: item.avatar || '',
-  content: item.content || '',
-  id: `testimonial-${idx + 1}`,
-  name: item.name || '',
-  rating: Number.isFinite(item.rating) ? Math.max(1, Math.min(5, item.rating)) : 5,
-  role: item.role || '',
-});
-
-const toPersistItem = (item: TestimonialsItem): TestimonialsPersistItem => ({
-  avatar: item.avatar,
-  content: item.content,
-  name: item.name,
-  rating: item.rating,
-  role: item.role,
-});
 
 export default function TestimonialsEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -81,10 +62,25 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
   const [active, setActive] = useState(true);
   const [items, setItems] = useState<TestimonialsItem[]>([]);
   const [style, setStyle] = useState<TestimonialsStyle>('cards');
+  const [desktopColumns, setDesktopColumns] = useState<TestimonialsDesktopColumns>(DEFAULT_TESTIMONIALS_CONFIG.desktopColumns ?? 3);
+  const [splitBackgroundImage, setSplitBackgroundImage] = useState(DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundImage ?? '');
+  const [splitBackgroundOverlayOpacity, setSplitBackgroundOverlayOpacity] = useState(DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundOverlayOpacity ?? 62);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
-  const [warningMessages, setWarningMessages] = useState<string[]>([]);
+
+  // Header state
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitleHeader, setShowTitleHeader] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [subtitle, setSubtitle] = useState('');
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+  const [headerExpanded, setHeaderExpanded] = useState(false);
 
   const resolvedSecondary = resolveSecondaryForMode(effectiveColors.primary, effectiveColors.secondary, brandMode);
 
@@ -101,19 +97,54 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
 
     const rawConfig = (component.config ?? {}) as Partial<TestimonialsConfig>;
     const loadedItems = Array.isArray(rawConfig.items)
-      ? rawConfig.items.map((item, idx) => toUiItem(item, idx))
-      : DEFAULT_TESTIMONIALS_CONFIG.items.map((item, idx) => toUiItem(item, idx));
-    const loadedStyle = normalizeStyle(rawConfig.style);
+      ? rawConfig.items.map((item, idx) => normalizeTestimonialsItem(item, idx))
+      : DEFAULT_TESTIMONIALS_CONFIG.items.map((item, idx) => normalizeTestimonialsItem(item, idx));
+    const loadedStyle = normalizeTestimonialsStyle(rawConfig.style);
+    const loadedDesktopColumns = normalizeTestimonialsDesktopColumns(rawConfig.desktopColumns ?? DEFAULT_TESTIMONIALS_CONFIG.desktopColumns);
+    const loadedSplitBackgroundImage = typeof rawConfig.splitBackgroundImage === 'string'
+      ? rawConfig.splitBackgroundImage
+      : DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundImage ?? '';
+    const loadedSplitBackgroundOverlayOpacity = normalizeSplitOverlayOpacity(rawConfig.splitBackgroundOverlayOpacity);
 
     setItems(loadedItems);
     setStyle(loadedStyle);
+    setDesktopColumns(loadedDesktopColumns);
+    setSplitBackgroundImage(loadedSplitBackgroundImage);
+    setSplitBackgroundOverlayOpacity(loadedSplitBackgroundOverlayOpacity);
+
+    // Load header config
+    const headerConfig = extractSectionHeaderConfig(rawConfig);
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitleHeader(headerConfig.showTitle ?? true);
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setSubtitle(headerConfig.subtitle ?? '');
+    setHeaderAlign(headerConfig.headerAlign ?? 'left');
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
 
     const snapshot = JSON.stringify({
       active: component.active,
       items: loadedItems,
       style: loadedStyle,
+      desktopColumns: loadedDesktopColumns,
+      splitBackgroundImage: loadedSplitBackgroundImage,
+      splitBackgroundOverlayOpacity: loadedSplitBackgroundOverlayOpacity,
       title: component.title,
       type: component.type,
+      // Header fields
+      hideHeader: headerConfig.hideHeader,
+      showTitle: headerConfig.showTitle,
+      showSubtitle: headerConfig.showSubtitle,
+      subtitle: headerConfig.subtitle,
+      headerAlign: headerConfig.headerAlign,
+      titleColorPrimary: headerConfig.titleColorPrimary,
+      subtitleAboveTitle: headerConfig.subtitleAboveTitle,
+      uppercaseText: headerConfig.uppercaseText,
+      showBadge: headerConfig.showBadge,
+      badgeText: headerConfig.badgeText,
     });
 
     setInitialSnapshot(snapshot);
@@ -127,8 +158,22 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
       active,
       items,
       style,
+      desktopColumns,
+      splitBackgroundImage,
+      splitBackgroundOverlayOpacity,
       title,
       type: component.type,
+      // Header fields
+      hideHeader,
+      showTitle: showTitleHeader,
+      showSubtitle,
+      subtitle,
+      headerAlign,
+      titleColorPrimary,
+      subtitleAboveTitle,
+      uppercaseText,
+      showBadge,
+      badgeText,
     });
     const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
     const customChanged = showCustomBlock
@@ -143,40 +188,52 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
       : false;
 
     setHasChanges(snapshot !== initialSnapshot || customChanged || customFontChanged);
-  }, [title, active, items, style, component, initialSnapshot, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock]);
+  }, [title, active, items, style, desktopColumns, splitBackgroundImage, splitBackgroundOverlayOpacity, component, initialSnapshot, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock, hideHeader, showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText]);
 
   useEffect(() => {
     if (!component || component.type !== 'Testimonials') {return;}
 
-    const validation = getTestimonialsValidationResult({
+    getTestimonialsValidationResult({
       mode: brandMode,
       primary: effectiveColors.primary,
       secondary: resolvedSecondary,
       style,
     });
 
-    setWarningMessages(buildTestimonialsWarningMessages({ mode: brandMode, validation }));
   }, [component, effectiveColors.primary, resolvedSecondary, brandMode, style]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isSubmitting || !hasChanges) {return;}
 
-    const validation = getTestimonialsValidationResult({
+    getTestimonialsValidationResult({
       mode: brandMode,
       primary: effectiveColors.primary,
       secondary: resolvedSecondary,
       style,
     });
-    setWarningMessages(buildTestimonialsWarningMessages({ mode: brandMode, validation }));
 
     setIsSubmitting(true);
     try {
       await updateMutation({
         active,
         config: {
-          items: items.map(toPersistItem),
+          items: items.map(toTestimonialsPersistItem),
           style,
+          desktopColumns,
+          splitBackgroundImage,
+          splitBackgroundOverlayOpacity,
+          // Header fields
+          hideHeader,
+          showTitle: showTitleHeader,
+          showSubtitle,
+          subtitle,
+          headerAlign,
+          titleColorPrimary,
+          subtitleAboveTitle,
+          uppercaseText,
+          showBadge,
+          badgeText,
         },
         id: id as Id<'homeComponents'>,
         title,
@@ -205,8 +262,22 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
         active,
         items,
         style,
+        desktopColumns,
+        splitBackgroundImage,
+        splitBackgroundOverlayOpacity,
         title,
         type: component?.type,
+        // Header fields
+        hideHeader,
+        showTitle: showTitleHeader,
+        showSubtitle,
+        subtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
       });
 
       setInitialSnapshot(snapshot);
@@ -256,68 +327,66 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
 
       <form onSubmit={handleSubmit}>
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Star size={20} />
-              Testimonials
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(event) => { setTitle(event.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5'
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
+          <CardContent className="pt-4 space-y-2">
+            <Label>Tên hiển thị <span className="text-red-500">*</span></Label>
+            <Input
+              value={title}
+              onChange={(event) => { setTitle(event.target.value); }}
+              required
+              placeholder="Nhập tiêu đề component..."
+            />
           </CardContent>
         </Card>
 
-        <TestimonialsForm items={items} setItems={setItems} />
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitleHeader}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitleHeader}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+        />
 
-        {warningMessages.length > 0 && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <div className="space-y-1">
-                {warningMessages.map((message, idx) => (
-                  <p key={`testimonials-warning-${idx}`}>{message}</p>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        <TestimonialsForm
+          items={items}
+          setItems={setItems}
+          defaultExpanded={false}
+          desktopColumns={desktopColumns}
+          onDesktopColumnsChange={setDesktopColumns}
+          selectedStyle={style}
+          splitBackgroundImage={splitBackgroundImage}
+          onSplitBackgroundImageChange={setSplitBackgroundImage}
+          splitBackgroundOverlayOpacity={splitBackgroundOverlayOpacity}
+          onSplitBackgroundOverlayOpacityChange={setSplitBackgroundOverlayOpacity}
+        />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
-          <div></div>
-          <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
-              <TypeColorOverrideCard
-                title="Màu custom cho Testimonials"
-                enabled={customState.enabled}
-                mode={customState.mode}
-                primary={customState.primary}
-                secondary={customState.secondary}
-                onEnabledChange={(next) => setCustomState((prev) => ({ ...prev, enabled: next }))}
+        <div className="space-y-4">
+          {showCustomBlock && (
+            <TypeColorOverrideCard
+              title="Màu custom cho Testimonials"
+              enabled={customState.enabled}
+              mode={customState.mode}
+              primary={customState.primary}
+              secondary={customState.secondary}
+              onEnabledChange={(next) => setCustomState((prev) => ({ ...prev, enabled: next }))}
               onModeChange={(next) => setCustomState((prev) => {
                 if (next === 'single') {
                   return { ...prev, mode: next, secondary: prev.primary };
@@ -336,20 +405,25 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
                 ...prev,
                 secondary: prev.mode === 'single' ? prev.primary : value,
               }))}
-              />
-            )}
-            {showFontCustomBlock && (
-              <TypeFontOverrideCard
-                title="Font custom cho Testimonials"
-                enabled={customFontState.enabled}
-                fontKey={customFontState.fontKey}
-                compact
-                toggleLabel="Custom"
-                fontLabel="Font"
-                onEnabledChange={(next) => setCustomFontState((prev) => ({ ...prev, enabled: next }))}
-                onFontChange={(next) => setCustomFontState((prev) => ({ ...prev, fontKey: next }))}
-              />
-            )}
+            />
+          )}
+          {showFontCustomBlock && (
+            <TypeFontOverrideCard
+              title="Font custom cho Testimonials"
+              enabled={customFontState.enabled}
+              fontKey={customFontState.fontKey}
+              compact
+              toggleLabel="Custom"
+              fontLabel="Font"
+              onEnabledChange={(next) => setCustomFontState((prev) => ({ ...prev, enabled: next }))}
+              onFontChange={(next) => setCustomFontState((prev) => ({ ...prev, fontKey: next }))}
+            />
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
+          <div></div>
+          <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
             <TestimonialsPreview
               items={items}
               brandColor={effectiveColors.primary}
@@ -359,6 +433,20 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
               onStyleChange={setStyle}
               fontStyle={fontStyle}
               fontClassName="font-active"
+              title={title}
+              subtitle={subtitle}
+              hideHeader={hideHeader}
+              showTitle={showTitleHeader}
+              showSubtitle={showSubtitle}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              showBadge={showBadge}
+              badgeText={badgeText}
+              desktopColumns={desktopColumns}
+              splitBackgroundImage={splitBackgroundImage}
+              splitBackgroundOverlayOpacity={splitBackgroundOverlayOpacity}
             />
             {brandMode === 'dual' && (
               <ColorInfoPanel brandColor={effectiveColors.primary} secondary={resolvedSecondary} />
@@ -371,6 +459,8 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

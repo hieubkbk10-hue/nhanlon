@@ -326,6 +326,7 @@ export const getSpeedDialColorTokens = ({
       stack: secondaryResolved,
       dock: secondaryResolved,
       minimal: neutralSurface,
+      'builder-bar': '#9b2c3b',
     },
     actionStyleText: {
       fab: getAPCATextColor(secondaryResolved, 14, 600),
@@ -334,6 +335,7 @@ export const getSpeedDialColorTokens = ({
       stack: getAPCATextColor(secondaryResolved, 14, 600),
       dock: getAPCATextColor(secondaryResolved, 14, 600),
       minimal: getAPCATextColor(neutralSurface, 14, 600),
+      'builder-bar': '#ffffff',
     },
     actionStyleBorder: {
       fab: neutralBorder,
@@ -342,6 +344,7 @@ export const getSpeedDialColorTokens = ({
       stack: neutralBorder,
       dock: neutralBorder,
       minimal: neutralBorder,
+      'builder-bar': 'rgba(236,170,77,0.5)',
     },
     labelPillBg: tooltipBg,
     labelPillText: tooltipText,

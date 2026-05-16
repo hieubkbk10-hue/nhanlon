@@ -4,9 +4,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { Card, CardContent, CardHeader, CardTitle, Label } from '@/app/admin/components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '@/app/admin/components/ui';
 import { getContactMapDataFromSettings } from '@/lib/contact/getContactMapData';
 import { ToggleSwitch } from '@/components/modules/shared';
+import { ChevronDown } from 'lucide-react';
 import type { ContactConfigState } from '../_types';
 import { validateContactConfig } from '../_lib/validation';
 import { FormFieldsSelector } from './FormFieldsSelector';
@@ -18,6 +19,15 @@ interface ConfigEditorProps {
   value: ContactConfigState;
   onChange: (config: ContactConfigState) => void;
   title?: string;
+  // Toggle states
+  contactDataExpanded?: boolean;
+  formExpanded?: boolean;
+  socialExpanded?: boolean;
+  labelsExpanded?: boolean;
+  onContactDataExpandedChange?: (value: boolean) => void;
+  onFormExpandedChange?: (value: boolean) => void;
+  onSocialExpandedChange?: (value: boolean) => void;
+  onLabelsExpandedChange?: (value: boolean) => void;
 }
 
 interface ValidationErrors {
@@ -26,7 +36,19 @@ interface ValidationErrors {
   socialLinks?: Record<number, { url?: string }>;
 }
 
-export function ConfigEditor({ value, onChange, title }: ConfigEditorProps) {
+export function ConfigEditor({ 
+  value, 
+  onChange, 
+  title,
+  contactDataExpanded = true,
+  formExpanded = true,
+  socialExpanded = true,
+  labelsExpanded = true,
+  onContactDataExpandedChange,
+  onFormExpandedChange,
+  onSocialExpandedChange,
+  onLabelsExpandedChange,
+}: ConfigEditorProps) {
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const contactSettings = useQuery(api.settings.listByGroup, { group: 'contact' });
   const socialSettings = useQuery(api.settings.listByGroup, { group: 'social' });
@@ -74,10 +96,25 @@ export function ConfigEditor({ value, onChange, title }: ConfigEditorProps) {
 
       <Card>
         <CardHeader className="py-3 space-y-1">
-          <CardTitle className="text-base">Dữ liệu liên hệ</CardTitle>
-          <p className="text-xs text-slate-500">Giá trị hiển thị trên preview/site.</p>
+          <div 
+            className="cursor-pointer flex items-center justify-between"
+            onClick={() => onContactDataExpandedChange?.(!contactDataExpanded)}
+          >
+            <div className="space-y-1">
+              <CardTitle className="text-base">Dữ liệu liên hệ</CardTitle>
+              <p className="text-xs text-slate-500">Giá trị hiển thị trên preview/site.</p>
+            </div>
+            <ChevronDown 
+              size={16} 
+              className={cn(
+                "transition-transform duration-200",
+                contactDataExpanded ? "rotate-180" : ""
+              )}
+            />
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        {contactDataExpanded && (
+          <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Hiển thị bản đồ
@@ -121,13 +158,27 @@ export function ConfigEditor({ value, onChange, title }: ConfigEditorProps) {
             validationErrors={validationErrors.contactItems}
           />
         </CardContent>
+        )}
       </Card>
 
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-base">Form liên hệ</CardTitle>
+          <div 
+            className="cursor-pointer flex items-center justify-between"
+            onClick={() => onFormExpandedChange?.(!formExpanded)}
+          >
+            <CardTitle className="text-base">Form liên hệ</CardTitle>
+            <ChevronDown 
+              size={16} 
+              className={cn(
+                "transition-transform duration-200",
+                formExpanded ? "rotate-180" : ""
+              )}
+            />
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        {formExpanded && (
+          <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Bật form liên hệ
@@ -218,13 +269,27 @@ export function ConfigEditor({ value, onChange, title }: ConfigEditorProps) {
               </p>
             )}
         </CardContent>
+        )}
       </Card>
 
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-base">Mạng xã hội</CardTitle>
+          <div 
+            className="cursor-pointer flex items-center justify-between"
+            onClick={() => onSocialExpandedChange?.(!socialExpanded)}
+          >
+            <CardTitle className="text-base">Mạng xã hội</CardTitle>
+            <ChevronDown 
+              size={16} 
+              className={cn(
+                "transition-transform duration-200",
+                socialExpanded ? "rotate-180" : ""
+              )}
+            />
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        {socialExpanded && (
+          <CardContent className="space-y-4">
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -243,20 +308,37 @@ export function ConfigEditor({ value, onChange, title }: ConfigEditorProps) {
             validationErrors={validationErrors.socialLinks}
           />
         </CardContent>
+        )}
       </Card>
 
       <Card>
         <CardHeader className="py-3 space-y-1">
-          <CardTitle className="text-base">Nhãn hiển thị</CardTitle>
-          <p className="text-xs text-slate-500">Chỉ đổi chữ hiển thị, không đổi dữ liệu liên hệ.</p>
+          <div 
+            className="cursor-pointer flex items-center justify-between"
+            onClick={() => onLabelsExpandedChange?.(!labelsExpanded)}
+          >
+            <div className="space-y-1">
+              <CardTitle className="text-base">Nhãn hiển thị</CardTitle>
+              <p className="text-xs text-slate-500">Chỉ đổi chữ hiển thị, không đổi dữ liệu liên hệ.</p>
+            </div>
+            <ChevronDown 
+              size={16} 
+              className={cn(
+                "transition-transform duration-200",
+                labelsExpanded ? "rotate-180" : ""
+              )}
+            />
+          </div>
         </CardHeader>
-        <CardContent>
+        {labelsExpanded && (
+          <CardContent>
           <DynamicTextFields
             style={value.style}
             texts={value.texts || {}}
             onChange={updateTexts}
           />
         </CardContent>
+        )}
       </Card>
     </div>
   );

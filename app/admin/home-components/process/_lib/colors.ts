@@ -37,7 +37,7 @@ const toRgbTuple = (value: string, fallback: string): [number, number, number] |
   return [r, g, b];
 };
 
-const getAPCALc = (text: string, background: string) => {
+export const getAPCALc = (text: string, background: string) => {
   const textRgb = toRgbTuple(text, '#ffffff');
   const backgroundRgb = toRgbTuple(background, '#0f172a');
 

@@ -19,6 +19,9 @@ import { DigitalCredentialsForm } from '@/components/orders/DigitalCredentialsFo
 import { stripHtml, truncateText } from '@/lib/seo';
 import { ProductCategoryCombobox } from '@/app/admin/products/components/ProductCategoryCombobox';
 import { QuickCreateCategoryModal } from '@/app/admin/products/components/QuickCreateCategoryModal';
+import { resolveProductImageAspectRatio } from '@/lib/products/image-aspect-ratio';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
+import { AiEntityImportDialog, type AiEntityImportPayload } from '@/app/admin/components/AiEntityImportDialog';
 
 const MODULE_KEY = 'products';
 
@@ -58,6 +61,7 @@ function ProductCreateContent() {
   const [status, setStatus] = useState<'Draft' | 'Active' | 'Archived'>('Draft');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editorResetKey, setEditorResetKey] = useState(0);
   const [hasVariants, setHasVariants] = useState(false);
   const [selectedOptionIds, setSelectedOptionIds] = useState<Id<'productOptions'>[]>([]);
   const [productType, setProductType] = useState<'physical' | 'digital'>('physical');
@@ -123,6 +127,10 @@ function ProductCreateContent() {
     const setting = settingsData?.find(s => s.settingKey === 'enableImageCrop');
     return Boolean(setting?.value);
   }, [settingsData]);
+  const defaultImageAspectRatio = useMemo(() => {
+    const setting = settingsData?.find(s => s.settingKey === 'defaultImageAspectRatio');
+    return resolveProductImageAspectRatio(setting?.value);
+  }, [settingsData]);
 
   const isAffiliateMode = saleMode === 'affiliate';
   const isPriceRequired = saleMode === 'cart';
@@ -186,15 +194,46 @@ function ProductCreateContent() {
   const priceHelper = formatNumberHelper(price);
   const salePriceHelper = formatNumberHelper(salePrice);
 
+  const generateSlugFromTitle = (value: string) => value.toLowerCase()
+    .normalize("NFD").replaceAll(/[\u0300-\u036F]/g, "")
+    .replaceAll(/[đĐ]/g, "d")
+    .replaceAll(/[^a-z0-9\s]/g, '')
+    .replaceAll(/\s+/g, '-');
+
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setName(val);
-    const generatedSlug = val.toLowerCase()
-      .normalize("NFD").replaceAll(/[\u0300-\u036F]/g, "")
-      .replaceAll(/[đĐ]/g, "d")
-      .replaceAll(/[^a-z0-9\s]/g, '')
-      .replaceAll(/\s+/g, '-');
-    setSlug(generatedSlug);
+    setSlug(generateSlugFromTitle(val));
+  };
+
+  const handleApplyAiProduct = (item: AiEntityImportPayload) => {
+    const nextName = item.name?.trim() || item.title?.trim() || '';
+    if (!nextName) {return;}
+
+    setName(nextName);
+    setSlug(item.slug?.trim() || generateSlugFromTitle(nextName));
+    if (item.sku) {setSku(item.sku);}
+    if (typeof item.price === 'number') {setPrice(String(item.price));}
+    if (typeof item.salePrice === 'number') {setSalePrice(String(item.salePrice));}
+    if (typeof item.stock === 'number') {setStock(String(item.stock));}
+    const nextDescription = item.description || item.content || item.excerpt || '';
+    setDescription(nextDescription);
+    if (item.htmlRender) {
+      setRenderType('html');
+      setHtmlRender(item.htmlRender);
+      setMarkdownRender('');
+    } else if (item.markdownRender) {
+      setRenderType('markdown');
+      setMarkdownRender(item.markdownRender);
+      setHtmlRender('');
+    }
+    setMetaTitle(item.metaTitle || truncateText(nextName, 60));
+    setMetaDescription(item.metaDescription || truncateText(stripHtml(nextDescription), 160));
+    if (item.image) {
+      setImage(item.image);
+      setImageStorageId(undefined);
+    }
+    setEditorResetKey((prev) => prev + 1);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -320,7 +359,7 @@ function ProductCreateContent() {
               {enabledFields.has('description') && (
                 <div className="space-y-2">
                   <Label>Mô tả sản phẩm</Label>
-                  <LexicalEditor onChange={setDescription} />
+                    <LexicalEditor onChange={setDescription} initialContent={description} resetKey={editorResetKey} />
                 </div>
               )}
             </CardContent>
@@ -624,7 +663,8 @@ function ProductCreateContent() {
                 onStorageIdChange={setImageStorageId}
                 folder="products"
                 naming={{ entityName: slug.trim() || 'product', style: 'slug-index', index: 1 }}
-                enableSquareCrop={enableImageCrop}
+                enableCrop={enableImageCrop}
+                cropAspectRatio={defaultImageAspectRatio}
               />
             </CardContent>
           </Card>
@@ -644,7 +684,9 @@ function ProductCreateContent() {
                   minItems={0}
                   maxItems={20}
                   aspectRatio="square"
-                  enableSquareCrop={enableImageCrop}
+                  enableCrop={enableImageCrop}
+                  cropAspectRatio={defaultImageAspectRatio}
+                  imageAspectRatio={defaultImageAspectRatio}
                   columns={2}
                   addButtonText="Thêm ảnh"
                   emptyText="Chưa có ảnh trong thư viện"
@@ -656,16 +698,24 @@ function ProductCreateContent() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 lg:left-[280px] right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center z-10">
-        <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/products'); }}>Hủy bỏ</Button>
-        <div className="flex gap-2">
-          <Button type="button" variant="secondary" onClick={() =>{  setStatus('Draft'); }}>Lưu nháp</Button>
-          <Button type="submit" variant="accent" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
-            Tạo sản phẩm
-          </Button>
-        </div>
-      </div>
+      <HomeComponentStickyFooter
+        isSubmitting={isSubmitting}
+        submitLabel="Tạo sản phẩm"
+        onCancel={() =>{  router.push('/admin/products'); }}
+        disableSave={isSubmitting}
+      >
+        <>
+          <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/products'); }}>Hủy bỏ</Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <AiEntityImportDialog kind="product" enabledFields={enabledFields} onApply={handleApplyAiProduct} />
+            <Button type="button" variant="secondary" onClick={() =>{  setStatus('Draft'); }}>Lưu nháp</Button>
+            <Button type="submit" variant="accent" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
+              Tạo sản phẩm
+            </Button>
+          </div>
+        </>
+      </HomeComponentStickyFooter>
     </form>
     </>
   );

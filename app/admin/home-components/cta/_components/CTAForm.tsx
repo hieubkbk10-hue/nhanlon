@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../components/ui';
+import { AiCtaImport } from './AiCtaImport';
 import type { CTAConfig } from '../_types';
 
 export const CTAForm = ({
@@ -12,7 +13,10 @@ export const CTAForm = ({
   onChange: (config: CTAConfig) => void;
 }) => (
   <Card className="mb-6">
-    <CardHeader><CardTitle className="text-base">Nội dung CTA</CardTitle></CardHeader>
+    <CardHeader className="flex flex-row items-center justify-between">
+      <CardTitle className="text-base">Nội dung CTA</CardTitle>
+      <AiCtaImport onApply={(patch) => onChange({ ...config, ...patch })} />
+    </CardHeader>
     <CardContent className="space-y-4">
       <div className="space-y-2">
         <Label>Badge (tùy chọn)</Label>

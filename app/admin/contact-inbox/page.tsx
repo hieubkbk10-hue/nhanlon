@@ -115,7 +115,7 @@ function ContactInboxContent() {
   );
 
   const isLoading = shouldLoadInbox && (inquiries === undefined || stats === undefined || totalCountData === undefined);
-  const safeInquiries = inquiries ?? [];
+  const safeInquiries = useMemo(() => inquiries ?? [], [inquiries]);
   const safeStats = stats ?? { total: 0, new: 0, in_progress: 0, resolved: 0, spam: 0 };
   const totalCount = totalCountData?.count ?? 0;
   const totalPages = totalCount ? Math.ceil(totalCount / resolvedPageSize) : 1;

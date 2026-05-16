@@ -3,6 +3,8 @@
 import React from 'react';
 import { Play, Video as VideoIcon } from 'lucide-react';
 import { cn } from '@/app/admin/components/ui';
+import { SectionHeader } from '../../_shared/components/SectionHeader';
+import { getPreviewAwareClass } from '../../_shared/lib/previewResponsive';
 import type { VideoColorTokens } from '../_lib/colors';
 import { getVideoInfo, getYouTubeThumbnail } from '../_lib/colors';
 import type { VideoConfig, VideoProvider, VideoStyle } from '../_types';
@@ -17,6 +19,18 @@ interface VideoSectionSharedProps {
   context: 'preview' | 'site';
   isPreview?: boolean;
   device?: VideoSectionDevice;
+  // Header config props (Pattern B - caller-driven)
+  brandColor?: string;
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  showSubtitle?: boolean;
+  subtitle?: string;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }
 
 const isExternalUrl = (url: string) => /^https?:\/\//i.test(url);
@@ -44,52 +58,7 @@ const toText = (value: unknown, fallback = '') => {
   return text || fallback;
 };
 
-const getCardTextClass = (device: VideoSectionDevice, compact = false) => {
-  if (compact || device === 'mobile') {return 'text-sm';}
-  if (device === 'tablet') {return 'text-[15px]';}
-  return 'text-base';
-};
-
-const getHeadingClass = (device: VideoSectionDevice, small = false) => {
-  if (small || device === 'mobile') {return 'text-xl';}
-  if (device === 'tablet') {return 'text-2xl';}
-  return 'text-3xl';
-};
-
-const SectionHeading = ({
-  heading,
-  description,
-  tokens,
-  device,
-  centered = false,
-  useSecondaryForDescription = false,
-}: {
-  heading: string;
-  description: string;
-  tokens: VideoColorTokens;
-  device: VideoSectionDevice;
-  centered?: boolean;
-  useSecondaryForDescription?: boolean;
-}) => {
-  if (!heading && !description) {return null;}
-
-  const descriptionColor = useSecondaryForDescription ? tokens.secondaryCtaText : tokens.mutedText;
-
-  return (
-    <div className={cn('space-y-2', centered ? 'text-center mx-auto max-w-3xl' : 'text-left')}>
-      {heading ? (
-        <h2 className={cn('font-bold tracking-tight', getHeadingClass(device))} style={{ color: tokens.heading }}>
-          {heading}
-        </h2>
-      ) : null}
-      {description ? (
-        <p className={cn('leading-relaxed', getCardTextClass(device))} style={{ color: descriptionColor }}>
-          {description}
-        </p>
-      ) : null}
-    </div>
-  );
-};
+// (SectionHeading, getCardTextClass, getHeadingClass removed — all layouts use shared SectionHeader)
 
 function VideoSurface({
   videoUrl,
@@ -244,6 +213,18 @@ export function VideoSectionShared({
   context,
   isPreview = false,
   device = 'desktop',
+  // Header config props
+  brandColor,
+  hideHeader: hideHeaderProp,
+  showTitle: showTitleProp,
+  showSubtitle: showSubtitleProp,
+  subtitle: subtitleProp,
+  headerAlign: headerAlignProp,
+  titleColorPrimary: titleColorPrimaryProp,
+  subtitleAboveTitle: subtitleAboveTitleProp,
+  uppercaseText: uppercaseTextProp,
+  showBadge: showBadgeProp,
+  badgeText: badgeTextProp,
 }: VideoSectionSharedProps) {
   const [isPlaying, setIsPlaying] = React.useState(false);
 
@@ -260,7 +241,7 @@ export function VideoSectionShared({
 
   const heading = toText(config.heading, toText(title));
   const description = toText(config.description);
-  const badge = toText(config.badge);
+  const _badge = toText(config.badge);
   const buttonText = toText(config.buttonText);
   const buttonLink = toSafeHref(config.buttonLink);
   const safeVideoUrl = toText(config.videoUrl);
@@ -269,20 +250,25 @@ export function VideoSectionShared({
   const thumbnail = toText(config.thumbnailUrl) || fallbackThumbnail;
   const provider = info.type;
 
-  const renderBadge = () => (
-    badge ? (
-      <span
-        className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide"
-        style={{
-          backgroundColor: tokens.badgeBackground,
-          color: tokens.badgeText,
-          borderColor: tokens.badgeBorder,
-        }}
-      >
-        {badge}
-      </span>
-    ) : null
+  // Shared SectionHeader for standard layout styles
+  const sharedHeader = (
+    <SectionHeader
+      title={heading}
+      subtitle={subtitleProp ?? description}
+      badgeText={badgeTextProp}
+      hideHeader={hideHeaderProp}
+      showTitle={showTitleProp}
+      showSubtitle={showSubtitleProp}
+      showBadge={showBadgeProp}
+      headerAlign={headerAlignProp}
+      titleColorPrimary={titleColorPrimaryProp}
+      subtitleAboveTitle={subtitleAboveTitleProp}
+      uppercaseText={uppercaseTextProp}
+      brandColor={brandColor ?? tokens.primary}
+    />
   );
+
+  // renderBadge removed — badge handled by sharedHeader
 
   const renderButton = (compact = false) => (
     buttonText ? (
@@ -312,17 +298,30 @@ export function VideoSectionShared({
   );
 
   const ContainerTag = context === 'site' ? 'section' : 'div';
+  const videoTitle = heading || title || 'Video';
 
+  const splitGridClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'grid grid-cols-1 items-center gap-6',
+      tablet: 'grid grid-cols-2 items-center gap-8',
+      desktop: 'grid grid-cols-2 items-center gap-10',
+    },
+    site: 'grid grid-cols-1 items-center gap-6 md:grid-cols-2 md:gap-10',
+  });
+
+  /* ── Centered ──────────────────────────────────────────── */
   if (style === 'centered') {
     return (
-      <ContainerTag className={cn('px-4', isPreview ? 'py-8' : 'py-12 md:py-16')} style={{ backgroundColor: tokens.neutralBackground }}>
-        <div className="mx-auto max-w-5xl space-y-6">
-          <SectionHeading heading={heading} description={description} tokens={tokens} device={device} centered useSecondaryForDescription />
+      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-5xl space-y-5">
+          {sharedHeader}
           <VideoSurface
             videoUrl={safeVideoUrl}
             thumbnailUrl={thumbnail}
             provider={provider}
-            title={heading || title || 'Video'}
+            title={videoTitle}
             tokens={tokens}
             isPlaying={isPlaying}
             onPlay={() => setIsPlaying(true)}
@@ -332,129 +331,98 @@ export function VideoSectionShared({
     );
   }
 
+  /* ── Split ─────────────────────────────────────────────── */
   if (style === 'split') {
     return (
-      <ContainerTag className={cn('px-4', isPreview ? 'py-8' : 'py-12 md:py-16')} style={{ backgroundColor: tokens.neutralBackground }}>
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-6 md:grid-cols-2 md:gap-10">
-          <VideoSurface
-            videoUrl={safeVideoUrl}
-            thumbnailUrl={thumbnail}
-            provider={provider}
-            title={heading || title || 'Video'}
-            tokens={tokens}
-            isPlaying={isPlaying}
-            onPlay={() => setIsPlaying(true)}
-            playSize="sm"
-          />
-          <div className="space-y-4">
-            {renderBadge()}
-            <SectionHeading heading={heading} description={description} tokens={tokens} device={device} useSecondaryForDescription />
-            {renderButton()}
+      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-6xl">
+          <div className={splitGridClassName}>
+            <VideoSurface
+              videoUrl={safeVideoUrl}
+              thumbnailUrl={thumbnail}
+              provider={provider}
+              title={videoTitle}
+              tokens={tokens}
+              isPlaying={isPlaying}
+              onPlay={() => setIsPlaying(true)}
+              playSize="sm"
+            />
+            <div className="flex flex-col justify-center space-y-4">
+              {sharedHeader}
+              {renderButton()}
+            </div>
           </div>
         </div>
       </ContainerTag>
     );
   }
 
+  /* ── Fullwidth ─────────────────────────────────────────── */
   if (style === 'fullwidth') {
     return (
-      <ContainerTag className="relative">
-        <div className={cn('relative overflow-hidden', isPreview ? 'aspect-[16/9]' : 'aspect-[21/9] min-h-[360px]')}>
-          {!isPlaying ? (
-            <>
-              {thumbnail ? (
-                <img src={thumbnail} alt={heading || title || 'Video'} className="absolute inset-0 h-full w-full object-cover" />
-              ) : (
-                <div className="absolute inset-0" style={{ backgroundColor: tokens.videoPlaceholder }} />
-              )}
-              <div className="absolute inset-0" style={{ backgroundColor: tokens.sectionOverlay }} />
-              <div className="relative z-10 mx-auto flex h-full max-w-6xl items-center px-4 py-8">
-                <div className="max-w-2xl space-y-4">
-                  {renderBadge()}
-                  {heading ? <h2 className={cn('font-bold text-white', getHeadingClass(device))}>{heading}</h2> : null}
-                  {description ? (
-                    <p className={cn('leading-relaxed', getCardTextClass(device))} style={{ color: tokens.secondaryTextOnDark }}>
-                      {description}
-                    </p>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setIsPlaying(true)}
-                    className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors"
-                    style={{ 
-                      backgroundColor: tokens.playButtonBackground, 
-                      color: tokens.playButtonText,
-                      '--hover-bg': tokens.playButtonHover,
-                    } as React.CSSProperties}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = tokens.playButtonHover;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = tokens.playButtonBackground;
-                    }}
-                  >
-                    <Play className="h-4 w-4" fill="currentColor" />
-                    {buttonText || 'Xem video'}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <VideoEmbed videoUrl={safeVideoUrl} provider={provider} title={heading || title || 'Video'} />
-          )}
-        </div>
-      </ContainerTag>
-    );
-  }
-
-  if (style === 'cinema') {
-    return (
-      <ContainerTag className={cn('px-4', isPreview ? 'py-8' : 'py-12 md:py-16')} style={{ backgroundColor: tokens.frameBackground }}>
-        <div className="mx-auto max-w-6xl space-y-6">
-          <div className="space-y-3 text-center">
-            {renderBadge()}
-            {heading ? <h2 className={cn('font-bold text-white', getHeadingClass(device))}>{heading}</h2> : null}
-            {description ? (
-              <p className={cn('mx-auto max-w-3xl leading-relaxed', getCardTextClass(device))} style={{ color: tokens.secondaryTextOnDark }}>
-                {description}
-              </p>
-            ) : null}
-          </div>
+      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-7xl space-y-5">
+          {sharedHeader}
           <VideoSurface
             videoUrl={safeVideoUrl}
             thumbnailUrl={thumbnail}
             provider={provider}
-            title={heading || title || 'Video'}
+            title={videoTitle}
             tokens={tokens}
             isPlaying={isPlaying}
             onPlay={() => setIsPlaying(true)}
-            ratioClass="aspect-[21/9]"
-            roundedClass="rounded-lg"
+            ratioClass={isPreview ? 'aspect-video' : 'aspect-video md:aspect-[21/9]'}
           />
-          {renderButton() ? <div className="text-center">{renderButton()}</div> : null}
+          {buttonText ? <div>{renderButton()}</div> : null}
         </div>
       </ContainerTag>
     );
   }
 
+  /* ── Cinema ────────────────────────────────────────────── */
+  if (style === 'cinema') {
+    return (
+      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-6xl space-y-5">
+          {sharedHeader}
+          <div className="rounded-2xl p-1" style={{ backgroundColor: tokens.frameBackground }}>
+            <VideoSurface
+              videoUrl={safeVideoUrl}
+              thumbnailUrl={thumbnail}
+              provider={provider}
+              title={videoTitle}
+              tokens={tokens}
+              isPlaying={isPlaying}
+              onPlay={() => setIsPlaying(true)}
+              ratioClass="aspect-[21/9]"
+              roundedClass="rounded-xl"
+            />
+          </div>
+          {buttonText ? <div className="text-center">{renderButton()}</div> : null}
+        </div>
+      </ContainerTag>
+    );
+  }
+
+  /* ── Minimal ───────────────────────────────────────────── */
   if (style === 'minimal') {
     return (
-      <ContainerTag className={cn('px-4', isPreview ? 'py-8' : 'py-12 md:py-16')} style={{ backgroundColor: tokens.neutralBackground }}>
-        <div className="mx-auto max-w-5xl">
+      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-5xl space-y-5">
+          {sharedHeader}
           <div className="overflow-hidden rounded-2xl border" style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}>
             <VideoSurface
               videoUrl={safeVideoUrl}
               thumbnailUrl={thumbnail}
               provider={provider}
-              title={heading || title || 'Video'}
+              title={videoTitle}
               tokens={tokens}
               isPlaying={isPlaying}
               onPlay={() => setIsPlaying(true)}
+              roundedClass="rounded-none"
             />
-            {(heading || description || badge || buttonText) ? (
-              <div className="space-y-3 border-t p-4 md:p-6" style={{ borderColor: tokens.cardBorder }}>
-                {renderBadge()}
-                <SectionHeading heading={heading} description={description} tokens={tokens} device={device} useSecondaryForDescription />
+            {buttonText ? (
+              <div className="border-t px-4 py-3" style={{ borderColor: tokens.cardBorder }}>
                 {renderButton(true)}
               </div>
             ) : null}
@@ -464,49 +432,25 @@ export function VideoSectionShared({
     );
   }
 
+  /* ── Parallax (default) ────────────────────────────────── */
   return (
-    <ContainerTag className="relative">
-      <div className={cn('relative overflow-hidden', isPreview ? 'min-h-[320px]' : 'min-h-[420px] md:min-h-[500px]')}>
-        {!isPlaying ? (
-          <>
-            {thumbnail ? (
-              <img src={thumbnail} alt={heading || title || 'Video'} className="absolute inset-0 h-full w-full object-cover" />
-            ) : (
-              <div className="absolute inset-0" style={{ backgroundColor: tokens.videoPlaceholder }} />
-            )}
-            <div className="absolute inset-0" style={{ backgroundColor: tokens.sectionOverlay }} />
-            <div className={cn('absolute inset-x-4 z-10', isPreview ? 'bottom-4' : 'bottom-6 md:bottom-10')}>
-              <div className="mx-auto max-w-2xl rounded-xl border p-4 md:p-6" style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}>
-                <div className="space-y-3">
-                  {renderBadge()}
-                  {heading ? <h2 className={cn('font-bold', getHeadingClass(device, true))} style={{ color: tokens.heading }}>{heading}</h2> : null}
-                  {description ? <p className={cn(getCardTextClass(device, true))} style={{ color: tokens.secondaryCtaText }}>{description}</p> : null}
-                  <button
-                    type="button"
-                    onClick={() => setIsPlaying(true)}
-                    className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-                    style={{ 
-                      backgroundColor: tokens.playButtonBackground, 
-                      color: tokens.playButtonText,
-                      '--hover-bg': tokens.playButtonHover,
-                    } as React.CSSProperties}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = tokens.playButtonHover;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = tokens.playButtonBackground;
-                    }}
-                  >
-                    <Play className="h-4 w-4" fill="currentColor" />
-                    {buttonText || 'Xem video'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <VideoEmbed videoUrl={safeVideoUrl} provider={provider} title={heading || title || 'Video'} />
-        )}
+    <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+      <div className="mx-auto max-w-7xl space-y-5">
+        {sharedHeader}
+        <div className="relative overflow-hidden rounded-2xl shadow-lg">
+          <VideoSurface
+            videoUrl={safeVideoUrl}
+            thumbnailUrl={thumbnail}
+            provider={provider}
+            title={videoTitle}
+            tokens={tokens}
+            isPlaying={isPlaying}
+            onPlay={() => setIsPlaying(true)}
+            ratioClass={isPreview ? 'aspect-video' : 'aspect-video md:aspect-[2/1]'}
+            roundedClass="rounded-none"
+          />
+        </div>
+        {buttonText ? <div>{renderButton()}</div> : null}
       </div>
     </ContainerTag>
   );

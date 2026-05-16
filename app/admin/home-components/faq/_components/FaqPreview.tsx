@@ -2,8 +2,10 @@
 
 import React from 'react';
 import { AlertTriangle, Eye } from 'lucide-react';
+import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { SectionHeader } from '../../_shared/components/SectionHeader';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 import { FAQ_STYLES } from '../_lib/constants';
 import {
@@ -23,6 +25,7 @@ const DESCRIPTION_FONT_SIZE: Record<FaqStyle, number> = {
   minimal: 16,
   timeline: 14,
   tabbed: 16,
+  'wine-list': 16,
 };
 
 export const FaqPreview = ({
@@ -36,6 +39,16 @@ export const FaqPreview = ({
   title,
   fontStyle,
   fontClassName,
+  hideHeader,
+  showTitle,
+  subtitle,
+  showSubtitle,
+  headerAlign,
+  titleColorPrimary,
+  subtitleAboveTitle,
+  uppercaseText,
+  showBadge,
+  badgeText,
 }: {
   items: FaqItem[];
   brandColor: string;
@@ -47,10 +60,25 @@ export const FaqPreview = ({
   title?: string;
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  subtitle?: string;
+  showSubtitle?: boolean;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }) => {
   const { device, setDevice } = usePreviewDevice();
   const style = selectedStyle;
   const maxVisible = device === 'mobile' ? 4 : 6;
+  const hasSharedHeader = !hideHeader && (
+    (showTitle && typeof title === 'string' && title.trim().length > 0)
+    || (showSubtitle && typeof subtitle === 'string' && subtitle.trim().length > 0)
+    || (showBadge && typeof badgeText === 'string' && badgeText.trim().length > 0)
+  );
 
   const normalizedPrimary = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(brandColor.trim())
     ? brandColor.trim()
@@ -110,15 +138,33 @@ export const FaqPreview = ({
         fontClassName={fontClassName}
       >
         <BrowserFrame url="yoursite.com/faq">
-          <FaqSectionShared
-            items={items}
-            title={title}
-            style={style}
-            config={config}
-            tokens={tokens}
-            context="preview"
-            maxVisible={maxVisible}
-          />
+          <div className="container mx-auto px-4">
+            <SectionHeader
+              title={title}
+              subtitle={subtitle}
+              badgeText={badgeText}
+              hideHeader={hideHeader}
+              showTitle={showTitle}
+              showSubtitle={showSubtitle}
+              showBadge={showBadge}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              brandColor={brandColor}
+            />
+            <FaqSectionShared
+              items={items}
+              title={title}
+              style={style}
+              config={config}
+              tokens={tokens}
+              context="preview"
+              maxVisible={maxVisible}
+              device={device}
+              suppressInternalHeader={hasSharedHeader}
+            />
+          </div>
         </BrowserFrame>
       </PreviewWrapper>
 
@@ -167,6 +213,15 @@ export const FaqPreview = ({
           )}
         </div>
       </div>
+
+      {mode === 'dual' && (
+        <ColorInfoPanel
+          compact
+          brandColor={normalizedPrimary}
+          secondary={resolvedSecondary}
+          description="Màu phụ đang được dùng cho tab, badge, accent và trạng thái active trong từng layout FAQ."
+        />
+      )}
     </>
   );
 };

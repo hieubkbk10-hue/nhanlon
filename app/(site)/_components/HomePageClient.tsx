@@ -1,28 +1,106 @@
 'use client';
 
-import { ComponentRenderer } from '@/components/site/ComponentRenderer';
+import { HomeComponentRenderer } from '@/components/site/home/HomeComponentRenderer';
 import { HomePageLoading } from '@/components/site/loading/HomePageLoading';
 import { api } from '@/convex/_generated/api';
 import type { Doc } from '@/convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
+import Link from 'next/link';
 import React, { useEffect, useRef, useState } from 'react';
 
 const EMPTY_COMPONENTS_COUNT = 0;
 const LOADING_DELAY_MS = 120;
 const LOADING_MIN_DISPLAY_MS = 320;
+const MAX_CRITICAL_COMPONENTS = 3;
 
 export default function HomePageClient({
   initialComponents,
 }: {
   initialComponents?: Doc<'homeComponents'>[];
 }): React.ReactElement {
+  const [showDeferred, setShowDeferred] = useState(false);
+  const [idleReady, setIdleReady] = useState(false);
+  const [interactionReady, setInteractionReady] = useState(false);
+  const [intersectionReady, setIntersectionReady] = useState(false);
   const components = useQuery(api.homeComponents.listActive);
   const resolvedComponents = components ?? initialComponents;
   const [showLoading, setShowLoading] = useState(false);
   const loadingStartRef = useRef<number | null>(null);
   const delayTimerRef = useRef<number | null>(null);
+  const deferredTriggerRef = useRef<HTMLDivElement | null>(null);
+  const [criticalCount, setCriticalCount] = useState(() => {
+    if (typeof window === 'undefined') {
+      return MAX_CRITICAL_COMPONENTS;
+    }
+    return window.innerWidth < 768 ? 1 : MAX_CRITICAL_COMPONENTS;
+  });
 
   const isDataReady = typeof resolvedComponents !== 'undefined';
+
+  useEffect(() => {
+    const canIdle = typeof window.requestIdleCallback === 'function';
+    const handle = canIdle
+      ? window.requestIdleCallback(() => setIdleReady(true), { timeout: 900 })
+      : window.setTimeout(() => setIdleReady(true), 900);
+    return () => {
+      if (canIdle) {
+        window.cancelIdleCallback(handle as number);
+      } else {
+        window.clearTimeout(handle as number);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (idleReady && (intersectionReady || interactionReady)) {
+      setShowDeferred(true);
+    }
+  }, [idleReady, intersectionReady, interactionReady]);
+
+  useEffect(() => {
+    if (showDeferred) {
+      return;
+    }
+    const node = deferredTriggerRef.current;
+    if (!node) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIntersectionReady(true);
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [showDeferred]);
+
+  useEffect(() => {
+    if (interactionReady || showDeferred) {
+      return;
+    }
+    const handleInteract = () => {
+      setInteractionReady(true);
+    };
+    window.addEventListener('scroll', handleInteract, { once: true, passive: true });
+    window.addEventListener('pointerdown', handleInteract, { once: true });
+    window.addEventListener('keydown', handleInteract, { once: true });
+    return () => {
+      window.removeEventListener('scroll', handleInteract);
+      window.removeEventListener('pointerdown', handleInteract);
+      window.removeEventListener('keydown', handleInteract);
+    };
+  }, [interactionReady, showDeferred]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const nextCount = window.innerWidth < 768 ? 1 : MAX_CRITICAL_COMPONENTS;
+    setCriticalCount(nextCount);
+  }, []);
 
   useEffect(() => {
     if (!isDataReady) {
@@ -74,13 +152,17 @@ export default function HomePageClient({
   }, [isDataReady, showLoading]);
 
   if (!isDataReady && !showLoading) {
-    return <></>;
+    return <div className="min-h-screen" aria-hidden />;
   }
 
-  if (!isDataReady || showLoading) {
+  if (showLoading && !isDataReady) {
     return (
       <HomePageLoading />
     );
+  }
+
+  if (!resolvedComponents) {
+    return <div className="min-h-screen" aria-hidden />;
   }
 
   if (resolvedComponents.length === EMPTY_COMPONENTS_COUNT) {
@@ -90,9 +172,9 @@ export default function HomePageClient({
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Chào mừng!</h1>
           <p className="text-slate-500">
             Chưa có nội dung trang chủ. Vui lòng thêm components trong{' '}
-            <a href="/admin/home-components" className="text-blue-600 hover:underline">
+            <Link href="/admin/home-components" className="text-blue-600 hover:underline">
               Admin Panel
-            </a>
+            </Link>
           </p>
         </div>
       </div>
@@ -100,13 +182,21 @@ export default function HomePageClient({
   }
 
   const sortedComponents = [...resolvedComponents]
-    .filter((componentItem) => componentItem.type !== 'Footer')
+    .filter((componentItem) => {
+      if (componentItem.type === 'Footer') {return false;}
+      if (componentItem.type !== 'SpeedDial') {return true;}
+
+      const config = componentItem.config as Record<string, unknown>;
+      return config.showOnAllPages !== true;
+    })
     .sort((firstComponent, secondComponent) => firstComponent.order - secondComponent.order);
+  const criticalComponents = sortedComponents.slice(0, criticalCount);
+  const deferredComponents = showDeferred ? sortedComponents.slice(criticalCount) : [];
 
   return (
     <>
-      {sortedComponents.map((component) => (
-        <ComponentRenderer
+      {criticalComponents.map((component) => (
+        <HomeComponentRenderer
           key={component._id}
           component={{
             _id: component._id,
@@ -117,6 +207,21 @@ export default function HomePageClient({
             type: component.type,
           }}
         />
+      ))}
+      {!showDeferred && <div ref={deferredTriggerRef} className="h-px w-px" aria-hidden={true} />}
+      {deferredComponents.map((component) => (
+        <div key={component._id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 500px' } as React.CSSProperties}>
+          <HomeComponentRenderer
+            component={{
+              _id: component._id,
+              active: component.active,
+              config: component.config as Record<string, unknown>,
+              order: component.order,
+              title: component.title,
+              type: component.type,
+            }}
+          />
+        </div>
       ))}
     </>
   );

@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Loader2, PhoneCall } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -36,6 +36,10 @@ const normalizeString = (value: unknown, fallback = '') => (
   typeof value === 'string' ? value : fallback
 );
 
+const normalizeBoolean = (value: unknown, fallback: boolean) => (
+  typeof value === 'boolean' ? value : fallback
+);
+
 const normalizeActions = (value: unknown): SpeedDialAction[] => {
   if (!Array.isArray(value) || value.length === 0) {
     return DEFAULT_SPEED_DIAL_CONFIG.actions.map((action, idx) => ({ ...action, id: `default-${idx}` }));
@@ -60,6 +64,9 @@ const toSnapshot = (payload: {
   active: boolean;
   style: SpeedDialStyle;
   position: SpeedDialPosition;
+  defaultOpen: boolean;
+  showOnAllPages: boolean;
+  enableShadow: boolean;
   actions: SpeedDialAction[];
 }) => JSON.stringify({
   ...payload,
@@ -85,6 +92,9 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
   const [actions, setActions] = useState<SpeedDialAction[]>([]);
   const [style, setStyle] = useState<SpeedDialStyle>(normalizeSpeedDialStyle(DEFAULT_SPEED_DIAL_CONFIG.style));
   const [position, setPosition] = useState<SpeedDialPosition>(DEFAULT_SPEED_DIAL_CONFIG.position);
+  const [defaultOpen, setDefaultOpen] = useState<boolean>(DEFAULT_SPEED_DIAL_CONFIG.defaultOpen);
+  const [showOnAllPages, setShowOnAllPages] = useState<boolean>(DEFAULT_SPEED_DIAL_CONFIG.showOnAllPages);
+  const [enableShadow, setEnableShadow] = useState<boolean>(DEFAULT_SPEED_DIAL_CONFIG.enableShadow);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
@@ -100,18 +110,27 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
     const normalizedActions = normalizeActions((rawConfig as Record<string, unknown>).actions);
     const normalizedStyle = normalizeSpeedDialStyle((rawConfig as Record<string, unknown>).style as string | undefined);
     const normalizedPosition = normalizePosition((rawConfig as Record<string, unknown>).position);
+    const normalizedDefaultOpen = normalizeBoolean((rawConfig as Record<string, unknown>).defaultOpen, DEFAULT_SPEED_DIAL_CONFIG.defaultOpen);
+    const normalizedShowOnAllPages = normalizeBoolean((rawConfig as Record<string, unknown>).showOnAllPages, DEFAULT_SPEED_DIAL_CONFIG.showOnAllPages);
+    const normalizedEnableShadow = normalizeBoolean((rawConfig as Record<string, unknown>).enableShadow, DEFAULT_SPEED_DIAL_CONFIG.enableShadow);
 
     setTitle(component.title);
     setActive(component.active);
     setActions(normalizedActions);
     setStyle(normalizedStyle);
     setPosition(normalizedPosition);
+    setDefaultOpen(normalizedDefaultOpen);
+    setShowOnAllPages(normalizedShowOnAllPages);
+    setEnableShadow(normalizedEnableShadow);
 
     setInitialSnapshot(toSnapshot({
       title: component.title,
       active: component.active,
       style: normalizedStyle,
       position: normalizedPosition,
+      defaultOpen: normalizedDefaultOpen,
+      showOnAllPages: normalizedShowOnAllPages,
+      enableShadow: normalizedEnableShadow,
       actions: normalizedActions,
     }));
   }, [component, id, router]);
@@ -121,6 +140,9 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
     active,
     style,
     position,
+    defaultOpen,
+    showOnAllPages,
+    enableShadow,
     actions,
   });
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
@@ -148,6 +170,9 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
         })),
         style,
         position,
+        defaultOpen,
+        showOnAllPages,
+        enableShadow,
       };
 
       await updateMutation({
@@ -172,6 +197,9 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
         active,
         style,
         position,
+        defaultOpen,
+        showOnAllPages,
+        enableShadow,
         actions,
       }));
       if (showCustomBlock) {
@@ -229,26 +257,7 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
                 placeholder="Nhập tiêu đề component..."
               />
             </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div
-                  className={cn(
-                    'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                    active ? 'translate-x-2.5' : '-translate-x-2.5',
-                  )}
-                />
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
+</CardContent>
         </Card>
 
         <SpeedDialForm
@@ -256,7 +265,14 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
           onActionsChange={setActions}
           position={position}
           onPositionChange={setPosition}
+          defaultOpen={defaultOpen}
+          onDefaultOpenChange={setDefaultOpen}
+          showOnAllPages={showOnAllPages}
+          onShowOnAllPagesChange={setShowOnAllPages}
+          enableShadow={enableShadow}
+          onEnableShadowChange={setEnableShadow}
           defaultActionColor={effectiveColors.secondary}
+          defaultExpanded={false}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
@@ -300,6 +316,8 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
               title={title}
               selectedStyle={style}
               onStyleChange={setStyle}
+              defaultOpen={defaultOpen}
+              enableShadow={enableShadow}
             />
           </div>
         </div>
@@ -309,6 +327,8 @@ export default function SpeedDialEditPage({ params }: { params: Promise<{ id: st
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

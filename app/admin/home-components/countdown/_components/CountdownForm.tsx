@@ -12,6 +12,7 @@ import type {
   CountdownConfigState,
   CountdownStyle,
 } from '../_types';
+import { AiCountdownImport } from './AiCountdownImport';
 
 interface CountdownFormProps {
   value: CountdownConfigState;
@@ -61,8 +62,9 @@ export const CountdownForm = ({
   return (
     <>
       <Card className="mb-6">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Nội dung Countdown</CardTitle>
+          <AiCountdownImport onApply={(patch) => onChange({ ...value, ...patch })} />
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

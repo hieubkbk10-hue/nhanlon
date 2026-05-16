@@ -8,11 +8,11 @@ import { buildCanonicalUrl, buildMetadata, buildSeoContext } from '@/lib/seo/met
 
 export async function generateMetadata(): Promise<Metadata> {
   const client = getConvexClient();
-  const [site, seo, social, promotionsModule] = await Promise.all([
+  const [site, seo, promotionsModule, social] = await Promise.all([
     getSiteSettings(),
     getSEOSettings(),
-    getSocialSettings(),
     client.query(api.admin.modules.getModuleByKey, { key: 'promotions' }),
+    getSocialSettings(),
   ]);
 
   if (promotionsModule?.enabled === false) {
@@ -22,8 +22,8 @@ export async function generateMetadata(): Promise<Metadata> {
       description: 'Trang khuyến mãi hiện không khả dụng.',
       indexable: false,
       title: 'Không tìm thấy khuyến mãi',
-      twitterSite: social.social_twitter,
       twitterCreator: social.social_twitter,
+      twitterSite: social.social_twitter,
     });
   }
 
@@ -37,8 +37,8 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     indexable: true,
     title,
-    twitterSite: social.social_twitter,
     twitterCreator: social.social_twitter,
+    twitterSite: social.social_twitter,
   });
 }
 

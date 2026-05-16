@@ -8,9 +8,11 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -22,6 +24,7 @@ import {
   buildBenefitsWarningMessages,
   getBenefitsValidationResult,
   normalizeBenefitsHarmony,
+  normalizeBenefitsStyle,
 } from '../../_lib/colors';
 import type {
   BenefitItem,
@@ -29,7 +32,7 @@ import type {
   BenefitsBrandMode,
   BenefitsConfig,
   BenefitsEditorState,
-  BenefitsStyle,
+  BenefitsHeaderAlign,
 } from '../../_types';
 
 const buildUiId = (item: BenefitPersistItem, idx: number) => {
@@ -69,12 +72,6 @@ const toPersistItem = (item: BenefitItem): BenefitPersistItem => ({
   title: item.title,
 });
 
-const normalizeStyle = (value: unknown): BenefitsStyle => (
-  value === 'cards' || value === 'list' || value === 'bento' || value === 'row' || value === 'carousel' || value === 'timeline'
-    ? value
-    : 'cards'
-);
-
 const toEditorState = (config: Partial<BenefitsConfig> | undefined): BenefitsEditorState => {
   const source = config ?? {};
 
@@ -94,11 +91,29 @@ const toEditorState = (config: Partial<BenefitsConfig> | undefined): BenefitsEdi
     headerAlign: source.headerAlign === 'center' || source.headerAlign === 'right'
       ? source.headerAlign
       : (DEFAULT_BENEFITS_CONFIG.headerAlign ?? 'left'),
+    highlightIndex: typeof source.highlightIndex === 'number' ? source.highlightIndex : (DEFAULT_BENEFITS_CONFIG.highlightIndex ?? 2),
     harmony: normalizeBenefitsHarmony(source.harmony ?? DEFAULT_BENEFITS_HARMONY),
     heading: typeof source.heading === 'string' ? source.heading : (DEFAULT_BENEFITS_CONFIG.heading ?? ''),
     items,
-    style: normalizeStyle(source.style),
+    showDecorativeVisuals: typeof source.showDecorativeVisuals === 'boolean'
+      ? source.showDecorativeVisuals
+      : (DEFAULT_BENEFITS_CONFIG.showDecorativeVisuals ?? true),
+    showItemNumbers: typeof source.showItemNumbers === 'boolean'
+      ? source.showItemNumbers
+      : (DEFAULT_BENEFITS_CONFIG.showItemNumbers ?? true),
+    style: normalizeBenefitsStyle(source.style),
     subHeading: typeof source.subHeading === 'string' ? source.subHeading : (DEFAULT_BENEFITS_CONFIG.subHeading ?? ''),
+    visualImage: typeof source.visualImage === 'string' ? source.visualImage : (DEFAULT_BENEFITS_CONFIG.visualImage ?? ''),
+    // Shared header config
+    hideHeader: typeof source.hideHeader === 'boolean' ? source.hideHeader : (DEFAULT_BENEFITS_CONFIG.hideHeader ?? false),
+    showTitle: typeof source.showTitle === 'boolean' ? source.showTitle : (DEFAULT_BENEFITS_CONFIG.showTitle ?? true),
+    showSubtitle: typeof source.showSubtitle === 'boolean' ? source.showSubtitle : (DEFAULT_BENEFITS_CONFIG.showSubtitle ?? true),
+    subtitle: typeof source.subtitle === 'string' ? source.subtitle : (DEFAULT_BENEFITS_CONFIG.subtitle ?? ''),
+    titleColorPrimary: typeof source.titleColorPrimary === 'boolean' ? source.titleColorPrimary : (DEFAULT_BENEFITS_CONFIG.titleColorPrimary ?? false),
+    subtitleAboveTitle: typeof source.subtitleAboveTitle === 'boolean' ? source.subtitleAboveTitle : (DEFAULT_BENEFITS_CONFIG.subtitleAboveTitle ?? false),
+    uppercaseText: typeof source.uppercaseText === 'boolean' ? source.uppercaseText : (DEFAULT_BENEFITS_CONFIG.uppercaseText ?? false),
+    showBadge: typeof source.showBadge === 'boolean' ? source.showBadge : (DEFAULT_BENEFITS_CONFIG.showBadge ?? true),
+    badgeText: typeof source.badgeText === 'string' ? source.badgeText : (DEFAULT_BENEFITS_CONFIG.badgeText ?? ''),
   };
 };
 
@@ -108,11 +123,39 @@ const toPersistConfig = (state: BenefitsEditorState): BenefitsConfig => ({
   gridColumnsDesktop: state.gridColumnsDesktop,
   gridColumnsMobile: state.gridColumnsMobile,
   headerAlign: state.headerAlign,
+  highlightIndex: state.highlightIndex,
   harmony: state.harmony,
   heading: state.heading,
   items: state.items.map(toPersistItem),
-  style: state.style,
+  showDecorativeVisuals: state.showDecorativeVisuals,
+  showItemNumbers: state.showItemNumbers,
+  style: normalizeBenefitsStyle(state.style),
   subHeading: state.subHeading,
+  visualImage: state.visualImage,
+  // Shared header config
+  hideHeader: state.hideHeader,
+  showTitle: state.showTitle,
+  showSubtitle: state.showSubtitle,
+  subtitle: state.subtitle,
+  titleColorPrimary: state.titleColorPrimary,
+  subtitleAboveTitle: state.subtitleAboveTitle,
+  uppercaseText: state.uppercaseText,
+  showBadge: state.showBadge,
+  badgeText: state.badgeText,
+});
+
+const buildPreviewConfig = ({
+  state,
+  header,
+}: {
+  state: BenefitsEditorState;
+  header: Pick<
+    BenefitsConfig,
+    'hideHeader' | 'showTitle' | 'subtitle' | 'showSubtitle' | 'headerAlign' | 'titleColorPrimary' | 'subtitleAboveTitle' | 'uppercaseText' | 'showBadge' | 'badgeText'
+  >;
+}): BenefitsConfig => ({
+  ...toPersistConfig(state),
+  ...header,
 });
 
 const createSnapshot = ({
@@ -131,6 +174,7 @@ const createSnapshot = ({
     gridColumnsDesktop: state.gridColumnsDesktop,
     gridColumnsMobile: state.gridColumnsMobile,
     headerAlign: state.headerAlign,
+    highlightIndex: state.highlightIndex,
     harmony: state.harmony,
     heading: state.heading,
     items: state.items.map((item) => ({
@@ -138,8 +182,21 @@ const createSnapshot = ({
       icon: item.icon,
       title: item.title,
     })),
-    style: state.style,
+    showDecorativeVisuals: state.showDecorativeVisuals,
+    showItemNumbers: state.showItemNumbers,
+    style: normalizeBenefitsStyle(state.style),
     subHeading: state.subHeading,
+    visualImage: state.visualImage,
+    // Shared header config
+    hideHeader: state.hideHeader,
+    showTitle: state.showTitle,
+    showSubtitle: state.showSubtitle,
+    subtitle: state.subtitle,
+    titleColorPrimary: state.titleColorPrimary,
+    subtitleAboveTitle: state.subtitleAboveTitle,
+    uppercaseText: state.uppercaseText,
+    showBadge: state.showBadge,
+    badgeText: state.badgeText,
   },
   title,
 });
@@ -163,6 +220,19 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
   const [editorState, setEditorState] = useState<BenefitsEditorState>(() => toEditorState(undefined));
   const [initialSnapshot, setInitialSnapshot] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Header config state
+  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(DEFAULT_BENEFITS_CONFIG.showTitle ?? true);
+  const [subtitle, setSubtitle] = useState('');
+  const [showSubtitle, setShowSubtitle] = useState(DEFAULT_BENEFITS_CONFIG.showSubtitle ?? true);
+  const [headerAlign, setHeaderAlign] = useState<BenefitsHeaderAlign>(DEFAULT_BENEFITS_CONFIG.headerAlign ?? 'left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
 
   useEffect(() => {
     if (component === undefined || component === null) {return;}
@@ -177,6 +247,19 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
 
     const state = toEditorState(component.config as Partial<BenefitsConfig> | undefined);
     setEditorState(state);
+    
+    // Load header config
+    const headerConfig = extractSectionHeaderConfig(component.config ?? {});
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitle(headerConfig.showTitle ?? true);
+    setSubtitle(headerConfig.subtitle ?? '');
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setHeaderAlign((headerConfig.headerAlign ?? 'left') as BenefitsHeaderAlign);
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
 
     setInitialSnapshot(createSnapshot({
       active: component.active,
@@ -186,8 +269,24 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
   }, [component, id, router]);
 
   const currentSnapshot = useMemo(
-    () => createSnapshot({ title, active, state: editorState }),
-    [title, active, editorState],
+    () => createSnapshot({ 
+      title, 
+      active, 
+      state: {
+        ...editorState,
+        hideHeader,
+        showTitle,
+        subtitle,
+        showSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
+      }
+    }),
+    [title, active, editorState, hideHeader, showTitle, subtitle, showSubtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText],
   );
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
@@ -224,6 +323,16 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
     try {
       const payload: Record<string, unknown> = {
         ...toPersistConfig(editorState),
+        hideHeader,
+        showTitle,
+        subtitle,
+        showSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
       };
 
       await updateMutation({
@@ -296,40 +405,42 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
       </div>
 
       <form onSubmit={handleSubmit}>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={expandedSections.header}
+          onExpandedChange={(value) => setExpandedSections({ header: value })}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
+
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-base">Thông tin chung</CardTitle>
+            <CardTitle className="text-base">Trạng thái</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(event) => { setTitle(event.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div
-                  className={cn(
-                    'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                    active ? 'translate-x-2.5' : '-translate-x-2.5',
-                  )}
-                />
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
+</CardContent>
         </Card>
 
         <BenefitsForm
@@ -391,6 +502,7 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
             )}
             <BenefitsPreview
               items={editorState.items}
+              title={title}
               brandColor={effectiveColors.primary}
               secondary={effectiveColors.secondary}
               mode={brandMode}
@@ -401,13 +513,21 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
                   style,
                 }));
               }}
-              config={{
-                buttonLink: editorState.buttonLink,
-                buttonText: editorState.buttonText,
-                harmony: editorState.harmony,
-                heading: editorState.heading,
-                subHeading: editorState.subHeading,
-              }}
+              config={buildPreviewConfig({
+                state: editorState,
+                header: {
+                  hideHeader,
+                  showTitle,
+                  subtitle,
+                  showSubtitle,
+                  headerAlign,
+                  titleColorPrimary,
+                  subtitleAboveTitle,
+                  uppercaseText,
+                  showBadge,
+                  badgeText,
+                },
+              })}
               fontStyle={fontStyle}
               fontClassName="font-active"
             />
@@ -432,6 +552,8 @@ export default function BenefitsEditPage({ params }: { params: Promise<{ id: str
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

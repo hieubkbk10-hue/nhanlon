@@ -1,6 +1,6 @@
 export type ServiceListStyle = 'grid' | 'bento' | 'list' | 'carousel' | 'minimal' | 'showcase';
 
-export type ServiceSelectionMode = 'auto' | 'manual';
+export type ServiceSelectionMode = 'auto' | 'manual' | 'demo';
 
 export type ServiceListSortBy = 'newest' | 'popular' | 'random';
 
@@ -16,11 +16,25 @@ export interface ServiceListPreviewItem {
   tag?: 'new' | 'hot';
 }
 
+export interface DemoServiceItem {
+  id: string;
+  name: string;
+  image?: string;
+  price?: string;
+  description?: string;
+  tag?: '' | 'new' | 'hot';
+}
+
 export interface ServiceListConfig {
   itemCount: number;
   sortBy: ServiceListSortBy;
   selectionMode: ServiceSelectionMode;
   selectedServiceIds?: string[];
+  demoServices?: DemoServiceItem[];
   style?: ServiceListStyle;
+  showTitle?: boolean;
+  showSubtitle?: boolean;
+  subtitle?: string;
+  headerAlign?: 'left' | 'center' | 'right';
   harmony?: ServiceListHarmony;
 }

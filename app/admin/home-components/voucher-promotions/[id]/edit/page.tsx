@@ -6,22 +6,24 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { TicketPercent, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { VoucherPromotionsPreview } from '../../_components/VoucherPromotionsPreview';
+import { VoucherPromotionsForm } from '../../_components/VoucherPromotionsForm';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   DEFAULT_VOUCHER_PROMOTIONS_CONFIG,
+  normalizeDemoVouchers,
   normalizeVoucherPromotionsTexts,
 } from '../../_lib/constants';
-import { getVoucherPromotionsValidationResult, calculateVoucherPromotionsAccentBalance } from '../../_lib/colors';
-import type { VoucherPromotionsConfigState } from '../../_types';
+import type { DemoVoucherPromotionItem, VoucherPromotionItem, VoucherPromotionsConfigState } from '../../_types';
 import { normalizeVoucherLimit, normalizeVoucherStyle } from '@/lib/home-components/voucher-promotions';
 
 const COMPONENT_TYPE = 'VoucherPromotions';
@@ -35,12 +37,20 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
   const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
   const updateMutation = useMutation(api.homeComponents.update);
+  const promotionsModule = useQuery(api.admin.modules.getModuleByKey, { key: 'promotions' });
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
   const [config, setConfig] = useState<VoucherPromotionsConfigState>(DEFAULT_VOUCHER_PROMOTIONS_CONFIG);
+  const [demoVouchers, setDemoVouchers] = useState<DemoVoucherPromotionItem[]>(DEFAULT_VOUCHER_PROMOTIONS_CONFIG.demoVouchers);
   const [initialSnapshot, setInitialSnapshot] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const canUseRealData = promotionsModule?.enabled === true;
+  const realVouchers = useQuery(
+    api.promotions.listPublicVouchers,
+    config.selectionMode === 'auto' && canUseRealData ? { limit: normalizeVoucherLimit(config.limit) } : 'skip',
+  ) as VoucherPromotionItem[] | undefined;
 
   useEffect(() => {
     if (component) {
@@ -50,29 +60,58 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
       }
 
       const rawConfig = component.config ?? {};
+      const headerConfig = extractSectionHeaderConfig(rawConfig);
+      const nextTexts = normalizeVoucherPromotionsTexts({
+        heading: (rawConfig.heading as string | undefined) ?? (rawConfig.texts as { heading?: string } | undefined)?.heading,
+        description: (rawConfig.subtitle as string | undefined)
+          ?? (rawConfig.description as string | undefined)
+          ?? (rawConfig.texts as { description?: string } | undefined)?.description,
+        ctaLabel: (rawConfig.ctaLabel as string | undefined) ?? (rawConfig.texts as { ctaLabel?: string } | undefined)?.ctaLabel,
+      });
+      const nextDemoVouchers = normalizeDemoVouchers(rawConfig.demoVouchers as Partial<DemoVoucherPromotionItem>[] | undefined);
       const normalizedConfig: VoucherPromotionsConfigState = {
+        ...DEFAULT_VOUCHER_PROMOTIONS_CONFIG,
         ctaUrl: (rawConfig.ctaUrl as string | undefined) ?? '/promotions',
+        showCta: typeof rawConfig.showCta === 'boolean' ? rawConfig.showCta : DEFAULT_VOUCHER_PROMOTIONS_CONFIG.showCta,
+        ctaVariant: rawConfig.ctaVariant === 'textRight' ? 'textRight' : 'button',
+        demoVouchers: nextDemoVouchers,
         limit: normalizeVoucherLimit(rawConfig.limit as number | undefined),
+        selectionMode: rawConfig.selectionMode === 'demo' ? 'demo' : 'auto',
         style: normalizeVoucherStyle(rawConfig.style as string | undefined),
-        texts: normalizeVoucherPromotionsTexts({
-          heading: (rawConfig.heading as string | undefined) ?? (rawConfig.texts as { heading?: string } | undefined)?.heading,
-          description: (rawConfig.description as string | undefined) ?? (rawConfig.texts as { description?: string } | undefined)?.description,
-          ctaLabel: (rawConfig.ctaLabel as string | undefined) ?? (rawConfig.texts as { ctaLabel?: string } | undefined)?.ctaLabel,
-        }),
+        texts: nextTexts,
+        hideHeader: headerConfig.hideHeader,
+        showTitle: headerConfig.showTitle,
+        showSubtitle: headerConfig.showSubtitle,
+        subtitle: headerConfig.subtitle || nextTexts.description,
+        headerAlign: headerConfig.headerAlign,
+        titleColorPrimary: headerConfig.titleColorPrimary,
+        subtitleAboveTitle: headerConfig.subtitleAboveTitle,
+        uppercaseText: headerConfig.uppercaseText,
+        showBadge: headerConfig.showBadge,
+        badgeText: headerConfig.badgeText,
+        desktopColumns: rawConfig.desktopColumns === 3 ? 3 : 4,
+        iconName: typeof rawConfig.iconName === 'string' ? rawConfig.iconName : DEFAULT_VOUCHER_PROMOTIONS_CONFIG.iconName,
       };
 
       setTitle(component.title);
       setActive(component.active);
       setConfig(normalizedConfig);
+      setDemoVouchers(nextDemoVouchers);
       setInitialSnapshot(JSON.stringify({
         title: component.title,
         active: component.active,
         config: normalizedConfig,
+        demoVouchers: normalizedConfig.selectionMode === 'demo' ? nextDemoVouchers : [],
       }));
     }
   }, [component, id, router]);
 
-  const currentSnapshot = useMemo(() => JSON.stringify({ title, active, config }), [title, active, config]);
+  const currentSnapshot = useMemo(() => JSON.stringify({
+    title,
+    active,
+    config,
+    demoVouchers: config.selectionMode === 'demo' ? demoVouchers : [],
+  }), [active, config, demoVouchers, title]);
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
   const customChanged = showCustomBlock
     ? customState.enabled !== initialCustom.enabled
@@ -86,28 +125,6 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
     : false;
   const hasChanges = initialSnapshot !== '' && (currentSnapshot !== initialSnapshot || customChanged || customFontChanged);
 
-  const validation = useMemo(() => getVoucherPromotionsValidationResult({
-    primary: effectiveColors.primary,
-    secondary: effectiveColors.secondary,
-    mode: effectiveColors.mode,
-  }), [effectiveColors]);
-
-  const accentBalance = useMemo(() => calculateVoucherPromotionsAccentBalance(effectiveColors.mode, config.style), [effectiveColors.mode, config.style]);
-
-  const warningMessages = useMemo(() => {
-    const warnings: string[] = [];
-
-    if (effectiveColors.mode === 'dual' && validation.harmonyStatus.isTooSimilar) {
-      warnings.push(`Màu chính và màu phụ đang khá gần nhau (ΔE=${validation.harmonyStatus.deltaE}).`);
-    }
-
-    if (validation.accessibility.failing.length > 0) {
-      warnings.push(`Có ${validation.accessibility.failing.length} cặp màu chưa đạt APCA (minLc=${validation.accessibility.minLc.toFixed(1)}).`);
-    }
-
-    return warnings;
-  }, [effectiveColors.mode, validation]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting || !hasChanges) {return;}
@@ -116,6 +133,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
     try {
       const payloadConfig: VoucherPromotionsConfigState = {
         ...config,
+        demoVouchers: config.selectionMode === 'demo' ? normalizeDemoVouchers(demoVouchers) : [],
         limit: normalizeVoucherLimit(config.limit),
         texts: normalizeVoucherPromotionsTexts(config.texts),
       };
@@ -143,7 +161,12 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
           type: COMPONENT_TYPE,
         });
       }
-      setInitialSnapshot(JSON.stringify({ title, active, config: payloadConfig }));
+      setInitialSnapshot(JSON.stringify({
+        title,
+        active,
+        config: payloadConfig,
+        demoVouchers: payloadConfig.selectionMode === 'demo' ? payloadConfig.demoVouchers : [],
+      }));
       if (showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
@@ -189,126 +212,59 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <TicketPercent size={20} />
-              Voucher Promotions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) =>{  setTitle(e.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
+        <HeaderConfigSection
+          hideHeader={config.hideHeader ?? false}
+          title={title}
+          showTitle={config.showTitle ?? true}
+          subtitle={config.subtitle ?? config.texts.description}
+          showSubtitle={config.showSubtitle ?? true}
+          headerAlign={config.headerAlign ?? 'left'}
+          titleColorPrimary={config.titleColorPrimary ?? false}
+          subtitleAboveTitle={config.subtitleAboveTitle ?? false}
+          uppercaseText={config.uppercaseText ?? false}
+          showBadge={config.showBadge ?? true}
+          badgeText={config.badgeText ?? ''}
+          onHideHeaderChange={(value) => setConfig((prev) => ({ ...prev, hideHeader: value }))}
+          onTitleChange={setTitle}
+          onShowTitleChange={(value) => setConfig((prev) => ({ ...prev, showTitle: value }))}
+          onSubtitleChange={(value) => setConfig((prev) => ({ ...prev, subtitle: value, texts: { ...prev.texts, description: value } }))}
+          onShowSubtitleChange={(value) => setConfig((prev) => ({ ...prev, showSubtitle: value }))}
+          onHeaderAlignChange={(value) => setConfig((prev) => ({ ...prev, headerAlign: value }))}
+          onTitleColorPrimaryChange={(value) => setConfig((prev) => ({ ...prev, titleColorPrimary: value }))}
+          onSubtitleAboveTitleChange={(value) => setConfig((prev) => ({ ...prev, subtitleAboveTitle: value }))}
+          onUppercaseTextChange={(value) => setConfig((prev) => ({ ...prev, uppercaseText: value }))}
+          onShowBadgeChange={(value) => setConfig((prev) => ({ ...prev, showBadge: value }))}
+          onBadgeTextChange={(value) => setConfig((prev) => ({ ...prev, badgeText: value }))}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleLabel="Tiêu đề section"
+          titlePlaceholder="VD: Voucher khuyến mãi, Ưu đãi hôm nay..."
+        />
 
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  "cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors",
-                  active ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600"
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  "w-5 h-5 bg-white rounded-full transition-transform shadow",
-                  active ? "translate-x-2.5" : "-translate-x-2.5"
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-
-            {effectiveColors.mode === 'dual' && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                <div className="font-medium mb-1">Accent Balance</div>
-                <div>Primary: {accentBalance.primary}% • Secondary: {accentBalance.secondary}% • Neutral: {accentBalance.neutral}%</div>
-              </div>
-            )}
-
-            {warningMessages.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                <div className="font-medium mb-1">Cảnh báo màu sắc</div>
-                <ul className="list-disc pl-4 space-y-1">
-                  {warningMessages.map((message) => (
-                    <li key={message}>{message}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">Nội dung voucher khuyến mãi</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề</Label>
-              <Input 
-                value={config.texts.heading} 
-                onChange={(e) => setConfig({
-                  ...config,
-                  texts: { ...config.texts, heading: e.target.value }
-                })} 
-                placeholder="Voucher khuyến mãi" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Mô tả</Label>
-              <textarea 
-                value={config.texts.description} 
-                onChange={(e) => setConfig({
-                  ...config,
-                  texts: { ...config.texts, description: e.target.value }
-                })} 
-                placeholder="Áp dụng mã để nhận ưu đãi tốt nhất hôm nay."
-                className="w-full min-h-[60px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm" 
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>CTA label</Label>
-                <Input 
-                  value={config.texts.ctaLabel} 
-                  onChange={(e) => setConfig({
-                    ...config,
-                    texts: { ...config.texts, ctaLabel: e.target.value }
-                  })} 
-                  placeholder="Xem tất cả ưu đãi" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>CTA link</Label>
-                <Input 
-                  value={config.ctaUrl} 
-                  onChange={(e) => setConfig({ ...config, ctaUrl: e.target.value })} 
-                  placeholder="/promotions" 
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Giới hạn voucher (1-8)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={config.limit}
-                  onChange={(e) => setConfig({ ...config, limit: Number(e.target.value) })}
-                  placeholder="4"
-                />
-                <p className="text-xs text-slate-500">Dữ liệu tự động từ Promotions (chỉ voucher có mã).</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <VoucherPromotionsForm
+          selectionMode={config.selectionMode}
+          onSelectionModeChange={(value) => setConfig((prev) => ({ ...prev, selectionMode: value }))}
+          limit={config.limit}
+          onLimitChange={(value) => setConfig((prev) => ({ ...prev, limit: value }))}
+          ctaLabel={config.texts.ctaLabel}
+          onCtaLabelChange={(value) => setConfig((prev) => ({ ...prev, texts: { ...prev.texts, ctaLabel: value } }))}
+          ctaUrl={config.ctaUrl ?? '/promotions'}
+          onCtaUrlChange={(value) => setConfig((prev) => ({ ...prev, ctaUrl: value }))}
+        showCta={config.showCta ?? true}
+        onShowCtaChange={(value) => setConfig((prev) => ({ ...prev, showCta: value }))}
+        ctaVariant={config.ctaVariant ?? 'button'}
+        onCtaVariantChange={(value) => setConfig((prev) => ({ ...prev, ctaVariant: value }))}
+          demoVouchers={demoVouchers}
+          setDemoVouchers={setDemoVouchers}
+          canUseRealData={canUseRealData}
+          moduleLoaded={promotionsModule !== undefined}
+          desktopColumns={config.desktopColumns ?? 4}
+          onDesktopColumnsChange={(value) => setConfig((prev) => ({ ...prev, desktopColumns: value }))}
+          iconName={config.iconName ?? 'BadgePercent'}
+          onIconNameChange={(value) => setConfig((prev) => ({ ...prev, iconName: value }))}
+          brandColor={effectiveColors.primary}
+          defaultExpanded={false}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
@@ -354,7 +310,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
               />
             )}
             <VoucherPromotionsPreview
-              config={config}
+              config={{ ...config, demoVouchers }}
               brandColor={effectiveColors.primary}
               secondary={effectiveColors.secondary}
               mode={effectiveColors.mode}
@@ -363,6 +319,8 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
               onStyleChange={(style) => {
                 setConfig({ ...config, style });
               }}
+              previewVouchers={realVouchers}
+              canUseRealData={canUseRealData}
               fontStyle={fontStyle}
               fontClassName="font-active"
             />
@@ -374,6 +332,8 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
           hasChanges={hasChanges}
           onCancel={() =>{  router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

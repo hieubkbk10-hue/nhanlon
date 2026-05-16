@@ -29,6 +29,17 @@ interface TeamPreviewProps {
   texts?: Record<string, string>;
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
+  // Header props
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  showSubtitle?: boolean;
+  subtitle?: string;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }
 
 export const TeamPreview = ({
@@ -42,6 +53,16 @@ export const TeamPreview = ({
   texts = {},
   fontStyle,
   fontClassName,
+  hideHeader,
+  showTitle,
+  showSubtitle,
+  subtitle,
+  headerAlign,
+  titleColorPrimary,
+  subtitleAboveTitle,
+  uppercaseText,
+  showBadge,
+  badgeText,
 }: TeamPreviewProps) => {
   const { device, setDevice } = usePreviewDevice();
   const style = normalizeTeamStyle(selectedStyle);
@@ -93,6 +114,16 @@ export const TeamPreview = ({
             device={device}
             carouselId={`team-preview-carousel-${device}`}
             texts={texts}
+            hideHeader={hideHeader}
+            showTitle={showTitle}
+            showSubtitle={showSubtitle}
+            subtitle={subtitle}
+            headerAlign={headerAlign}
+            titleColorPrimary={titleColorPrimary}
+            subtitleAboveTitle={subtitleAboveTitle}
+            uppercaseText={uppercaseText}
+            showBadge={showBadge}
+            badgeText={badgeText}
           />
         </BrowserFrame>
       </PreviewWrapper>

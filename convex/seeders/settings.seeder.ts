@@ -105,6 +105,7 @@ export class SettingsSeeder extends BaseSeeder<SettingData> {
           showRating: true,
           showWishlist: true,
           showBuyNow: true,
+          enableImageLightbox: false,
         },
       },
       {

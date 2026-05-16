@@ -10,6 +10,7 @@ import { useBrandColors } from '@/components/site/hooks';
 import { getPostsListColors } from '@/components/site/posts/colors';
 import { usePostsListConfig } from '@/lib/experiences';
 import type { Id } from '@/convex/_generated/dataModel';
+import { buildCategoryPath, buildDetailPath, buildModuleListPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 import {
   FullWidthLayout,
   MagazineLayout,
@@ -171,6 +172,8 @@ function PostsContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const routeModeSetting = useQuery(api.settings.getValue, { key: 'ia_route_mode', defaultValue: 'unified' });
+  const routeMode = useMemo(() => normalizeRouteMode(routeModeSetting), [routeModeSetting]);
   
   // Read page from URL for pagination mode
   const urlPage = Number(searchParams.get('page')) || 1;
@@ -213,12 +216,19 @@ function PostsContent() {
     [visibleCategories, categories]
   );
   
+  const categorySlugFromPath = useMemo(() => {
+    if (routeMode !== 'unified') {return null;}
+    const segment = pathname.split('/').filter(Boolean)[0];
+    if (!segment || segment === 'posts') {return null;}
+    return segment;
+  }, [pathname, routeMode]);
+
   const categoryFromUrl = useMemo(() => {
-    const catSlug = searchParams.get('catpost');
+    const catSlug = categorySlugFromPath ?? searchParams.get('catpost');
     if (!catSlug || categoryOptions.length === 0) {return null;}
     const matchedCategory = categoryOptions.find((c) => c.slug === catSlug);
     return matchedCategory?._id ?? null;
-  }, [searchParams, categoryOptions]);
+  }, [categorySlugFromPath, searchParams, categoryOptions]);
 
   const activeCategory = categoryFromUrl;
   
@@ -305,6 +315,18 @@ function PostsContent() {
     return new Map(categories.map((c) => [c._id, c.name]));
   }, [categories]);
 
+  const categorySlugMap = useMemo(() => {
+    if (!categories) {return new Map<string, string>();}
+    return new Map(categories.map((c) => [c._id, c.slug]));
+  }, [categories]);
+
+  const getPostDetailHref = useCallback((post: { slug: string; categoryId: Id<'postCategories'> }) => buildDetailPath({
+    categorySlug: categorySlugMap.get(post.categoryId),
+    mode: routeMode,
+    moduleKey: 'posts',
+    recordSlug: post.slug,
+  }), [categorySlugMap, routeMode]);
+
   // Handlers
   const handleCategoryChange = useCallback((categoryId: Id<"postCategories"> | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -312,15 +334,21 @@ function PostsContent() {
     if (categoryId && categoryOptions.length > 0) {
       const category = categoryOptions.find(c => c._id === categoryId);
       if (category) {
+        if (routeMode === 'unified') {
+          router.push(buildCategoryPath({ categorySlug: category.slug, mode: routeMode, moduleKey: 'posts' }), { scroll: false });
+          return;
+        }
         params.set('catpost', category.slug);
       }
     } else {
       params.delete('catpost');
     }
     
-    const newUrl = params.toString() ? `/posts?${params.toString()}` : '/posts';
+    const newUrl = params.toString()
+      ? `${buildModuleListPath('posts')}?${params.toString()}`
+      : buildModuleListPath('posts');
     router.push(newUrl, { scroll: false });
-  }, [searchParams, categoryOptions, router]);
+  }, [searchParams, categoryOptions, router, routeMode]);
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
@@ -354,15 +382,19 @@ function PostsContent() {
   }, [searchParams, pathname, router]);
 
   useEffect(() => {
-    const catSlug = searchParams.get('catpost');
+    const catSlug = categorySlugFromPath ?? searchParams.get('catpost');
     if (!catSlug || categoryOptions.length === 0) {return;}
     const hasMatch = categoryOptions.some((category) => category.slug === catSlug);
     if (hasMatch) {return;}
+    if (routeMode === 'unified' && categorySlugFromPath) {
+      router.replace(buildModuleListPath('posts'), { scroll: false });
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete('catpost');
     const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.replace(nextUrl, { scroll: false });
-  }, [categoryOptions, pathname, router, searchParams]);
+  }, [categoryOptions, categorySlugFromPath, pathname, router, routeMode, searchParams]);
   
   // Reset page to 1 when search/filter/page size changes
   useEffect(() => {
@@ -429,6 +461,7 @@ function PostsContent() {
                 tokens={tokens}
                 categoryMap={categoryMap}
                 enabledFields={enabledFields}
+                getDetailHref={getPostDetailHref}
               />
             )}
           </>
@@ -453,6 +486,7 @@ function PostsContent() {
               enabledFields={enabledFields}
               showSearch={listConfig.showSearch}
               showCategories={listConfig.showCategories}
+              getDetailHref={getPostDetailHref}
             />
           )
         )}
@@ -477,6 +511,7 @@ function PostsContent() {
               enabledFields={enabledFields}
               showSearch={listConfig.showSearch}
               showCategories={listConfig.showCategories}
+              getDetailHref={getPostDetailHref}
             />
           )
         )}

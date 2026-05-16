@@ -31,7 +31,6 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { useLexicalNodeSelection } from '@lexical/react/useLexicalNodeSelection';
 import { mergeRegister } from '@lexical/utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 
 export interface InsertImagePayload {
   src: string;
@@ -275,13 +274,12 @@ function ImageComponent({
       className={`image-wrapper ${isFocused ? 'focused' : ''}`}
       style={{ display: 'inline-block', position: 'relative' }}
     >
-      <Image
+      <img
         ref={imageRef}
         src={src}
         alt={altText}
         width={width ?? 600}
         height={height ?? 400}
-        unoptimized
         style={{
           borderRadius: '4px',
           cursor: 'default',
@@ -497,3 +495,4 @@ const ImagesPlugin = () => {
 };
 
 export default ImagesPlugin;
+

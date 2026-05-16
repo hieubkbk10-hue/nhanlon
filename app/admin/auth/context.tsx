@@ -12,6 +12,12 @@ interface AdminUser {
   roleId: string;
   isSuperAdmin: boolean;
   permissions: Record<string, string[]>;
+  trial?: {
+    createdAt: number | null;
+    durationDays: 1 | 7 | 30 | 90 | null;
+    expiresAt: number;
+    remainingMs: number;
+  };
 }
 
 interface AdminAuthContextType {
@@ -37,6 +43,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginMutation = useMutation(api.auth.verifyAdminLogin);
   const logoutMutation = useMutation(api.auth.logoutAdmin);
+  const cleanupExpiredTrialByToken = useMutation(api.auth.cleanupExpiredAdminTrialByToken);
   
   // Verify session on mount and token change
   const sessionResult = useQuery(
@@ -64,14 +71,18 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     name: sessionResult.user.name,
     permissions: sessionResult.user.permissions,
     roleId: sessionResult.user.roleId,
+    trial: sessionResult.user.trial,
   } : null;
 
   // Clear invalid token
   useEffect(() => {
     if (token && sessionResult && !sessionResult.valid) {
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
+      void cleanupExpiredTrialByToken({ token }).finally(() => {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        setToken(null);
+      });
     }
-  }, [token, sessionResult]);
+  }, [cleanupExpiredTrialByToken, token, sessionResult]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {

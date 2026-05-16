@@ -12,7 +12,13 @@ const normalizeSiteUrl = (value?: string | null): string => {
 export const resolveSiteUrlFromValue = (value?: string | null): string => normalizeSiteUrl(value);
 
 export const resolveSiteUrl = async (): Promise<string> => {
-  const client = getConvexClient();
-  const siteUrlSetting = await client.query(api.settings.getByKey, { key: 'site_url' });
-  return normalizeSiteUrl(siteUrlSetting?.value as string);
+  const fallbackUrl = normalizeSiteUrl();
+
+  try {
+    const client = getConvexClient();
+    const siteUrlSetting = await client.query(api.settings.getByKey, { key: 'site_url' });
+    return normalizeSiteUrl(siteUrlSetting?.value as string) || fallbackUrl;
+  } catch {
+    return fallbackUrl;
+  }
 };

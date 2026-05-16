@@ -75,22 +75,40 @@ export function PageViewTracker() {
 
     trackedPaths.current.add(pathname);
 
-    trackPageView({
-      browser: getBrowser(),
-      device: getDeviceType(),
-      os: getOS(),
-      path: pathname,
-      referrer: document.referrer || undefined,
-      sessionId,
-      userAgent: navigator.userAgent,
-    }).catch(console.error);
+    const shouldTrack = () => document.visibilityState === 'visible';
+    const sendTracking = () => {
+      if (!shouldTrack()) {
+        return;
+      }
+      trackPageView({
+        browser: getBrowser(),
+        device: getDeviceType(),
+        os: getOS(),
+        path: pathname,
+        referrer: document.referrer || undefined,
+        sessionId,
+        userAgent: navigator.userAgent,
+      }).catch(console.error);
+    };
+
+    const canIdle = typeof window.requestIdleCallback === 'function';
+    const handle = canIdle
+      ? window.requestIdleCallback(sendTracking, { timeout: 1200 })
+      : window.setTimeout(sendTracking, 1200);
 
     // Clear tracked path after some time to allow re-tracking on navigation back
     const timeout = setTimeout(() => {
       trackedPaths.current.delete(pathname);
     }, 5000);
 
-    return () =>{  clearTimeout(timeout); };
+    return () => {
+      if (canIdle) {
+        window.cancelIdleCallback(handle as number);
+      } else {
+        window.clearTimeout(handle as number);
+      }
+      clearTimeout(timeout);
+    };
   }, [pathname, trackPageView]);
 
   return null;

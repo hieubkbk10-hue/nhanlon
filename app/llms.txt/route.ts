@@ -10,7 +10,7 @@ export async function GET() {
     getContactSettings(),
     getSocialSettings(),
   ]);
-  const baseUrl = resolveSiteUrlFromValue(site.site_url) || 'https://example.com';
+  const baseUrl = resolveSiteUrlFromValue(site.site_url);
   const text = buildLlmsText({ baseUrl, contact, seo, site, social });
 
   return new NextResponse(text, {

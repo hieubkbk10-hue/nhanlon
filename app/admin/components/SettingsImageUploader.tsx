@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Image as ImageIcon, Link, Loader2, Trash2, Upload } from 'lucide-react';
+import { ClipboardPaste, Image as ImageIcon, Link, Loader2, Pencil, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Input, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
+import { ImageEditorDialog } from './ImageEditorDialog';
 
 type InputMode = 'upload' | 'url';
 
@@ -38,6 +39,7 @@ export function SettingsImageUploader({
   const [urlInput, setUrlInput] = useState('');
   const [preview, setPreview] = useState<string | undefined>(value);
   const [currentStorageId, setCurrentStorageId] = useState<string | undefined>();
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Convex mutations
@@ -124,6 +126,39 @@ export function SettingsImageUploader({
     if (file) {void handleFileUpload(file);}
   }, [handleFileUpload]);
 
+  // Đọc ảnh từ clipboard khi user click nút "Dán"
+  const handleClipboardPaste = useCallback(async () => {
+    if (isUploading) return;
+
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split('/')[1] || 'png';
+          const file = new File(
+            [blob],
+            `clipboard-${Date.now()}.${ext}`,
+            { type: imageType },
+          );
+          void handleFileUpload(file);
+          return;
+        }
+      }
+
+      toast.error('Clipboard không có ảnh. Hãy copy ảnh trước.');
+    } catch (err) {
+      // Permission denied hoặc clipboard trống
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        toast.error('Trình duyệt chặn quyền đọc clipboard.');
+      } else {
+        toast.error('Không đọc được clipboard. Hãy copy ảnh trước.');
+      }
+    }
+  }, [isUploading, handleFileUpload]);
+
   const handleUrlSubmit = useCallback(() => {
     if (!urlInput.trim()) {return;}
 
@@ -204,6 +239,16 @@ export function SettingsImageUploader({
           <Link size={14} />
           URL
         </button>
+        <button
+          type="button"
+          onClick={handleClipboardPaste}
+          disabled={isUploading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 disabled:opacity-50"
+          title="Copy ảnh rồi click vào đây"
+        >
+          <ClipboardPaste size={14} />
+          Dán
+        </button>
       </div>
 
       {/* Upload Mode */}
@@ -246,6 +291,16 @@ export function SettingsImageUploader({
                 >
                   <Upload size={14} className="mr-1" />
                   Đổi ảnh
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditorOpen(true)}
+                  disabled={isUploading}
+                >
+                  <Pencil size={14} className="mr-1" />
+                  Chỉnh sửa
                 </Button>
                 <Button
                   type="button"
@@ -330,20 +385,43 @@ export function SettingsImageUploader({
                   }}
                 />
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleRemove}
-                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-              >
-                <Trash2 size={14} className="mr-1" />
-                Xóa
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditorOpen(true)}
+                >
+                  <Pencil size={14} className="mr-1" />
+                  Chỉnh sửa
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemove}
+                  className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                >
+                  <Trash2 size={14} className="mr-1" />
+                  Xóa
+                </Button>
+              </div>
             </div>
           )}
         </div>
       )}
+      {/* Image Editor Dialog */}
+      {isEditorOpen && preview && (
+        <ImageEditorDialog
+          imageUrl={preview}
+          onClose={() => setIsEditorOpen(false)}
+          onApply={(editedFile) => {
+            setIsEditorOpen(false);
+            void handleFileUpload(editedFile);
+          }}
+        />
+      )}
     </div>
   );
 }
+

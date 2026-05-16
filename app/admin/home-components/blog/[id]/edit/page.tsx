@@ -6,11 +6,12 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Doc, Id } from '@/convex/_generated/dataModel';
-import { FileText, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -19,7 +20,13 @@ import { BlogPreview } from '../../_components/BlogPreview';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { getBlogValidationResult } from '../../_lib/colors';
 import { DEFAULT_BLOG_CONFIG, sortBlogPosts } from '../../_lib/constants';
-import type { BlogSelectionMode, BlogStyle } from '../../_types';
+import { enforceToggleDisabled } from '@/lib/experiences/module-toggle-guards';
+import {
+  normalizeBlogConfig,
+  type BlogSelectionMode,
+  type BlogStyle,
+  type DemoBlogItem,
+} from '../../_types';
 
 const COMPONENT_TYPE = 'Blog';
 
@@ -34,20 +41,52 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
   const updateMutation = useMutation(api.homeComponents.update);
   const postsData = useQuery(api.posts.listAll, { limit: 100 });
   const postCategoriesData = useQuery(api.postCategories.listAll, { limit: 200 });
+  const postsModuleData = useQuery(api.admin.modules.getModuleByKey, { key: 'posts' });
+  const postsModuleFields = useQuery(api.admin.modules.listModuleFields, { moduleKey: 'posts' });
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
-  const [blogStyle, setBlogStyle] = useState<BlogStyle>('grid');
+  const [blogStyle, setBlogStyle] = useState<BlogStyle>('layout1');
   const [blogSelectionMode, setBlogSelectionMode] = useState<BlogSelectionMode>('auto');
   const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
   const [postSearchTerm, setPostSearchTerm] = useState('');
+  const [demoPosts, setDemoPosts] = useState<DemoBlogItem[]>([]);
   const [blogConfig, setBlogConfig] = useState({
     itemCount: DEFAULT_BLOG_CONFIG.itemCount,
-    sortBy: DEFAULT_BLOG_CONFIG.sortBy
+    showAuthor: DEFAULT_BLOG_CONFIG.showAuthor,
+    showDate: DEFAULT_BLOG_CONFIG.showDate,
+    showExcerpt: DEFAULT_BLOG_CONFIG.showExcerpt,
+    sortBy: DEFAULT_BLOG_CONFIG.sortBy,
+    subtitle: DEFAULT_BLOG_CONFIG.subtitle,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [warningMessages, setWarningMessages] = useState<string[]>([]);
   const [initialState, setInitialState] = useState('');
+
+  // Header config state (shared pattern)
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitleHeader, setShowTitleHeader] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [headerSubtitle, setHeaderSubtitle] = useState('');
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
+
+  const canShowAuthor = useMemo(() => {
+    if (postsModuleData === undefined || postsModuleFields === undefined) {
+      return false;
+    }
+
+    if (!postsModuleData || postsModuleData.enabled === false) {
+      return false;
+    }
+
+    return postsModuleFields.some((field) => field.fieldKey === 'author_name' && field.enabled);
+  }, [postsModuleData, postsModuleFields]);
 
   const filteredPosts = useMemo(() => {
     if (!postsData) {return [];}
@@ -77,31 +116,76 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
       setTitle(component.title);
       setActive(component.active);
 
-      const config = component.config ?? {};
+      const nextConfig = normalizeBlogConfig(component.config ?? {});
+      const guardedConfig = enforceToggleDisabled(nextConfig, 'showAuthor', canShowAuthor);
       setBlogConfig({
-        itemCount: (config.itemCount as number) ?? DEFAULT_BLOG_CONFIG.itemCount,
-        sortBy: (config.sortBy as 'newest' | 'popular' | 'random') ?? DEFAULT_BLOG_CONFIG.sortBy,
+        itemCount: guardedConfig.itemCount,
+        showAuthor: guardedConfig.showAuthor,
+        showDate: guardedConfig.showDate,
+        showExcerpt: guardedConfig.showExcerpt,
+        sortBy: guardedConfig.sortBy,
+        subtitle: guardedConfig.subtitle,
       });
-      const nextStyle = (config.style as BlogStyle) || 'grid';
-      const nextSelectionMode = (config.selectionMode as BlogSelectionMode) || 'auto';
-      const nextSelectedPostIds = (config.selectedPostIds as string[]) || [];
+      const nextStyle = guardedConfig.style;
+      const nextSelectionMode = guardedConfig.selectionMode;
+      const nextSelectedPostIds = guardedConfig.selectedPostIds;
 
       setBlogStyle(nextStyle);
       setBlogSelectionMode(nextSelectionMode);
       setSelectedPostIds(nextSelectedPostIds);
+      setDemoPosts((guardedConfig.demoPosts as DemoBlogItem[]) ?? []);
+
+      // Load header config
+      const config = component.config ?? {};
+      const headerConfig = extractSectionHeaderConfig(config);
+      setHideHeader(headerConfig.hideHeader ?? false);
+      setShowTitleHeader(headerConfig.showTitle ?? true);
+      setShowSubtitle(headerConfig.showSubtitle ?? true);
+      setHeaderSubtitle(headerConfig.subtitle || '');
+      setHeaderAlign(headerConfig.headerAlign ?? 'left');
+      setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+      setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+      setUppercaseText(headerConfig.uppercaseText ?? false);
+      setShowBadge(headerConfig.showBadge ?? true);
+      setBadgeText(headerConfig.badgeText || '');
+
+      // Load desktop columns
+      const rawDesktopCols = (component.config as Record<string, unknown> | undefined)?.desktopColumns;
+      const loadedDesktopColumns: 3 | 4 = rawDesktopCols === 3 ? 3 : 4;
+      setDesktopColumns(loadedDesktopColumns);
 
       const snapshot = JSON.stringify({
         title: component.title,
         active: component.active,
-        itemCount: (config.itemCount as number) ?? DEFAULT_BLOG_CONFIG.itemCount,
-        sortBy: (config.sortBy as 'newest' | 'popular' | 'random') ?? DEFAULT_BLOG_CONFIG.sortBy,
+        itemCount: nextConfig.itemCount,
+        showAuthor: guardedConfig.showAuthor,
+        showDate: guardedConfig.showDate,
+        showExcerpt: guardedConfig.showExcerpt,
+        sortBy: nextConfig.sortBy,
         style: nextStyle,
         selectionMode: nextSelectionMode,
         selectedPostIds: nextSelectionMode === 'manual' ? nextSelectedPostIds : [],
+        demoPosts: nextSelectionMode === 'demo' ? (guardedConfig.demoPosts ?? []) : [],
+        // Header fields
+        hideHeader: headerConfig.hideHeader,
+        showTitle: headerConfig.showTitle,
+        showSubtitleHeader: headerConfig.showSubtitle,
+        subtitle: headerConfig.subtitle || '',
+        headerAlign: headerConfig.headerAlign,
+        titleColorPrimary: headerConfig.titleColorPrimary,
+        subtitleAboveTitle: headerConfig.subtitleAboveTitle,
+        uppercaseText: headerConfig.uppercaseText,
+        showBadge: headerConfig.showBadge,
+        badgeText: headerConfig.badgeText || '',
+        desktopColumns: loadedDesktopColumns,
       });
       setInitialState(snapshot);
     }
-  }, [component, id, router]);
+  }, [canShowAuthor, component, id, router]);
+
+  useEffect(() => {
+    setBlogConfig((prev) => enforceToggleDisabled(prev, 'showAuthor', canShowAuthor));
+  }, [canShowAuthor]);
 
   const previewPosts = useMemo(() => {
     if (!postsData) {return undefined;}
@@ -137,11 +221,27 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
     title,
     active,
     itemCount: blogConfig.itemCount,
+    showAuthor: blogConfig.showAuthor,
+    showDate: blogConfig.showDate,
+    showExcerpt: blogConfig.showExcerpt,
     sortBy: blogConfig.sortBy,
     style: blogStyle,
     selectionMode: blogSelectionMode,
     selectedPostIds: blogSelectionMode === 'manual' ? selectedPostIds : [],
-  }), [active, blogConfig.itemCount, blogConfig.sortBy, blogSelectionMode, blogStyle, selectedPostIds, title]);
+    demoPosts: blogSelectionMode === 'demo' ? demoPosts : [],
+    // Header fields
+    hideHeader,
+    showTitle: showTitleHeader,
+    showSubtitleHeader: showSubtitle,
+    subtitle: headerSubtitle,
+    headerAlign,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
+    desktopColumns,
+  }), [active, badgeText, blogConfig.itemCount, blogConfig.showAuthor, blogConfig.showDate, blogConfig.showExcerpt, blogConfig.sortBy, blogSelectionMode, blogStyle, demoPosts, desktopColumns, headerAlign, headerSubtitle, hideHeader, selectedPostIds, showBadge, showSubtitle, showTitleHeader, subtitleAboveTitle, title, titleColorPrimary, uppercaseText]);
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
   const customChanged = showCustomBlock
@@ -177,18 +277,35 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
         warnings.push(`Có ${validation.accessibility.failing.length} cặp màu chưa đạt APCA (minLc=${validation.accessibility.minLc.toFixed(1)}).`);
       }
     }
-    setWarningMessages(warnings);
 
     try {
+      const nextConfig = {
+        itemCount: blogConfig.itemCount,
+        showAuthor: blogConfig.showAuthor,
+        showDate: blogConfig.showDate,
+        showExcerpt: blogConfig.showExcerpt,
+        sortBy: blogConfig.sortBy,
+        style: blogStyle,
+        selectionMode: blogSelectionMode,
+        selectedPostIds: blogSelectionMode === 'manual' ? selectedPostIds : [],
+        demoPosts: blogSelectionMode === 'demo' ? demoPosts : [],
+        // Header config fields
+        hideHeader,
+        showTitle: showTitleHeader,
+        showSubtitle,
+        subtitle: headerSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
+        desktopColumns,
+      };
+
       await updateMutation({
         active,
-        config: {
-          itemCount: blogConfig.itemCount,
-          sortBy: blogConfig.sortBy,
-          style: blogStyle,
-          selectionMode: blogSelectionMode,
-          selectedPostIds: blogSelectionMode === 'manual' ? selectedPostIds : [],
-        },
+        config: nextConfig,
         id: id as Id<'homeComponents'>,
         title,
       });
@@ -249,6 +366,21 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
 
   const fontStyle = { '--font-active': `var(${effectiveFont.fontVariable})` } as React.CSSProperties;
 
+  // Resolve preview items for demo mode
+  const demoPreviewItems: BlogPostItem[] | undefined = blogSelectionMode === 'demo' && demoPosts.length > 0
+    ? demoPosts.map((item) => ({
+      _id: item.id,
+      _creationTime: Date.now(),
+      title: item.title || 'Bài viết demo',
+      excerpt: item.excerpt,
+      thumbnail: item.thumbnail,
+      categoryId: undefined,
+      categoryName: item.category,
+      status: 'Published',
+      views: 0,
+    }))
+    : undefined;
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
@@ -256,45 +388,54 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
         <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText size={20} />
-              Tin tức / Blog
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) =>{  setTitle(e.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
 
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  "cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors",
-                  active ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600"
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  "w-5 h-5 bg-white rounded-full transition-transform shadow",
-                  active ? "translate-x-2.5" : "-translate-x-2.5"
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
+      <form onSubmit={handleSubmit}>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitleHeader}
+          subtitle={headerSubtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitleHeader}
+          onSubtitleChange={setHeaderSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleLabel="Tiêu đề section"
+          titlePlaceholder="VD: Tin tức mới nhất, Bài viết nổi bật..."
+        />
 
         <BlogForm
+          showAuthor={blogConfig.showAuthor}
+          canShowAuthor={canShowAuthor}
+          showDate={blogConfig.showDate}
+          showExcerpt={blogConfig.showExcerpt}
+          onDisplayConfigChange={(next) => {
+            setBlogConfig((prev) => {
+              const nextConfig = {
+                ...prev,
+                showAuthor: next.showAuthor ?? prev.showAuthor,
+                showDate: next.showDate ?? prev.showDate,
+                showExcerpt: next.showExcerpt ?? prev.showExcerpt,
+              };
+
+              return enforceToggleDisabled(nextConfig, 'showAuthor', canShowAuthor);
+            });
+          }}
           selectionMode={blogSelectionMode}
           onSelectionModeChange={setBlogSelectionMode}
           itemCount={blogConfig.itemCount}
@@ -302,7 +443,11 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           onConfigChange={(next) =>{
             setBlogConfig((prev) => ({
               itemCount: next.itemCount ?? prev.itemCount,
+              showAuthor: prev.showAuthor,
+              showDate: prev.showDate,
+              showExcerpt: prev.showExcerpt,
               sortBy: next.sortBy ?? prev.sortBy,
+              subtitle: prev.subtitle,
             }));
           }}
           selectedPosts={selectedPosts as BlogPostItem[]}
@@ -313,7 +458,12 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           searchTerm={postSearchTerm}
           onSearchTermChange={setPostSearchTerm}
           filteredPosts={filteredPosts as BlogPostItem[]}
+          demoPosts={demoPosts}
+          setDemoPosts={setDemoPosts}
           isLoading={postsData === undefined}
+          defaultExpanded={false}
+          desktopColumns={desktopColumns}
+          onDesktopColumnsChange={setDesktopColumns}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
@@ -363,27 +513,31 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
               brandColor={effectiveColors.primary}
               secondary={effectiveColors.secondary}
               mode={effectiveColors.mode}
-              postCount={blogSelectionMode === 'manual' ? selectedPostIds.length : blogConfig.itemCount}
+              postCount={blogSelectionMode === 'demo' ? demoPosts.length : (blogSelectionMode === 'manual' ? selectedPostIds.length : blogConfig.itemCount)}
               selectedStyle={blogStyle}
               onStyleChange={setBlogStyle}
               title={title}
-              previewItems={typedPreviewPosts}
+              subtitle={headerSubtitle}
+              previewItems={demoPreviewItems ?? typedPreviewPosts}
               categoryMap={typedCategoryMap}
+              showAuthor={blogConfig.showAuthor}
+              showDate={blogConfig.showDate}
+              showExcerpt={blogConfig.showExcerpt}
               fontStyle={fontStyle}
               fontClassName="font-active"
+              hideHeader={hideHeader}
+              showTitleHeader={showTitleHeader}
+              showSubtitleHeader={showSubtitle}
+              showBadge={showBadge}
+              badgeText={badgeText}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              desktopColumns={desktopColumns}
             />
           </div>
         </div>
-
-        {warningMessages.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 mb-4">
-            <ul className="list-disc pl-4 space-y-1">
-              {warningMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
@@ -391,6 +545,8 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           disableSave={saveDisabled}
           onCancel={() =>{  router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

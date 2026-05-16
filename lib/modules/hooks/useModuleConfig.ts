@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { toast } from 'sonner';
+import { revalidateSeoPaths } from '@/app/actions/seo-revalidate';
 import type { ModuleDefinition } from '../define-module';
 import type { FieldConfig, FieldType } from '@/types/module-config';
 
@@ -243,9 +244,11 @@ export function useModuleConfig(config: ModuleDefinition) {
      // Auto-update linked fields
      const feature = config.features?.find(f => f.key === key);
      if (feature?.linkedField) {
-       setLocalFields(prev => prev.map(f => 
-         f.linkedFeature === key ? { ...f, enabled: newState } : f
-       ));
+       setLocalFields(prev => prev.map(f => {
+        if (f.linkedFeature !== key) {return f;}
+        if (f.isSystem && !newState) {return f;}
+        return { ...f, enabled: newState };
+      }));
      }
 
     if (moduleKey === 'subscriptions' && key === 'enablePriority') {
@@ -285,6 +288,7 @@ export function useModuleConfig(config: ModuleDefinition) {
     }
      setIsSaving(true);
      try {
+      const hasSiteUrlChanged = moduleKey === 'settings' && localSettings.site_url !== serverSettings.site_url;
        const promises: Promise<unknown>[] = [];
        
        // Collect feature updates
@@ -334,6 +338,11 @@ export function useModuleConfig(config: ModuleDefinition) {
        }
        
        await Promise.all(promises);
+      if (hasSiteUrlChanged) {
+        void revalidateSeoPaths().catch(() => {
+          toast.warning('Đã lưu, đồng bộ SEO đang chậm.');
+        });
+      }
        toast.success('Đã lưu cấu hình!');
      } catch (error) {
        toast.error(error instanceof Error ? error.message : 'Có lỗi xảy ra');

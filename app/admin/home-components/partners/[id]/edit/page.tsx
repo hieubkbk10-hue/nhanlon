@@ -6,18 +6,21 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { LayoutTemplate, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Button } from '@/app/admin/components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { PartnersForm } from '../../_components/PartnersForm';
 import { PartnersPreview } from '../../_components/PartnersPreview';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
-import type { PartnerItem, PartnersStyle } from '../../_types';
+import { DEFAULT_PARTNERS_DISPLAY_MODE, normalizePartnersDisplayMode, normalizePartnersStyle, type PartnerItem, type PartnersDisplayMode, type PartnersStyle } from '../../_types';
+import { AiDemoPartnersImport } from '../../../product-list/_components/AiDemoProductsImport';
 
 const COMPONENT_TYPE = 'Partners';
 
@@ -35,8 +38,35 @@ export default function PartnersEditPage({ params }: { params: Promise<{ id: str
   const [active, setActive] = useState(true);
   const [partnersItems, setPartnersItems] = useState<PartnerItem[]>([]);
   const [partnersStyle, setPartnersStyle] = useState<PartnersStyle>('grid');
+  const [displayMode, setDisplayMode] = useState<PartnersDisplayMode>(DEFAULT_PARTNERS_DISPLAY_MODE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
+
+  const DEMO_PARTNERS_ITEMS: PartnerItem[] = [
+    { id: 'demo-1', link: '', name: 'Apex Digital', url: '/demo/partners/partner-1.png' },
+    { id: 'demo-2', link: '', name: 'NexaCore', url: '/demo/partners/partner-2.png' },
+    { id: 'demo-3', link: '', name: 'InfiniLoop', url: '/demo/partners/partner-3.png' },
+    { id: 'demo-4', link: '', name: 'Summit Labs', url: '/demo/partners/partner-4.png' },
+    { id: 'demo-5', link: '', name: 'GreenLeaf', url: '/demo/partners/partner-5.png' },
+    { id: 'demo-6', link: '', name: 'Globex Corp', url: '/demo/partners/partner-6.png' },
+  ];
+
+  const handleUseDemoImages = () => {
+    setPartnersItems(DEMO_PARTNERS_ITEMS);
+  };
+
+  // Header state
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [subtitle, setSubtitle] = useState('');
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('center');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('Đối tác');
+  const [headerExpanded, setHeaderExpanded] = useState(false);
 
   const normalizeItemsForCompare = (items: PartnerItem[]) => items.map(item => ({
     link: item.link?.trim() ?? '',
@@ -61,24 +91,63 @@ export default function PartnersEditPage({ params }: { params: Promise<{ id: str
         name: item.name ?? '',
         url: item.url,
       })) ?? [{ id: 'item-1', link: '', name: '', url: '' }];
-      const nextStyle = (config.style as PartnersStyle) || 'grid';
+      const nextStyle = normalizePartnersStyle(config.style);
+      const nextDisplayMode = normalizePartnersDisplayMode(config.displayMode);
+
+      // Load header config
+      const headerConfig = extractSectionHeaderConfig(config);
+      setHideHeader(headerConfig.hideHeader ?? false);
+      setShowTitle(headerConfig.showTitle ?? true);
+      setShowSubtitle(headerConfig.showSubtitle ?? true);
+      setSubtitle(headerConfig.subtitle ?? '');
+      setHeaderAlign(headerConfig.headerAlign ?? 'center');
+      setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+      setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+      setUppercaseText(headerConfig.uppercaseText ?? false);
+      setShowBadge(headerConfig.showBadge ?? true);
+      setBadgeText(headerConfig.badgeText ?? 'Đối tác');
 
       setPartnersItems(nextItems);
       setPartnersStyle(nextStyle);
+      setDisplayMode(nextDisplayMode);
       setInitialSnapshot(JSON.stringify({
+        displayMode: nextDisplayMode,
         title: component.title.trim(),
         active: component.active,
         style: nextStyle,
         items: normalizeItemsForCompare(nextItems),
+        // Header fields
+        hideHeader: headerConfig.hideHeader,
+        showTitle: headerConfig.showTitle,
+        showSubtitle: headerConfig.showSubtitle,
+        subtitle: headerConfig.subtitle,
+        headerAlign: headerConfig.headerAlign,
+        titleColorPrimary: headerConfig.titleColorPrimary,
+        subtitleAboveTitle: headerConfig.subtitleAboveTitle,
+        uppercaseText: headerConfig.uppercaseText,
+        showBadge: headerConfig.showBadge,
+        badgeText: headerConfig.badgeText,
       }));
     }
   }, [component, id, router]);
 
   const currentSnapshot = JSON.stringify({
+    displayMode,
     title: title.trim(),
     active,
     style: partnersStyle,
     items: normalizeItemsForCompare(partnersItems),
+    // Header fields
+    hideHeader,
+    showTitle,
+    showSubtitle,
+    subtitle,
+    headerAlign,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
   });
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
   const customChanged = showCustomBlock
@@ -102,8 +171,20 @@ export default function PartnersEditPage({ params }: { params: Promise<{ id: str
       await updateMutation({
         active,
         config: {
+          displayMode,
           items: partnersItems.map(item => ({ link: item.link, name: item.name, url: item.url })),
           style: partnersStyle,
+          // Header fields
+          hideHeader,
+          showTitle,
+          showSubtitle,
+          subtitle,
+          headerAlign,
+          titleColorPrimary,
+          subtitleAboveTitle,
+          uppercaseText,
+          showBadge,
+          badgeText,
         },
         id: id as Id<"homeComponents">,
         title,
@@ -171,44 +252,49 @@ export default function PartnersEditPage({ params }: { params: Promise<{ id: str
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <LayoutTemplate size={20} />
-              Partners
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) =>{  setTitle(e.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
 
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5'
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <PartnersForm
+          items={partnersItems}
+          setItems={setPartnersItems}
+          displayMode={displayMode}
+          setDisplayMode={setDisplayMode}
+        />
 
-        <PartnersForm items={partnersItems} setItems={setPartnersItems} />
+        <div className="mb-6 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={handleUseDemoImages}>
+            Dùng ảnh demo
+          </Button>
+          <AiDemoPartnersImport buttonClassName="h-10" onApply={setPartnersItems} />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
@@ -261,8 +347,21 @@ export default function PartnersEditPage({ params }: { params: Promise<{ id: str
               selectedStyle={partnersStyle}
               onStyleChange={setPartnersStyle}
               title={title}
+              subheading={subtitle}
+              align={headerAlign}
+              displayMode={displayMode}
+              onDisplayModeChange={setDisplayMode}
               fontStyle={fontStyle}
               fontClassName="font-active"
+              hideHeader={hideHeader}
+              showTitle={showTitle}
+              showSubtitle={showSubtitle}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              showBadge={showBadge}
+              badgeText={badgeText}
             />
           </div>
         </div>
@@ -270,8 +369,10 @@ export default function PartnersEditPage({ params }: { params: Promise<{ id: str
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+          active={active}
+          onActiveChange={setActive}
         />
       </form>
     </div>

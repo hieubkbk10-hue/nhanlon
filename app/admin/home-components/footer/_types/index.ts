@@ -22,13 +22,17 @@ export type FooterStyle = 'classic' | 'modern' | 'corporate' | 'minimal' | 'cent
 
 export type FooterMaxWidth = '6xl' | '7xl' | '8xl' | '9xl';
 
+export type FooterLogoBackgroundStyle = 'none' | 'flat-light' | 'flat-dark' | 'flat-brand';
+
 export interface FooterConfig {
   columns: FooterColumn[];
   copyright: string;
   description: string;
   logo: string;
+  logoName: string;
   maxWidth?: FooterMaxWidth;
   logoSizeLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+  logoBackgroundStyle?: FooterLogoBackgroundStyle;
   showCopyright?: boolean;
   showBctLogo?: boolean;
   bctLogoType?: 'thong-bao' | 'dang-ky';

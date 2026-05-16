@@ -35,6 +35,17 @@ export interface ContactConfig {
   submitButtonText?: string;
   responseTimeText?: string;
   texts?: Record<string, string>;
+  // Shared header config
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  subtitle?: string;
+  showSubtitle?: boolean;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }
 
 export interface ContactConfigState extends ContactConfig {

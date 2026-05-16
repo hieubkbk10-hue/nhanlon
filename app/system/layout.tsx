@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { 
   BarChart3, 
   Blocks, 
+  BookOpen,
   ChevronRight, 
   Database, 
   Globe,
@@ -12,6 +13,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   LogOut,
+  Map,
   type LucideIcon,
   Menu,
   Moon,
@@ -162,12 +164,14 @@ function SystemLayoutContent({ children }: { children: React.ReactNode }) {
 
   const getPageName = () => {
     if (pathname === '/system') {return t.pages.dashboard;}
+    if (pathname.includes('huong-dan')) {return t.pages.guides;}
     if (pathname.includes('modules')) {return t.pages.moduleManagement;}
     if (pathname.includes('home-components')) {return t.pages.homeComponents;}
     if (pathname.includes('data')) {return 'Data Manager';}
     if (pathname.includes('experiences')) {return t.pages.experiences;}
     if (pathname.includes('integrations')) {return t.pages.analyticsIntegrations;}
     if (pathname.includes('seo')) {return t.pages.seoConfiguration;}
+    if (pathname.includes('ia')) {return t.pages.informationArchitecture;}
     return 'System';
   };
 
@@ -196,6 +200,7 @@ function SystemLayoutContent({ children }: { children: React.ReactNode }) {
           <SidebarItem href="/system" icon={LayoutDashboard} label={t.sidebar.overview} collapsed={collapsed} />
           
           <SidebarGroup label={t.sidebar.control} collapsed={collapsed} />
+          <SidebarItem href="/system/huong-dan" icon={BookOpen} label={t.sidebar.guides} collapsed={collapsed} />
           <SidebarItem href="/system/modules" icon={Blocks} label={t.sidebar.modules} collapsed={collapsed} />
           <SidebarItem href="/system/experiences" icon={LayoutTemplate} label={t.sidebar.experiences} collapsed={collapsed} />
           <SidebarItem href="/system/home-components" icon={LayoutGrid} label={t.sidebar.homeComponents} collapsed={collapsed} />
@@ -203,6 +208,7 @@ function SystemLayoutContent({ children }: { children: React.ReactNode }) {
           <SidebarItem href="/system/data" icon={Database} label="Data Manager" collapsed={collapsed} />
           <SidebarItem href="/system/integrations" icon={BarChart3} label={t.sidebar.analytics} collapsed={collapsed} />
           <SidebarItem href="/system/seo" icon={Globe} label={t.sidebar.seo} collapsed={collapsed} />
+          <SidebarItem href="/system/ia" icon={Map} label={t.sidebar.ia} collapsed={collapsed} />
         </nav>
 
         {/* Sidebar Footer */}

@@ -34,6 +34,12 @@ import {
 } from 'lucide-react';
 import { CommentsPreview } from './DetailPreview';
 import { getProductDetailColors } from '@/components/site/products/detail/_lib/colors';
+import {
+  getProductImageFrameConfig,
+  getVerticalThumbnailSlots,
+  type ProductImageAspectRatio,
+} from '@/components/site/products/detail/_lib/image-aspect-ratio';
+import { ProductImageLightbox } from '@/components/site/products/detail/_components/ProductImageLightbox';
 
 type ProductDetailPreviewProps = {
   layoutStyle: 'classic' | 'modern' | 'minimal';
@@ -46,10 +52,13 @@ type ProductDetailPreviewProps = {
   showAddToCart: boolean;
   showBuyNow: boolean;
   showVariants?: boolean;
+  showAllProductImagesSection?: boolean;
+  enableImageLightbox?: boolean;
   showHighlights: boolean;
   classicHighlights?: { icon: string; text: string }[];
   heroStyle?: 'full' | 'split' | 'minimal';
   contentWidth?: 'narrow' | 'medium' | 'wide';
+  imageAspectRatio: ProductImageAspectRatio;
   device?: 'desktop' | 'tablet' | 'mobile';
   brandColor?: string;
   secondaryColor?: string;
@@ -98,33 +107,130 @@ const PREVIEW_IMAGES = [
 const PREVIEW_DESCRIPTION = 'Thiết kế sang trọng, hiệu năng bền bỉ và trải nghiệm màn hình sắc nét phù hợp nhu cầu cao cấp. Pin tối ưu cho cả ngày dài, camera linh hoạt và chất liệu hoàn thiện tinh tế.';
 const RATING_STAR_ACTIVE_COLOR = '#f59e0b';
 
+function usePrefersReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleChange = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    handleChange();
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+function preloadNeighborImages(images: string[], centerIndex: number) {
+  if (typeof window === 'undefined' || images.length === 0) {
+    return;
+  }
+
+  const candidates = [images[centerIndex], images[centerIndex - 1], images[centerIndex + 1]];
+  candidates.forEach((candidate) => {
+    if (!candidate) {
+      return;
+    }
+    const image = new window.Image();
+    image.src = candidate;
+  });
+}
+
 function BlurredPreviewImage({ src, alt }: { src: string; alt: string }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [incomingSrc, setIncomingSrc] = useState<string | null>(null);
+  const [incomingVisible, setIncomingVisible] = useState(false);
+
+  useEffect(() => {
+    if (!src) {
+      setIncomingSrc(null);
+      setIncomingVisible(false);
+      return;
+    }
+
+    if (!currentSrc) {
+      setCurrentSrc(src);
+      return;
+    }
+
+    if (currentSrc === src) {
+      return;
+    }
+
+    if (prefersReducedMotion) {
+      setCurrentSrc(src);
+      setIncomingSrc(null);
+      setIncomingVisible(false);
+      return;
+    }
+
+    setIncomingSrc(src);
+    setIncomingVisible(false);
+
+    const frame = window.requestAnimationFrame(() => setIncomingVisible(true));
+    const timeout = window.setTimeout(() => {
+      setCurrentSrc(src);
+      setIncomingSrc(null);
+      setIncomingVisible(false);
+    }, 160);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [currentSrc, prefersReducedMotion, src]);
+
   return (
     <>
       <div
         className="absolute inset-0 scale-110"
         style={{
-          backgroundImage: `url(${src})`,
+          backgroundImage: `url(${currentSrc})`,
           backgroundPosition: 'center',
           backgroundSize: 'cover',
           filter: 'blur(24px)',
         }}
       />
       <div className="absolute inset-0 bg-black/10" />
-      <img src={src} alt={alt} className="relative z-10 h-full w-full object-contain" />
+      <img src={currentSrc} alt={alt} className="relative z-10 h-full w-full object-contain" />
+
+      {incomingSrc && (
+        <div className={`absolute inset-0 transition-opacity duration-150 ease-out ${incomingVisible ? 'opacity-100' : 'opacity-0'}`}>
+          <div
+            className="absolute inset-0 scale-110"
+            style={{
+              backgroundImage: `url(${incomingSrc})`,
+              backgroundPosition: 'center',
+              backgroundSize: 'cover',
+              filter: 'blur(24px)',
+            }}
+          />
+          <div className="absolute inset-0 bg-black/10" />
+          <img src={incomingSrc} alt={alt} className="relative z-10 h-full w-full object-contain" />
+        </div>
+      )}
     </>
   );
 }
 
-function ExpandablePreviewText({ text, className, style, buttonStyle }: { text: string; className?: string; style?: React.CSSProperties; buttonStyle?: React.CSSProperties }) {
+function ExpandablePreviewDescriptionBlock({
+  children,
+  buttonStyle,
+}: {
+  children: React.ReactNode;
+  buttonStyle?: React.CSSProperties;
+}) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [canExpand, setCanExpand] = useState(false);
 
   useEffect(() => {
-    if (expanded) {
-      return;
-    }
     const element = contentRef.current;
     if (!element) {
       return;
@@ -139,21 +245,20 @@ function ExpandablePreviewText({ text, className, style, buttonStyle }: { text: 
     const observer = new ResizeObserver(checkOverflow);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [expanded, text]);
+  }, [expanded, children]);
 
   return (
     <div>
       <div
         ref={contentRef}
-        className={`${className ?? ''} ${expanded ? '' : 'line-clamp-4 md:line-clamp-5'}`.trim()}
-        style={style}
+        className={`${expanded ? '' : 'max-h-[640px] overflow-hidden md:max-h-[860px]'}`.trim()}
       >
-        {text}
+        {children}
       </div>
       {canExpand && (
         <button
           type="button"
-          className="mt-2 text-sm font-medium"
+          className="mt-3 text-sm font-medium"
           style={buttonStyle}
           onClick={() => setExpanded((prev) => !prev)}
         >
@@ -237,9 +342,11 @@ function PreviewMobileCarousel({
 type PreviewThumbnailRailProps = {
   images: string[];
   activeIndex?: number;
+  onActiveIndexChange?: (index: number) => void;
   orientation: 'horizontal' | 'vertical';
   visibleSlots: number;
   tokens: ReturnType<typeof getProductDetailColors>;
+  thumbnailAspectRatio: string;
   className?: string;
   listClassName?: string;
   itemClassName?: string;
@@ -248,9 +355,11 @@ type PreviewThumbnailRailProps = {
 function PreviewThumbnailRail({
   images,
   activeIndex = 0,
+  onActiveIndexChange,
   orientation,
   visibleSlots,
   tokens,
+  thumbnailAspectRatio,
   className,
   listClassName,
   itemClassName,
@@ -290,11 +399,13 @@ function PreviewThumbnailRail({
   }
 
   const visibleImages = hasOverflow ? images.slice(startIndex, startIndex + visibleSlots) : images;
-  const canScrollPrev = hasOverflow && startIndex > 0;
-  const canScrollNext = hasOverflow && startIndex < maxStartIndex;
+  const canScrollPrev = hasOverflow && activeIndex > 0;
+  const canScrollNext = hasOverflow && activeIndex < images.length - 1;
   const railClassName = `${isVertical ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2'} ${className ?? ''}`.trim();
   const listClass = `${isVertical ? 'flex flex-col gap-2' : 'flex gap-2'} ${listClassName ?? ''}`.trim();
   const arrowClassName = 'h-8 w-8 rounded-full border flex items-center justify-center transition-colors disabled:opacity-40';
+  const handlePrev = () => onActiveIndexChange?.(Math.max(0, activeIndex - 1));
+  const handleNext = () => onActiveIndexChange?.(Math.min(images.length - 1, activeIndex + 1));
 
   return (
     <div className={railClassName}>
@@ -303,7 +414,7 @@ function PreviewThumbnailRail({
           type="button"
           aria-label={isVertical ? 'Ảnh trước' : 'Ảnh trước'}
           disabled={!canScrollPrev}
-          onClick={() => setStartIndex((prev) => Math.max(0, prev - 1))}
+          onClick={handlePrev}
           className={arrowClassName}
           style={{ borderColor: tokens.thumbnailBorder, color: tokens.thumbnailBorderActive, backgroundColor: tokens.surface }}
         >
@@ -315,13 +426,19 @@ function PreviewThumbnailRail({
           const actualIndex = hasOverflow ? startIndex + index : index;
           const isActive = actualIndex === activeIndex;
           return (
-            <div
+            <button
               key={`${img}-${actualIndex}`}
-              className={`${itemClassName ?? 'aspect-square w-20 rounded-lg'} overflow-hidden border-2`}
-              style={{ borderColor: isActive ? tokens.thumbnailBorderActive : tokens.thumbnailBorder, backgroundColor: tokens.surfaceMuted }}
+              type="button"
+              onClick={() => onActiveIndexChange?.(actualIndex)}
+              className={`${itemClassName ?? 'w-20 rounded-lg'} overflow-hidden border-2`}
+              style={{
+                aspectRatio: thumbnailAspectRatio,
+                borderColor: isActive ? tokens.thumbnailBorderActive : tokens.thumbnailBorder,
+                backgroundColor: tokens.surfaceMuted,
+              }}
             >
               <img src={img} alt="" className="h-full w-full object-contain" />
-            </div>
+            </button>
           );
         })}
       </div>
@@ -330,7 +447,7 @@ function PreviewThumbnailRail({
           type="button"
           aria-label={isVertical ? 'Ảnh kế tiếp' : 'Ảnh kế tiếp'}
           disabled={!canScrollNext}
-          onClick={() => setStartIndex((prev) => Math.min(maxStartIndex, prev + 1))}
+          onClick={handleNext}
           className={arrowClassName}
           style={{ borderColor: tokens.thumbnailBorder, color: tokens.thumbnailBorderActive, backgroundColor: tokens.surface }}
         >
@@ -390,10 +507,13 @@ export function ProductDetailPreview({
   showAddToCart,
   showBuyNow,
   showVariants = true,
+  showAllProductImagesSection = false,
+  enableImageLightbox = false,
   showHighlights,
   classicHighlights = [],
   heroStyle = 'full',
   contentWidth = 'medium',
+  imageAspectRatio,
   device = 'desktop',
   brandColor = '#06b6d4',
   secondaryColor,
@@ -405,7 +525,11 @@ export function ProductDetailPreview({
   const isMobile = device === 'mobile';
   const isDesktop = device === 'desktop';
   const isTablet = device === 'tablet';
-  const [mobileCarouselIndex, setMobileCarouselIndex] = useState(0);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [mainImageHeight, setMainImageHeight] = useState<number | null>(null);
+  const mainImageRef = useRef<HTMLDivElement>(null);
+  const mainImageHeightRef = useRef<number | null>(null);
   const productName = 'iPhone 15 Pro Max 256GB';
   const categoryName = 'Điện thoại';
   const sku = 'IP15PM-256';
@@ -439,6 +563,10 @@ export function ProductDetailPreview({
     : contentWidth === 'wide'
       ? 'max-w-7xl'
       : 'max-w-6xl';
+  const imageFrame = getProductImageFrameConfig(imageAspectRatio, layoutStyle);
+  const mainImageFrameStyle: React.CSSProperties = { aspectRatio: imageFrame.frameAspectRatio };
+  const thumbnailFrameStyle: React.CSSProperties = { aspectRatio: imageFrame.thumbnailAspectRatio };
+  const relatedImageFrameStyle: React.CSSProperties = { aspectRatio: imageFrame.frameAspectRatio };
   const heroContainerClass = heroStyle === 'full'
     ? 'border rounded-2xl'
     : heroStyle === 'split'
@@ -448,10 +576,60 @@ export function ProductDetailPreview({
     ? { borderColor: tokens.border, backgroundColor: tokens.surfaceMuted }
     : { borderColor: tokens.border, backgroundColor: tokens.surface };
   const heroImageWrapperClass = heroStyle === 'split'
-    ? 'relative aspect-square flex items-center justify-center p-6'
+    ? 'relative flex items-center justify-center p-6'
     : heroStyle === 'minimal'
-      ? 'relative aspect-square flex items-center justify-center p-3'
-      : 'relative aspect-square flex items-center justify-center p-6';
+      ? 'relative flex items-center justify-center p-3'
+      : 'relative flex items-center justify-center p-6';
+  const verticalVisibleSlots = mainImageHeight
+    ? getVerticalThumbnailSlots({
+      frameHeight: mainImageHeight,
+      thumbnailWidth: 80,
+      thumbnailAspectRatio: imageFrame.thumbnailAspectRatio,
+      gap: 8,
+      arrowHeight: 32,
+      imageCount: PREVIEW_IMAGES.length,
+      minSlots: 1,
+    })
+    : 6;
+  const canOpenLightbox = enableImageLightbox && PREVIEW_IMAGES.length > 0;
+
+  const openLightboxAt = (index: number) => {
+    if (!canOpenLightbox) {
+      return;
+    }
+    setLightboxIndex(index);
+  };
+
+  const handleLightboxKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!canOpenLightbox) {
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openLightboxAt(activeImageIndex);
+    }
+  };
+
+  useEffect(() => {
+    preloadNeighborImages(PREVIEW_IMAGES, activeImageIndex);
+  }, [activeImageIndex]);
+
+  useEffect(() => {
+    const element = mainImageRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const nextHeight = Math.round(entries[0]?.contentRect?.height ?? 0);
+      if (!nextHeight || nextHeight === mainImageHeightRef.current) {
+        return;
+      }
+      mainImageHeightRef.current = nextHeight;
+      setMainImageHeight(nextHeight);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [layoutStyle]);
 
   const renderHighlights = () => (
     <div className="grid grid-cols-3 gap-4 p-4 rounded-xl" style={{ backgroundColor: tokens.highlightBg }}>
@@ -467,6 +645,30 @@ export function ProductDetailPreview({
     </div>
   );
 
+  const renderPreviewDescriptionImages = () => {
+    if (!showAllProductImagesSection || PREVIEW_IMAGES.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mt-6 border-t pt-6" style={{ borderColor: tokens.divider }}>
+        <h4 className="text-base font-semibold" style={{ color: tokens.headingColor }}>Toàn bộ ảnh sản phẩm</h4>
+        <p className="mt-1 text-xs" style={{ color: tokens.metaText }}>Lăn để xem chi tiết ảnh sản phẩm.</p>
+        <div className="mt-3 space-y-4">
+          {PREVIEW_IMAGES.map((image, index) => (
+            <div
+              key={`${image}-${index}`}
+              className="w-full overflow-hidden rounded-2xl"
+              style={{ ...mainImageFrameStyle, backgroundColor: tokens.surfaceMuted }}
+            >
+              <img src={image} alt={`${productName} ${index + 1}`} className="h-full w-full object-contain" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="py-6 px-4 min-h-[300px]">
       <div className="max-w-6xl mx-auto">
@@ -474,30 +676,39 @@ export function ProductDetailPreview({
           <>
             <div className={`${isMobile ? 'space-y-4' : 'grid grid-cols-2 gap-8'}`}>
             <div className="space-y-3">
-              <div className="relative aspect-square rounded-xl overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
-                {PREVIEW_IMAGES.length > 0 ? (
-                  <>
-                    {isMobile ? (
-                      <PreviewMobileCarousel
-                        images={PREVIEW_IMAGES}
-                        alt={productName}
-                        activeIndex={mobileCarouselIndex}
-                        onActiveIndexChange={setMobileCarouselIndex}
-                      />
-                    ) : (
-                      <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
-                    )}
-                    {isMobile && PREVIEW_IMAGES.length > 1 && (
-                      <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                        {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
-                  </div>
-                )}
+              <div className={imageFrame.frameWidthClassName}>
+                <div
+                  className={`relative rounded-xl overflow-hidden ${canOpenLightbox ? 'cursor-zoom-in' : ''}`.trim()}
+                  style={{ ...mainImageFrameStyle, backgroundColor: tokens.surfaceMuted }}
+                  role={canOpenLightbox ? 'button' : undefined}
+                  tabIndex={canOpenLightbox ? 0 : -1}
+                  onClick={canOpenLightbox ? () => openLightboxAt(activeImageIndex) : undefined}
+                  onKeyDown={handleLightboxKeyDown}
+                >
+                  {PREVIEW_IMAGES.length > 0 ? (
+                    <>
+                      {isMobile ? (
+                        <PreviewMobileCarousel
+                          images={PREVIEW_IMAGES}
+                          alt={productName}
+                          activeIndex={activeImageIndex}
+                          onActiveIndexChange={setActiveImageIndex}
+                        />
+                      ) : (
+                        <BlurredPreviewImage src={PREVIEW_IMAGES[activeImageIndex]} alt={productName} />
+                      )}
+                      {isMobile && PREVIEW_IMAGES.length > 1 && (
+                        <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                          {activeImageIndex + 1}/{PREVIEW_IMAGES.length}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
+                    </div>
+                  )}
+                </div>
               </div>
               {PREVIEW_IMAGES.length > 1 && (
                 <>
@@ -506,8 +717,9 @@ export function ProductDetailPreview({
                       {PREVIEW_IMAGES.slice(0, 4).map((img, index) => (
                         <div
                           key={img}
-                          className="aspect-square rounded-lg border-2 overflow-hidden relative"
+                          className="rounded-lg border-2 overflow-hidden relative"
                           style={{
+                            ...thumbnailFrameStyle,
                             borderColor: index === 0 ? tokens.thumbnailBorderActive : tokens.thumbnailBorder,
                             backgroundColor: tokens.surfaceMuted,
                           }}
@@ -520,11 +732,13 @@ export function ProductDetailPreview({
                   {isDesktop && (
                     <PreviewThumbnailRail
                       images={PREVIEW_IMAGES}
-                      activeIndex={0}
+                      activeIndex={activeImageIndex}
                       orientation="horizontal"
                       visibleSlots={6}
                       tokens={tokens}
-                      itemClassName="aspect-square w-20 rounded-lg"
+                      thumbnailAspectRatio={imageFrame.thumbnailAspectRatio}
+                      onActiveIndexChange={setActiveImageIndex}
+                      itemClassName="w-20 rounded-lg"
                     />
                   )}
                 </>
@@ -592,7 +806,16 @@ export function ProductDetailPreview({
                     </button>
                   )}
                   {showBuyNow && (
-                    <button className="py-3.5 px-8 rounded-xl font-semibold flex items-center justify-center gap-2 border" style={{ borderColor: tokens.ctaSecondaryBorder, color: tokens.ctaSecondaryText }}>
+                    <button
+                      className="py-3.5 px-8 rounded-xl font-semibold flex items-center justify-center gap-2 border transition-all cursor-pointer bg-[var(--cta-secondary-bg)] shadow-sm hover:bg-[var(--cta-secondary-hover-bg)] hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cta-secondary-ring)]"
+                      style={{
+                        borderColor: tokens.ctaSecondaryBorder,
+                        color: tokens.ctaSecondaryText,
+                        '--cta-secondary-bg': tokens.ctaSecondaryHoverBg,
+                        '--cta-secondary-hover-bg': tokens.ctaSecondaryHoverBg,
+                        '--cta-secondary-ring': tokens.inputRing,
+                      } as React.CSSProperties}
+                    >
                       Mua ngay
                     </button>
                   )}
@@ -618,12 +841,12 @@ export function ProductDetailPreview({
               {showHighlightBlock && renderHighlights()}
               <div className="border-t pt-6" style={{ borderColor: tokens.divider }}>
                 <h3 className="font-semibold mb-4" style={{ color: tokens.headingColor }}>Mô tả sản phẩm</h3>
-                <ExpandablePreviewText
-                  text={PREVIEW_DESCRIPTION}
-                  className="prose prose-sm max-w-none"
-                  style={{ color: tokens.bodyText }}
-                  buttonStyle={{ color: tokens.primary }}
-                />
+                <ExpandablePreviewDescriptionBlock buttonStyle={{ color: tokens.primary }}>
+                  <div className="prose prose-sm max-w-none" style={{ color: tokens.bodyText }}>
+                    {PREVIEW_DESCRIPTION}
+                  </div>
+                  {renderPreviewDescriptionImages()}
+                </ExpandablePreviewDescriptionBlock>
               </div>
             </div>
           </div>
@@ -672,57 +895,19 @@ export function ProductDetailPreview({
                 {heroStyle === 'split' ? (
                   <div className={`overflow-hidden ${heroContainerClass}`} style={heroContainerStyle}>
                     <div className="grid md:grid-cols-2 gap-3 items-center p-3 md:p-5">
-                      <div className="relative aspect-square rounded-xl overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
-                        {discountPercent > 0 && (
-                          <span
-                            className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                            style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
-                          >
-                            -{discountPercent}%
-                          </span>
-                        )}
-                      {PREVIEW_IMAGES.length > 0 ? (
-                        <>
-                          {isMobile ? (
-                            <PreviewMobileCarousel
-                              images={PREVIEW_IMAGES}
-                              alt={productName}
-                              activeIndex={mobileCarouselIndex}
-                              onActiveIndexChange={setMobileCarouselIndex}
-                            />
-                          ) : (
-                            <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
-                          )}
-                          {isMobile && (
-                            <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                              {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="hidden md:flex flex-col gap-3 text-sm" style={{ color: tokens.metaText }}>
-                        <span className="text-xs uppercase tracking-widest" style={{ color: tokens.softText }}>Điểm nổi bật</span>
-                        <ul className="space-y-2">
-                          <li>• Thiết kế cao cấp, hoàn thiện tinh tế</li>
-                          <li>• Công nghệ mới nhất, hiệu năng ổn định</li>
-                          <li>• Bảo hành chính hãng toàn quốc</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={`overflow-hidden ${heroContainerClass}`} style={heroContainerStyle}>
-                    <div className={`${heroImageWrapperClass} overflow-hidden`}>
+                      <div className={imageFrame.frameWidthClassName}>
+                    <div
+                      className={`relative rounded-xl overflow-hidden ${canOpenLightbox ? 'cursor-zoom-in' : ''}`.trim()}
+                      style={{ ...mainImageFrameStyle, backgroundColor: tokens.surfaceMuted }}
+                      role={canOpenLightbox ? 'button' : undefined}
+                      tabIndex={canOpenLightbox ? 0 : -1}
+                      onClick={canOpenLightbox ? () => openLightboxAt(activeImageIndex) : undefined}
+                      onKeyDown={handleLightboxKeyDown}
+                    >
                       {discountPercent > 0 && (
                         <span
                           className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                          style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
-                        >
+                          style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>
                           -{discountPercent}%
                         </span>
                       )}
@@ -732,15 +917,61 @@ export function ProductDetailPreview({
                             <PreviewMobileCarousel
                               images={PREVIEW_IMAGES}
                               alt={productName}
-                              activeIndex={mobileCarouselIndex}
-                              onActiveIndexChange={setMobileCarouselIndex}
+                              activeIndex={activeImageIndex}
+                              onActiveIndexChange={setActiveImageIndex}
                             />
                           ) : (
-                            <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
+                            <BlurredPreviewImage src={PREVIEW_IMAGES[activeImageIndex]} alt={productName} />
                           )}
                           {isMobile && (
                             <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                              {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
+                              {activeImageIndex + 1}/{PREVIEW_IMAGES.length}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`overflow-hidden ${heroContainerClass}`} style={heroContainerStyle}>
+                    <div className={heroImageWrapperClass}>
+                  <div className={`${imageFrame.frameWidthClassName} overflow-hidden`}>
+                    <div
+                      className={`relative overflow-hidden rounded-xl ${canOpenLightbox ? 'cursor-zoom-in' : ''}`.trim()}
+                      style={{ ...mainImageFrameStyle, backgroundColor: tokens.surfaceMuted }}
+                      role={canOpenLightbox ? 'button' : undefined}
+                      tabIndex={canOpenLightbox ? 0 : -1}
+                      onClick={canOpenLightbox ? () => openLightboxAt(activeImageIndex) : undefined}
+                      onKeyDown={handleLightboxKeyDown}
+                    >
+                      {discountPercent > 0 && (
+                        <span
+                          className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                          style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>
+                          -{discountPercent}%
+                        </span>
+                      )}
+                      {PREVIEW_IMAGES.length > 0 ? (
+                        <>
+                          {isMobile ? (
+                            <PreviewMobileCarousel
+                              images={PREVIEW_IMAGES}
+                              alt={productName}
+                              activeIndex={activeImageIndex}
+                              onActiveIndexChange={setActiveImageIndex}
+                            />
+                          ) : (
+                            <BlurredPreviewImage src={PREVIEW_IMAGES[activeImageIndex]} alt={productName} />
+                          )}
+                          {isMobile && (
+                            <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                              {activeImageIndex + 1}/{PREVIEW_IMAGES.length}
                             </span>
                           )}
                         </>
@@ -749,6 +980,8 @@ export function ProductDetailPreview({
                       )}
                     </div>
                   </div>
+                </div>
+                  </div>
                 )}
 
                 {heroStyle !== 'minimal' && PREVIEW_IMAGES.length > 1 && (
@@ -756,11 +989,13 @@ export function ProductDetailPreview({
                     {isDesktop && (
                       <PreviewThumbnailRail
                         images={PREVIEW_IMAGES}
-                        activeIndex={0}
+                        activeIndex={activeImageIndex}
                         orientation="horizontal"
                         visibleSlots={5}
                         tokens={tokens}
-                        itemClassName="aspect-square w-20 rounded-xl"
+                        thumbnailAspectRatio={imageFrame.thumbnailAspectRatio}
+                        onActiveIndexChange={setActiveImageIndex}
+                        itemClassName="w-20 rounded-xl"
                       />
                     )}
                   </>
@@ -840,7 +1075,16 @@ export function ProductDetailPreview({
                       </button>
                     )}
                     {showBuyNow && (
-                      <button className="w-full h-12 text-base font-semibold border" style={{ borderColor: tokens.ctaSecondaryBorder, color: tokens.ctaSecondaryText }}>
+                      <button
+                        className="w-full h-12 text-base font-semibold border transition-all cursor-pointer bg-[var(--cta-secondary-bg)] shadow-sm hover:bg-[var(--cta-secondary-hover-bg)] hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cta-secondary-ring)]"
+                        style={{
+                          borderColor: tokens.ctaSecondaryBorder,
+                          color: tokens.ctaSecondaryText,
+                          '--cta-secondary-bg': tokens.ctaSecondaryHoverBg,
+                          '--cta-secondary-hover-bg': tokens.ctaSecondaryHoverBg,
+                          '--cta-secondary-ring': tokens.inputRing,
+                        } as React.CSSProperties}
+                      >
                         Mua ngay
                       </button>
                     )}
@@ -860,12 +1104,12 @@ export function ProductDetailPreview({
                 {showHighlightBlock && renderHighlights()}
 
                 <div className="border rounded-2xl p-4" style={{ borderColor: tokens.border }}>
-                  <ExpandablePreviewText
-                    text={PREVIEW_DESCRIPTION}
-                    className="prose prose-sm max-w-none"
-                    style={{ color: tokens.bodyText }}
-                    buttonStyle={{ color: tokens.primary }}
-                  />
+                  <ExpandablePreviewDescriptionBlock buttonStyle={{ color: tokens.primary }}>
+                    <div className="prose prose-sm max-w-none" style={{ color: tokens.bodyText }}>
+                      {PREVIEW_DESCRIPTION}
+                    </div>
+                    {renderPreviewDescriptionImages()}
+                  </ExpandablePreviewDescriptionBlock>
                 </div>
 
                 <CommentsPreview
@@ -906,47 +1150,58 @@ export function ProductDetailPreview({
                     <div className="hidden md:flex md:flex-col md:w-20 shrink-0">
                       <PreviewThumbnailRail
                         images={PREVIEW_IMAGES}
-                        activeIndex={0}
+                        activeIndex={activeImageIndex}
                         orientation="vertical"
-                        visibleSlots={6}
+                        visibleSlots={verticalVisibleSlots}
                         tokens={tokens}
-                        itemClassName="aspect-square w-full rounded-sm"
+                        thumbnailAspectRatio={imageFrame.thumbnailAspectRatio}
+                        onActiveIndexChange={setActiveImageIndex}
+                        itemClassName="w-full rounded-sm"
                       />
                     </div>
                   )}
 
-                  <div className="flex-1 relative aspect-square w-full rounded-sm overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
-                    {discountPercent > 0 && (
-                      <span
-                        className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                        style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}
-                      >
-                        -{discountPercent}%
-                      </span>
-                    )}
-                    {PREVIEW_IMAGES.length > 0 ? (
-                      <>
-                        {isMobile ? (
-                          <PreviewMobileCarousel
-                            images={PREVIEW_IMAGES}
-                            alt={productName}
-                            activeIndex={mobileCarouselIndex}
-                            onActiveIndexChange={setMobileCarouselIndex}
-                          />
-                        ) : (
-                          <BlurredPreviewImage src={PREVIEW_IMAGES[0]} alt={productName} />
-                        )}
-                        {isMobile && (
-                          <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
-                              {mobileCarouselIndex + 1}/{PREVIEW_IMAGES.length}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
-                      </div>
-                    )}
+                  <div className={`flex-1 ${imageFrame.frameWidthClassName}`}>
+                    <div
+                      ref={mainImageRef}
+                      className={`relative w-full rounded-sm overflow-hidden ${canOpenLightbox ? 'cursor-zoom-in' : ''}`.trim()}
+                      style={{ ...mainImageFrameStyle, backgroundColor: tokens.surfaceMuted }}
+                      role={canOpenLightbox ? 'button' : undefined}
+                      tabIndex={canOpenLightbox ? 0 : -1}
+                      onClick={canOpenLightbox ? () => openLightboxAt(activeImageIndex) : undefined}
+                      onKeyDown={handleLightboxKeyDown}
+                    >
+                      {discountPercent > 0 && (
+                        <span
+                          className="absolute left-3 top-3 z-30 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                          style={{ backgroundColor: tokens.discountBadgeBg, color: tokens.discountBadgeText }}>
+                          -{discountPercent}%
+                        </span>
+                      )}
+                      {PREVIEW_IMAGES.length > 0 ? (
+                        <>
+                          {isMobile ? (
+                            <PreviewMobileCarousel
+                              images={PREVIEW_IMAGES}
+                              alt={productName}
+                              activeIndex={activeImageIndex}
+                              onActiveIndexChange={setActiveImageIndex}
+                            />
+                          ) : (
+                            <BlurredPreviewImage src={PREVIEW_IMAGES[activeImageIndex]} alt={productName} />
+                          )}
+                          {isMobile && (
+                            <span className="absolute bottom-3 right-3 px-2 py-0.5 text-[11px] font-semibold rounded-full backdrop-blur-sm" style={{ backgroundColor: tokens.surface, color: tokens.headingColor }}>
+                                {activeImageIndex + 1}/{PREVIEW_IMAGES.length}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-32 h-32 rounded-lg" style={{ backgroundColor: tokens.surfaceSoft }} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1015,7 +1270,16 @@ export function ProductDetailPreview({
                       )}
                     </div>
                     {showBuyNow && (
-                      <button className="h-12 uppercase tracking-wider text-xs font-medium border" style={{ borderColor: tokens.ctaSecondaryBorder, color: tokens.ctaSecondaryText }}>
+                      <button
+                        className="h-12 uppercase tracking-wider text-xs font-medium border transition-all cursor-pointer bg-[var(--cta-secondary-bg)] shadow-sm hover:bg-[var(--cta-secondary-hover-bg)] hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cta-secondary-ring)]"
+                        style={{
+                          borderColor: tokens.ctaSecondaryBorder,
+                          color: tokens.ctaSecondaryText,
+                          '--cta-secondary-bg': tokens.ctaSecondaryHoverBg,
+                          '--cta-secondary-hover-bg': tokens.ctaSecondaryHoverBg,
+                          '--cta-secondary-ring': tokens.inputRing,
+                        } as React.CSSProperties}
+                      >
                         Mua ngay
                       </button>
                     )}
@@ -1039,12 +1303,12 @@ export function ProductDetailPreview({
 
             <div className="rounded-2xl border px-6 py-8" style={{ borderColor: tokens.border }}>
               <h2 className="text-lg font-semibold mb-4" style={{ color: tokens.headingColor }}>Mô tả sản phẩm</h2>
-              <ExpandablePreviewText
-                text={PREVIEW_DESCRIPTION}
-                className="leading-relaxed"
-                style={{ color: tokens.bodyText }}
-                buttonStyle={{ color: tokens.primary }}
-              />
+              <ExpandablePreviewDescriptionBlock buttonStyle={{ color: tokens.primary }}>
+                <div className="leading-relaxed" style={{ color: tokens.bodyText }}>
+                  {PREVIEW_DESCRIPTION}
+                </div>
+                {renderPreviewDescriptionImages()}
+              </ExpandablePreviewDescriptionBlock>
             </div>
 
             <CommentsPreview
@@ -1063,10 +1327,10 @@ export function ProductDetailPreview({
                   {relatedProductsMode === 'pagination' && `Phân trang · ${relatedProductsPerPage}/trang`}
                 </span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {relatedItems.map((item, index) => (
-                  <div key={`${item.name}-${index}`} className="rounded-xl overflow-hidden border" style={{ borderColor: tokens.relatedCardBorder, backgroundColor: tokens.relatedCardBg }}>
-                    <div className="aspect-square overflow-hidden" style={{ backgroundColor: tokens.surfaceMuted }}>
+                  <div key={`${item.name}-${index}`} className="rounded-xl border overflow-hidden" style={{ borderColor: tokens.relatedCardBorder, backgroundColor: tokens.relatedCardBg }}>
+                    <div className="overflow-hidden" style={{ ...relatedImageFrameStyle, backgroundColor: tokens.surfaceMuted }}>
                       <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
                     </div>
                     <div className="p-3">
@@ -1098,6 +1362,15 @@ export function ProductDetailPreview({
           </div>
         )}
       </div>
+      <ProductImageLightbox
+        images={PREVIEW_IMAGES}
+        currentIndex={lightboxIndex ?? activeImageIndex}
+        open={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+        onIndexChange={(nextIndex) => setLightboxIndex(nextIndex)}
+        useNativeImage
+        frame={null}
+      />
     </div>
   );
 }

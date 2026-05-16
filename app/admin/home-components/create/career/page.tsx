@@ -12,12 +12,13 @@ import {
   DEFAULT_CAREER_TEXTS,
 } from '../../career/_lib/constants';
 import { getCareerValidationResult } from '../../career/_lib/colors';
-import { normalizeCareerJobs, toCareerJobsForConfig } from '../../career/_lib/normalize';
+import { normalizeCareerJobs } from '../../career/_lib/normalize';
 import type {
   CareerStyle,
   CareerTexts,
   JobPosition,
 } from '../../career/_types';
+import { AiDemoCareerImport } from '../../product-list/_components/AiDemoProductsImport';
 
 const DEFAULT_CREATE_JOBS: JobPosition[] = [
   createCareerJob({
@@ -54,54 +55,15 @@ export default function CareerCreatePage() {
 
   const normalizedJobs = useMemo(() => normalizeCareerJobs(jobPositions), [jobPositions]);
 
-  const validation = useMemo(() => getCareerValidationResult({
+  useMemo(() => getCareerValidationResult({
     primary,
     secondary,
     mode,
   }), [primary, secondary, mode]);
 
-  const warningMessages = useMemo(() => {
-    const warnings: string[] = [];
-
-    if (mode === 'dual' && validation.harmonyStatus.isTooSimilar) {
-      warnings.push(`Màu chính và màu phụ đang khá gần nhau (deltaE=${validation.harmonyStatus.deltaE}).`);
-    }
-
-    if (validation.accessibility.failing.length > 0) {
-      warnings.push(`Có ${validation.accessibility.failing.length} cặp màu chưa đạt APCA (minLc=${validation.accessibility.minLc.toFixed(1)}).`);
-    }
-
-    return warnings;
-  }, [mode, validation]);
-
-  const handleAddJob = () => {
-    setJobPositions((prev) => ([
-      ...prev,
-      createCareerJob({
-        id: `career-job-${Date.now()}-${prev.length}`,
-        type: 'Full-time',
-      }),
-    ]));
-  };
-
-  const handleRemoveJob = (index: number) => {
-    setJobPositions((prev) => {
-      if (prev.length <= 1) {
-        return prev;
-      }
-      return prev.filter((_, idx) => idx !== index);
-    });
-  };
-
-  const updateJob = (index: number, field: keyof JobPosition, value: string) => {
-    setJobPositions((prev) => prev.map((job, idx) => (
-      idx === index ? { ...job, [field]: value } : job
-    )));
-  };
-
   const onSubmit = (event: React.FormEvent) => {
     void handleSubmit(event, {
-      jobs: toCareerJobsForConfig(normalizedJobs),
+      jobs: normalizedJobs,
       style: careerStyle,
       texts,
     });
@@ -127,15 +89,26 @@ export default function CareerCreatePage() {
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Vị trí tuyển dụng</CardTitle>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleAddJob}
-            className="gap-2"
-          >
-            <Plus size={14} /> Thêm vị trí
-          </Button>
+          <div className="flex items-center gap-2">
+            <AiDemoCareerImport onApply={(items) => setJobPositions(items as JobPosition[])} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setJobPositions((prev) => [
+                  ...prev,
+                  createCareerJob({
+                    id: `career-job-${Date.now()}-${prev.length}`,
+                    type: 'Full-time',
+                  }),
+                ]);
+              }}
+              className="gap-2"
+            >
+              <Plus size={14} /> Thêm vị trí
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {jobPositions.map((job, idx) => (
@@ -150,7 +123,12 @@ export default function CareerCreatePage() {
                   variant="ghost"
                   size="icon"
                   className="text-red-500 h-8 w-8"
-                  onClick={() => { handleRemoveJob(idx); }}
+                  onClick={() => {
+                    setJobPositions((prev) => {
+                      if (prev.length <= 1) {return prev;}
+                      return prev.filter((_, i) => i !== idx);
+                    });
+                  }}
                   disabled={jobPositions.length <= 1}
                 >
                   <Trash2 size={14} />
@@ -161,12 +139,16 @@ export default function CareerCreatePage() {
                 <Input
                   placeholder="Vị trí tuyển dụng"
                   value={job.title}
-                  onChange={(event) => { updateJob(idx, 'title', event.target.value); }}
+                  onChange={(e) => {
+                    setJobPositions((prev) => prev.map((j, i) => (i === idx ? { ...j, title: e.target.value } : j)));
+                  }}
                 />
                 <Input
                   placeholder="Phòng ban"
                   value={job.department}
-                  onChange={(event) => { updateJob(idx, 'department', event.target.value); }}
+                  onChange={(e) => {
+                    setJobPositions((prev) => prev.map((j, i) => (i === idx ? { ...j, department: e.target.value } : j)));
+                  }}
                 />
               </div>
 
@@ -174,12 +156,16 @@ export default function CareerCreatePage() {
                 <Input
                   placeholder="Địa điểm"
                   value={job.location}
-                  onChange={(event) => { updateJob(idx, 'location', event.target.value); }}
+                  onChange={(e) => {
+                    setJobPositions((prev) => prev.map((j, i) => (i === idx ? { ...j, location: e.target.value } : j)));
+                  }}
                 />
                 <select
                   className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
                   value={job.type}
-                  onChange={(event) => { updateJob(idx, 'type', event.target.value); }}
+                  onChange={(e) => {
+                    setJobPositions((prev) => prev.map((j, i) => (i === idx ? { ...j, type: e.target.value } : j)));
+                  }}
                 >
                   <option>Full-time</option>
                   <option>Part-time</option>
@@ -189,14 +175,18 @@ export default function CareerCreatePage() {
                 <Input
                   placeholder="Mức lương"
                   value={job.salary}
-                  onChange={(event) => { updateJob(idx, 'salary', event.target.value); }}
+                  onChange={(e) => {
+                    setJobPositions((prev) => prev.map((j, i) => (i === idx ? { ...j, salary: e.target.value } : j)));
+                  }}
                 />
               </div>
 
               <Input
                 placeholder="Mô tả ngắn (tuỳ chọn)"
                 value={job.description}
-                onChange={(event) => { updateJob(idx, 'description', event.target.value); }}
+                onChange={(e) => {
+                  setJobPositions((prev) => prev.map((j, i) => (i === idx ? { ...j, description: e.target.value } : j)));
+                }}
               />
             </div>
           ))}
@@ -257,7 +247,7 @@ export default function CareerCreatePage() {
       </Card>
 
       <CareerPreview
-        jobs={toCareerJobsForConfig(normalizedJobs)}
+        jobs={normalizedJobs}
         brandColor={primary}
         secondary={secondary}
         mode={mode}
@@ -268,19 +258,6 @@ export default function CareerCreatePage() {
         fontStyle={fontStyle}
         fontClassName="font-active"
       />
-
-      {warningMessages.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {warningMessages.map((message) => (
-            <div
-              key={message}
-              className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700"
-            >
-              <p>{message}</p>
-            </div>
-          ))}
-        </div>
-      )}
     </ComponentFormWrapper>
   );
 }

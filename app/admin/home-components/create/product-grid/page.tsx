@@ -5,18 +5,19 @@ import { useQuery } from 'convex/react';
 import type { Id } from '@/convex/_generated/dataModel';
 import { api } from '@/convex/_generated/api';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
+import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { getHomeComponentPriceLabel, resolveSaleMode } from '../../_shared/lib/productPrice';
-import type { ProductListPreviewItem } from '../../product-list/_types';
-import type { ProductGridProductItem } from '../../product-grid/_components/ProductGridForm';
+import type { ProductListPreviewItem, DemoProductItem } from '../../product-list/_types';
+import type { ProductGridProductItem, CategoryTabItem } from '../../product-grid/_components/ProductGridForm';
 import { ProductGridForm } from '../../product-grid/_components/ProductGridForm';
 import { ProductGridPreview } from '../../product-grid/_components/ProductGridPreview';
-import type { ProductGridStyle } from '../../product-grid/_types';
+import type { ProductGridStyle, ProductGridSelectionMode } from '../../product-grid/_types';
 
 function ProductGridCreateContent() {
   const COMPONENT_TYPE = 'ProductGrid';
-  const { title, setTitle, active, setActive, handleSubmit, isSubmitting } = useComponentForm('Sản phẩm', COMPONENT_TYPE);
+  const { title, setTitle, active, setActive, handleSubmit, isSubmitting } = useComponentForm('Catalog sản phẩm', COMPONENT_TYPE);
   const { customState, effectiveColors, showCustomBlock, setCustomState, systemColors } = useTypeColorOverrideState(COMPONENT_TYPE, { seedCustomFromSettingsWhenTypeEmpty: true });
   const { customState: customFontState, effectiveFont, showCustomBlock: showFontCustomBlock, setCustomState: setCustomFontState } = useTypeFontOverrideState(COMPONENT_TYPE, { seedCustomFromSettingsWhenTypeEmpty: true });
   const { primary, secondary } = effectiveColors;
@@ -24,17 +25,40 @@ function ProductGridCreateContent() {
 
   const [itemCount, setItemCount] = useState(8);
   const [sortBy, setSortBy] = useState<'newest' | 'bestseller' | 'random'>('newest');
-  const [selectionMode, setSelectionMode] = useState<'auto' | 'manual'>('auto');
+  const [selectionMode, setSelectionMode] = useState<ProductGridSelectionMode>('auto');
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [demoProducts, setDemoProducts] = useState<DemoProductItem[]>([]);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [subTitle, setSubTitle] = useState('Bộ sưu tập');
   const [sectionTitle, setSectionTitle] = useState('Sản phẩm nổi bật');
   const [style, setStyle] = useState<ProductGridStyle>('commerce');
 
+  // Category tabs state
+  const [categoryTabIds, setCategoryTabIds] = useState<string[]>([]);
+  // Desktop columns
+  const [desktopColumns, setDesktopColumns] = useState<3 | 4 | 5 | 6>(4);
+
+  // Header config state
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitleHeader, setShowTitleHeader] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [headerExpanded, setHeaderExpanded] = useState(true);
+
   const productsData = useQuery(api.products.listAll, { limit: 100 });
   const resolvedProductsData = useQuery(api.products.listPublicResolved, { limit: 100 });
   const saleModeSetting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'saleMode' });
   const saleMode = useMemo(() => resolveSaleMode(saleModeSetting?.value), [saleModeSetting?.value]);
+  const categoriesData = useQuery(api.productCategories.listActive);
+
+  const allCategories: CategoryTabItem[] | undefined = useMemo(() => {
+    if (!categoriesData) return undefined;
+    return categoriesData.map(c => ({ _id: c._id, name: c.name, image: c.image, active: c.active }));
+  }, [categoriesData]);
 
   const resolvedProductMap = useMemo(() => new Map(
     (resolvedProductsData ?? []).map((product) => [product._id, product])
@@ -83,7 +107,7 @@ function ProductGridCreateContent() {
         ? getHomeComponentPriceLabel({ saleMode: 'cart', price: priceDisplay.comparePrice }).label
         : undefined,
     };
-  }), [selectedProducts, saleMode]);
+  }), [resolvedProductMap, selectedProducts, saleMode]);
 
   const autoProductPreviewItems: ProductListPreviewItem[] = useMemo(() => {
     const source = resolvedProductsData ?? productsData;
@@ -112,10 +136,25 @@ function ProductGridCreateContent() {
       itemCount,
       sectionTitle,
       selectedProductIds: selectionMode === 'manual' ? selectedProductIds : [],
+      demoProducts: selectionMode === 'demo' ? demoProducts : undefined,
       selectionMode,
       sortBy,
       style,
       subTitle,
+      showCategoryTabs: true,
+      categoryTabIds,
+      desktopColumns,
+      // Header config fields
+      hideHeader,
+      showTitle: showTitleHeader,
+      showSubtitle,
+      subtitle: sectionTitle,
+      headerAlign,
+      titleColorPrimary,
+      subtitleAboveTitle,
+      uppercaseText,
+      showBadge,
+      badgeText: subTitle,
     });
   };
 
@@ -136,6 +175,35 @@ function ProductGridCreateContent() {
       showFontCustomBlock={showFontCustomBlock}
       setCustomFontState={setCustomFontState}
     >
+      <HeaderConfigSection
+        hideHeader={hideHeader}
+        title={title}
+        showTitle={showTitleHeader}
+        subtitle={sectionTitle}
+        showSubtitle={showSubtitle}
+        headerAlign={headerAlign}
+        titleColorPrimary={titleColorPrimary}
+        subtitleAboveTitle={subtitleAboveTitle}
+        uppercaseText={uppercaseText}
+        showBadge={showBadge}
+        badgeText={subTitle}
+        onHideHeaderChange={setHideHeader}
+        onTitleChange={setTitle}
+        onShowTitleChange={setShowTitleHeader}
+        onSubtitleChange={setSectionTitle}
+        onShowSubtitleChange={setShowSubtitle}
+        onHeaderAlignChange={setHeaderAlign}
+        onTitleColorPrimaryChange={setTitleColorPrimary}
+        onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+        onUppercaseTextChange={setUppercaseText}
+        onShowBadgeChange={setShowBadge}
+        onBadgeTextChange={setSubTitle}
+        expanded={headerExpanded}
+        onExpandedChange={setHeaderExpanded}
+        titleLabel="Tiêu đề section"
+        titlePlaceholder="VD: Sản phẩm nổi bật, Bán chạy nhất..."
+      />
+
       <ProductGridForm
         itemCount={itemCount}
         setItemCount={setItemCount}
@@ -145,15 +213,18 @@ function ProductGridCreateContent() {
         setSelectionMode={setSelectionMode}
         selectedProductIds={selectedProductIds}
         setSelectedProductIds={setSelectedProductIds}
-        subTitle={subTitle}
-        setSubTitle={setSubTitle}
-        sectionTitle={sectionTitle}
-        setSectionTitle={setSectionTitle}
         productSearchTerm={productSearchTerm}
         setProductSearchTerm={setProductSearchTerm}
         selectedProducts={selectedProducts}
         filteredProducts={filteredProducts}
         isLoading={productsData === undefined}
+        demoProducts={demoProducts}
+        setDemoProducts={setDemoProducts}
+        categoryTabIds={categoryTabIds}
+        setCategoryTabIds={setCategoryTabIds}
+        allCategories={allCategories}
+        desktopColumns={desktopColumns}
+        onDesktopColumnsChange={setDesktopColumns}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
@@ -162,17 +233,38 @@ function ProductGridCreateContent() {
           <ProductGridPreview
             brandColor={primary}
             secondary={secondary}
-            itemCount={selectionMode === 'manual' ? selectedProductIds.length : itemCount}
+            itemCount={selectionMode === 'demo' ? demoProducts.length : (selectionMode === 'manual' ? selectedProductIds.length : itemCount)}
             selectedStyle={style}
             onStyleChange={setStyle}
-            items={selectionMode === 'manual' && productPreviewItems.length > 0
-              ? productPreviewItems
-              : (autoProductPreviewItems.length > 0 ? autoProductPreviewItems : undefined)
+            items={
+              selectionMode === 'demo' && demoProducts.length > 0
+                ? demoProducts.map(d => ({ id: d.id, name: d.name, image: d.image, price: d.price, originalPrice: d.originalPrice, category: d.category, tag: d.tag || undefined }))
+                : selectionMode === 'manual' && productPreviewItems.length > 0
+                  ? productPreviewItems
+                  : (autoProductPreviewItems.length > 0 ? autoProductPreviewItems : undefined)
             }
             subTitle={subTitle}
-            sectionTitle={sectionTitle}
+            sectionTitle={title}
+            subtitle={sectionTitle}
             fontStyle={fontStyle}
             fontClassName="font-active"
+            categoryTabs={
+              selectionMode === 'demo'
+                ? [...new Set(demoProducts.map(d => d.category).filter(Boolean))].slice(0, 5).map(name => ({ _id: name, name, active: true } as CategoryTabItem))
+                : allCategories
+                  ? (categoryTabIds.length > 0
+                      ? categoryTabIds.map(id => allCategories.find(c => c._id === id)).filter(Boolean) as CategoryTabItem[]
+                      : allCategories.filter(c => c.active))
+                  : undefined
+            }
+            hideHeader={hideHeader}
+            showTitle={showTitleHeader}
+            showSubtitle={showSubtitle}
+            headerAlign={headerAlign}
+            titleColorPrimary={titleColorPrimary}
+            subtitleAboveTitle={subtitleAboveTitle}
+            uppercaseText={uppercaseText}
+            showBadge={showBadge}
           />
         </div>
       </div>

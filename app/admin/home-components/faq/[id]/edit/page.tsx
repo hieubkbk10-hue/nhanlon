@@ -8,9 +8,10 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { HelpCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -63,6 +64,19 @@ const toFaqConfig = (value: Record<string, unknown> | null | undefined): FaqConf
     description: typeof config.description === 'string' ? config.description : DEFAULT_FAQ_CONFIG.description,
     buttonText: typeof config.buttonText === 'string' ? config.buttonText : DEFAULT_FAQ_CONFIG.buttonText,
     buttonLink: typeof config.buttonLink === 'string' ? config.buttonLink : DEFAULT_FAQ_CONFIG.buttonLink,
+    // Header fields
+    hideHeader: typeof config.hideHeader === 'boolean' ? config.hideHeader : DEFAULT_FAQ_CONFIG.hideHeader,
+    showTitle: typeof config.showTitle === 'boolean' ? config.showTitle : DEFAULT_FAQ_CONFIG.showTitle,
+    showSubtitle: typeof config.showSubtitle === 'boolean' ? config.showSubtitle : DEFAULT_FAQ_CONFIG.showSubtitle,
+    subtitle: typeof config.subtitle === 'string' ? config.subtitle : DEFAULT_FAQ_CONFIG.subtitle,
+    headerAlign: (config.headerAlign === 'left' || config.headerAlign === 'center' || config.headerAlign === 'right')
+      ? config.headerAlign
+      : DEFAULT_FAQ_CONFIG.headerAlign,
+    titleColorPrimary: typeof config.titleColorPrimary === 'boolean' ? config.titleColorPrimary : DEFAULT_FAQ_CONFIG.titleColorPrimary,
+    subtitleAboveTitle: typeof config.subtitleAboveTitle === 'boolean' ? config.subtitleAboveTitle : DEFAULT_FAQ_CONFIG.subtitleAboveTitle,
+    uppercaseText: typeof config.uppercaseText === 'boolean' ? config.uppercaseText : DEFAULT_FAQ_CONFIG.uppercaseText,
+    showBadge: typeof config.showBadge === 'boolean' ? config.showBadge : DEFAULT_FAQ_CONFIG.showBadge,
+    badgeText: typeof config.badgeText === 'string' ? config.badgeText : DEFAULT_FAQ_CONFIG.badgeText,
   };
 };
 
@@ -85,6 +99,21 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
   const [faqConfig, setFaqConfig] = useState<FaqConfig>(DEFAULT_FAQ_CONFIG);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [faqExpanded, setFaqExpanded] = useState(false);
+  
+  // Header state
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [subtitle, setSubtitle] = useState('');
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+  
   const [initialData, setInitialData] = useState<{
     title: string;
     active: boolean;
@@ -112,6 +141,19 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
     setFaqItems(nextFaqItems);
     setFaqStyle(nextFaqStyle);
     setFaqConfig(nextFaqConfig);
+    
+    // Load header config
+    setHideHeader(nextFaqConfig.hideHeader ?? false);
+    setShowTitle(nextFaqConfig.showTitle ?? true);
+    setShowSubtitle(nextFaqConfig.showSubtitle ?? true);
+    setSubtitle(nextFaqConfig.subtitle ?? '');
+    setHeaderAlign(nextFaqConfig.headerAlign ?? 'left');
+    setTitleColorPrimary(nextFaqConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(nextFaqConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(nextFaqConfig.uppercaseText ?? false);
+    setShowBadge(nextFaqConfig.showBadge ?? true);
+    setBadgeText(nextFaqConfig.badgeText ?? '');
+    
     setInitialData({
       title: component.title,
       active: component.active,
@@ -137,16 +179,27 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
       ? customFontState.enabled !== initialFontCustom.enabled
         || customFontState.fontKey !== initialFontCustom.fontKey
       : false;
+    const headerChanged = hideHeader !== initialData.faqConfig.hideHeader
+      || showTitle !== initialData.faqConfig.showTitle
+      || showSubtitle !== initialData.faqConfig.showSubtitle
+      || subtitle !== initialData.faqConfig.subtitle
+      || headerAlign !== initialData.faqConfig.headerAlign
+      || titleColorPrimary !== initialData.faqConfig.titleColorPrimary
+      || subtitleAboveTitle !== initialData.faqConfig.subtitleAboveTitle
+      || uppercaseText !== initialData.faqConfig.uppercaseText
+      || showBadge !== initialData.faqConfig.showBadge
+      || badgeText !== initialData.faqConfig.badgeText;
     const changed = title !== initialData.title
       || active !== initialData.active
       || faqStyle !== initialData.faqStyle
       || JSON.stringify(faqItems) !== JSON.stringify(initialData.faqItems)
       || JSON.stringify(faqConfig) !== JSON.stringify(initialData.faqConfig)
       || customChanged
-      || customFontChanged;
+      || customFontChanged
+      || headerChanged;
 
     setHasChanges(changed);
-  }, [title, active, faqItems, faqStyle, faqConfig, initialData, customState, initialCustom, showCustomBlock]);
+  }, [title, active, faqItems, faqStyle, faqConfig, initialData, customState, initialCustom, showCustomBlock, hideHeader, showTitle, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,6 +211,17 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
         buttonLink: faqConfig.buttonLink,
         buttonText: faqConfig.buttonText,
         description: faqConfig.description,
+        // Header fields
+        hideHeader,
+        showTitle,
+        showSubtitle,
+        subtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
       };
 
       await updateMutation({
@@ -168,6 +232,17 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
           description: nextConfig.description,
           items: faqItems.map((item) => ({ answer: item.answer, question: item.question })),
           style: faqStyle,
+          // Header fields
+          hideHeader: nextConfig.hideHeader,
+          showTitle: nextConfig.showTitle,
+          showSubtitle: nextConfig.showSubtitle,
+          subtitle: nextConfig.subtitle,
+          headerAlign: nextConfig.headerAlign,
+          titleColorPrimary: nextConfig.titleColorPrimary,
+          subtitleAboveTitle: nextConfig.subtitleAboveTitle,
+          uppercaseText: nextConfig.uppercaseText,
+          showBadge: nextConfig.showBadge,
+          badgeText: nextConfig.badgeText,
         },
         id: id as Id<'homeComponents'>,
         title,
@@ -261,27 +336,35 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
                 placeholder="Nhập tiêu đề component..."
               />
             </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div
-                  className={cn(
-                    'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                    active ? 'translate-x-2.5' : '-translate-x-2.5',
-                  )}
-                />
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
+</CardContent>
         </Card>
+
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+        />
 
         <FaqForm
           faqItems={faqItems}
@@ -290,50 +373,55 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
           brandColor={effectiveColors.primary}
           faqConfig={faqConfig}
           setFaqConfig={setFaqConfig}
+          expanded={faqExpanded}
+          onExpandedChange={setFaqExpanded}
         />
+
+        <div className="space-y-4">
+          {showCustomBlock && (
+            <TypeColorOverrideCard
+              title="Màu custom cho FAQ"
+              enabled={customState.enabled}
+              mode={customState.mode}
+              primary={customState.primary}
+              secondary={customState.secondary}
+              onEnabledChange={(next) => setCustomState((prev) => ({ ...prev, enabled: next }))}
+              onModeChange={(next) => {
+                if (next === 'single') {
+                  setCustomState((prev) => ({ ...prev, mode: 'single', secondary: prev.primary }));
+                  return;
+                }
+                setCustomState((prev) => ({
+                  ...prev,
+                  mode: 'dual',
+                  secondary: prev.mode === 'single' ? getSuggestedSecondary(prev.primary) : prev.secondary,
+                }));
+              }}
+              onPrimaryChange={(value) => setCustomState((prev) => ({
+                ...prev,
+                primary: value,
+                secondary: prev.mode === 'single' ? value : prev.secondary,
+              }))}
+              onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: value }))}
+            />
+          )}
+          {showFontCustomBlock && (
+            <TypeFontOverrideCard
+              title="Font custom cho FAQ"
+              enabled={customFontState.enabled}
+              fontKey={customFontState.fontKey}
+              compact
+              toggleLabel="Custom"
+              fontLabel="Font"
+              onEnabledChange={(next) => setCustomFontState((prev) => ({ ...prev, enabled: next }))}
+              onFontChange={(next) => setCustomFontState((prev) => ({ ...prev, fontKey: next }))}
+            />
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
-              <TypeColorOverrideCard
-                title="Màu custom cho FAQ"
-                enabled={customState.enabled}
-                mode={customState.mode}
-                primary={customState.primary}
-                secondary={customState.secondary}
-                onEnabledChange={(next) => setCustomState((prev) => ({ ...prev, enabled: next }))}
-                onModeChange={(next) => {
-                  if (next === 'single') {
-                    setCustomState((prev) => ({ ...prev, mode: 'single', secondary: prev.primary }));
-                    return;
-                  }
-                  setCustomState((prev) => ({
-                    ...prev,
-                    mode: 'dual',
-                    secondary: prev.mode === 'single' ? getSuggestedSecondary(prev.primary) : prev.secondary,
-                  }));
-                }}
-                onPrimaryChange={(value) => setCustomState((prev) => ({
-                  ...prev,
-                  primary: value,
-                  secondary: prev.mode === 'single' ? value : prev.secondary,
-                }))}
-                onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: value }))}
-              />
-            )}
-            {showFontCustomBlock && (
-              <TypeFontOverrideCard
-                title="Font custom cho FAQ"
-                enabled={customFontState.enabled}
-                fontKey={customFontState.fontKey}
-                compact
-                toggleLabel="Custom"
-                fontLabel="Font"
-                onEnabledChange={(next) => setCustomFontState((prev) => ({ ...prev, enabled: next }))}
-                onFontChange={(next) => setCustomFontState((prev) => ({ ...prev, fontKey: next }))}
-              />
-            )}
             <FaqPreview
               items={faqItems}
               brandColor={effectiveColors.primary}
@@ -345,6 +433,16 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
               title={title}
               fontStyle={fontStyle}
               fontClassName="font-active"
+              hideHeader={hideHeader}
+              showTitle={showTitle}
+              subtitle={subtitle}
+              showSubtitle={showSubtitle}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              showBadge={showBadge}
+              badgeText={badgeText}
             />
           </div>
         </div>
@@ -354,6 +452,8 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

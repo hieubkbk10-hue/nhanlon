@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { QuickContactButtons } from '@/components/site/QuickContact';
 import { ArrowLeft, ArrowRight, Calendar, ChevronRight, Clock, Copy, Eye, Image as ImageIcon, Star } from 'lucide-react';
 import type { Id } from '@/convex/_generated/dataModel';
 import type { ServiceDetailColors } from './_lib/colors';
 import { RichContent, withFormatMarker } from '@/components/common/RichContent';
+import { buildDetailPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 
 export interface ServiceDetailData {
   _id: Id<"services">;
@@ -32,6 +33,7 @@ export interface RelatedService {
   _id: Id<"services">;
   title: string;
   slug: string;
+  categoryId?: Id<"serviceCategories">;
   thumbnail?: string;
   price?: number;
 }
@@ -92,6 +94,8 @@ export interface StyleProps {
   quickContact?: QuickContactConfig;
   modernConfig?: ModernConfig;
   minimalConfig?: MinimalConfig;
+  routeMode?: 'unified' | 'namespace';
+  categorySlugMap?: Map<string, string>;
 }
 
 function formatPrice(price?: number): string {
@@ -102,6 +106,19 @@ function formatPrice(price?: number): string {
 function formatDate(timestamp?: number): string {
   if (!timestamp) {return '';}
   return new Date(timestamp).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function getServiceDetailHref(params: {
+  service: Pick<RelatedService, 'slug' | 'categoryId'>;
+  routeMode?: 'unified' | 'namespace';
+  categorySlugMap?: Map<string, string>;
+}) {
+  return buildDetailPath({
+    categorySlug: params.service.categoryId ? params.categorySlugMap?.get(params.service.categoryId) : undefined,
+    mode: normalizeRouteMode(params.routeMode),
+    moduleKey: 'services',
+    recordSlug: params.service.slug,
+  });
 }
 
 function FallbackServiceThumb({ tokens }: { tokens: ServiceDetailColors }) {
@@ -131,12 +148,13 @@ function RelatedServiceThumb({ title, thumbnail, tokens, size }: { title: string
       sizes={size === 'small' ? '64px' : '(max-width: 768px) 100vw, 33vw'}
       className={size === 'small' ? "object-cover group-hover:scale-110 transition-transform duration-300" : "object-cover group-hover:scale-110 transition-transform duration-500"}
       onError={() =>{  setHasError(true); }}
+      mode="thumb"
     />
   );
 }
 
 // STYLE 1: CLASSIC - Professional service page with sticky CTA sidebar
-export function ClassicStyle({ service, brandColor: _brandColor, tokens, relatedServices, enabledFields, showShare = true, quickContact }: StyleProps) {
+export function ClassicStyle({ service, brandColor: _brandColor, tokens, relatedServices, enabledFields, showShare = true, quickContact, routeMode, categorySlugMap }: StyleProps) {
   const showPrice = enabledFields.has('price');
   const showDuration = enabledFields.has('duration');
   const showFeatured = enabledFields.has('featured');
@@ -249,6 +267,7 @@ export function ClassicStyle({ service, brandColor: _brandColor, tokens, related
                   fill
                   sizes="(max-width: 1024px) 100vw, 800px"
                   className="object-cover"
+                  mode="primary"
                 />
               </div>
             )}
@@ -299,7 +318,7 @@ export function ClassicStyle({ service, brandColor: _brandColor, tokens, related
                     {relatedServices.map(s => (
                       <Link 
                         key={s._id} 
-                        href={`/services/${s.slug}`}
+                        href={getServiceDetailHref({ service: s, routeMode, categorySlugMap })}
                         className="flex gap-4 group"
                       >
                         <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 relative" style={{ backgroundColor: tokens.surface }}>
@@ -345,7 +364,7 @@ export function ClassicStyle({ service, brandColor: _brandColor, tokens, related
 }
 
 // STYLE 2: MODERN - Landing page style with full-width hero and floating CTA
-export function ModernStyle({ service, brandColor: _brandColor, tokens, relatedServices, enabledFields, modernConfig }: StyleProps) {
+export function ModernStyle({ service, brandColor: _brandColor, tokens, relatedServices, enabledFields, modernConfig, routeMode, categorySlugMap }: StyleProps) {
   const showPrice = enabledFields.has('price');
   const showDuration = enabledFields.has('duration');
   const showFeatured = enabledFields.has('featured');
@@ -466,6 +485,7 @@ export function ModernStyle({ service, brandColor: _brandColor, tokens, relatedS
               fill
               sizes="(max-width: 1024px) 100vw, 1200px"
               className="object-cover"
+              mode="primary"
             />
           </div>
         </div>
@@ -501,7 +521,7 @@ export function ModernStyle({ service, brandColor: _brandColor, tokens, relatedS
               {relatedServices.map((s) => (
                 <Link 
                   key={s._id} 
-                  href={`/services/${s.slug}`}
+                  href={getServiceDetailHref({ service: s, routeMode, categorySlugMap })}
                   className="group rounded-lg overflow-hidden border transition-colors"
                   style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
                 >
@@ -541,7 +561,7 @@ export function ModernStyle({ service, brandColor: _brandColor, tokens, relatedS
 }
 
 // STYLE 3: MINIMAL - Clean, distraction-free reading experience
-export function MinimalStyle({ service, brandColor: _brandColor, tokens, relatedServices, enabledFields, minimalConfig }: StyleProps) {
+export function MinimalStyle({ service, brandColor: _brandColor, tokens, relatedServices, enabledFields, minimalConfig, routeMode, categorySlugMap }: StyleProps) {
   const showDuration = enabledFields.has('duration');
   const showFeatured = enabledFields.has('featured');
   const resolvedContent = resolveServiceContent(service);
@@ -639,6 +659,7 @@ export function MinimalStyle({ service, brandColor: _brandColor, tokens, related
                 fill
                 sizes="(max-width: 1024px) 100vw, 800px"
                 className="object-cover"
+                mode="primary"
               />
             </div>
           </figure>
@@ -676,7 +697,7 @@ export function MinimalStyle({ service, brandColor: _brandColor, tokens, related
               {relatedServices.map((s, index) => (
                 <Link 
                   key={s._id} 
-                  href={`/services/${s.slug}`}
+                  href={getServiceDetailHref({ service: s, routeMode, categorySlugMap })}
                   className="group flex items-center justify-between gap-4 rounded-xl border px-4 py-3 transition-colors"
                   style={{ borderColor: tokens.cardBorder, backgroundColor: tokens.cardBackground }}
                 >

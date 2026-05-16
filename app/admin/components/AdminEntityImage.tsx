@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { Briefcase, FileText, Package } from 'lucide-react';
 import { cn } from './ui';
 import { isValidImageSrc } from '@/lib/utils/image';
@@ -49,3 +49,4 @@ export function AdminEntityImage({ alt, className, height, src, variant, width }
     </div>
   );
 }
+

@@ -1,13 +1,15 @@
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { getExtensionFromMime } from "../lib/image/uploadNaming";
 
 // ============ VALIDATORS ============
 const mediaDoc = v.object({
   _creationTime: v.number(),
   _id: v.id("images"),
   alt: v.optional(v.string()),
+  extension: v.optional(v.string()),
   filename: v.string(),
   folder: v.optional(v.string()),
   height: v.optional(v.number()),
@@ -22,6 +24,7 @@ const mediaWithUrl = v.object({
   _creationTime: v.number(),
   _id: v.id("images"),
   alt: v.optional(v.string()),
+  extension: v.optional(v.string()),
   filename: v.string(),
   folder: v.optional(v.string()),
   height: v.optional(v.number()),
@@ -33,6 +36,15 @@ const mediaWithUrl = v.object({
   width: v.optional(v.number()),
 });
 
+type MediaUsage = {
+  field: string;
+  label?: string;
+  recordId: string;
+  table: string;
+};
+
+const MAX_USAGE_SCAN_PER_TABLE = 3;
+
 // ============ HELPER FUNCTIONS ============
 
 // Get media type key from mimeType
@@ -43,6 +55,220 @@ function getMediaTypeKey(mimeType: string): "image" | "video" | "document" | "ot
     return "document";
   }
   return "other";
+}
+
+function getExtensionFromFilename(filename: string): string | undefined {
+  const match = filename.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1];
+}
+
+function resolveExtension(filename: string, mimeType: string): string {
+  const byName = getExtensionFromFilename(filename);
+  if (byName) {
+    return byName;
+  }
+  const ext = getExtensionFromMime(mimeType);
+  if (ext !== "bin") {
+    return ext;
+  }
+  const fallback = mimeType.split("/")[1];
+  if (!fallback) {
+    return "bin";
+  }
+  return fallback.replace("+xml", "").replace("jpeg", "jpg");
+}
+
+function normalizeValue(value: unknown): string {
+  if (value === null || value === undefined) {return "";}
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
+}
+
+function containsStorageId(value: unknown, storageId: string): boolean {
+  if (value === null || value === undefined) {return false;}
+  if (typeof value === "string") {return value === storageId;}
+  if (typeof value === "number" || typeof value === "boolean") {return false;}
+  if (Array.isArray(value)) {return value.some(item => containsStorageId(item, storageId));}
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some(item => containsStorageId(item, storageId));
+  }
+  return false;
+}
+
+function containsUrl(value: unknown, url: string | null): boolean {
+  if (!url || value === null || value === undefined) {return false;}
+  if (typeof value === "string") {return value === url || value.includes(url);}
+  if (typeof value === "number" || typeof value === "boolean") {return false;}
+  if (Array.isArray(value)) {return value.some(item => containsUrl(item, url));}
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some(item => containsUrl(item, url));
+  }
+  return false;
+}
+
+function addUsage(
+  usages: MediaUsage[],
+  table: string,
+  record: { _id: unknown; name?: string; title?: string; key?: string; slug?: string; filename?: string },
+  field: string
+) {
+  usages.push({
+    field,
+    label: record.name ?? record.title ?? record.key ?? record.slug ?? record.filename,
+    recordId: normalizeValue(record._id),
+    table,
+  });
+}
+
+function trimUsageRecords<T>(records: T[], scanState: { complete: boolean }): T[] {
+  if (records.length > MAX_USAGE_SCAN_PER_TABLE) {
+    scanState.complete = false;
+    return records.slice(0, MAX_USAGE_SCAN_PER_TABLE);
+  }
+  return records;
+}
+
+
+function addUsageToMap(
+  usageMap: Map<string, MediaUsage[]>,
+  mediaId: string,
+  table: string,
+  record: { _id: unknown; name?: string; title?: string; key?: string; slug?: string; filename?: string },
+  field: string
+) {
+  const usages = usageMap.get(mediaId) ?? [];
+  addUsage(usages, table, record, field);
+  usageMap.set(mediaId, usages);
+}
+
+function collectUsageMatches(
+  usageMap: Map<string, MediaUsage[]>,
+  candidates: { id: string; storageId: string; url: string | null }[],
+  table: string,
+  record: { _id: unknown; name?: string; title?: string; key?: string; slug?: string; filename?: string },
+  field: string,
+  value: unknown
+) {
+  candidates.forEach(candidate => {
+    if (containsUrl(value, candidate.url) || containsStorageId(value, candidate.storageId)) {
+      addUsageToMap(usageMap, candidate.id, table, record, field);
+    }
+  });
+}
+
+async function resolveMediaUsageMap(
+  ctx: QueryCtx,
+  mediaItems: { _id: unknown; storageId: unknown }[],
+  urlsById: Map<string, string | null>
+): Promise<{ scanComplete: boolean; usageMap: Map<string, MediaUsage[]> }> {
+  const usageMap = new Map<string, MediaUsage[]>();
+  const scanState = { complete: true };
+  const candidates = mediaItems.map(media => {
+    const id = normalizeValue(media._id);
+    usageMap.set(id, []);
+    return { id, storageId: normalizeValue(media.storageId), url: urlsById.get(id) ?? null };
+  });
+
+  if (candidates.length === 0) {return { scanComplete: true, usageMap };}
+
+  const users = trimUsageRecords(await ctx.db.query("users").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  users.forEach(record => collectUsageMatches(usageMap, candidates, "users", record, "avatar", record.avatar));
+
+  const customers = trimUsageRecords(await ctx.db.query("customers").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  customers.forEach(record => collectUsageMatches(usageMap, candidates, "customers", record, "avatar", record.avatar));
+
+  const productCategories = trimUsageRecords(await ctx.db.query("productCategories").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  productCategories.forEach(record => collectUsageMatches(usageMap, candidates, "productCategories", record, "image", record.image));
+
+  const products = trimUsageRecords(await ctx.db.query("products").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  products.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "products", record, "imageStorageId", record.imageStorageId);
+    collectUsageMatches(usageMap, candidates, "products", record, "imageStorageIds", record.imageStorageIds);
+    collectUsageMatches(usageMap, candidates, "products", record, "image", record.image);
+    collectUsageMatches(usageMap, candidates, "products", record, "images", record.images);
+    collectUsageMatches(usageMap, candidates, "products", record, "description", record.description);
+    collectUsageMatches(usageMap, candidates, "products", record, "markdownRender", record.markdownRender);
+    collectUsageMatches(usageMap, candidates, "products", record, "htmlRender", record.htmlRender);
+  });
+
+  const productOptionValues = trimUsageRecords(await ctx.db.query("productOptionValues").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  productOptionValues.forEach(record => collectUsageMatches(usageMap, candidates, "productOptionValues", record, "image", record.image));
+
+  const productVariants = trimUsageRecords(await ctx.db.query("productVariants").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  productVariants.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "productVariants", record, "image", record.image);
+    collectUsageMatches(usageMap, candidates, "productVariants", record, "images", record.images);
+  });
+
+  const productImageFrames = trimUsageRecords(await ctx.db.query("productImageFrames").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  productImageFrames.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "productImageFrames", record, "overlayStorageId", record.overlayStorageId);
+    collectUsageMatches(usageMap, candidates, "productImageFrames", record, "overlayImageUrl", record.overlayImageUrl);
+    collectUsageMatches(usageMap, candidates, "productImageFrames", record, "logoConfig", record.logoConfig);
+    collectUsageMatches(usageMap, candidates, "productImageFrames", record, "metadata", record.metadata);
+  });
+
+  const productSupplementalContents = trimUsageRecords(await ctx.db.query("productSupplementalContents").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  productSupplementalContents.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "productSupplementalContents", record, "preContent", record.preContent);
+    collectUsageMatches(usageMap, candidates, "productSupplementalContents", record, "postContent", record.postContent);
+    collectUsageMatches(usageMap, candidates, "productSupplementalContents", record, "faqItems", record.faqItems);
+  });
+
+  const postCategories = trimUsageRecords(await ctx.db.query("postCategories").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  postCategories.forEach(record => collectUsageMatches(usageMap, candidates, "postCategories", record, "thumbnail", record.thumbnail));
+
+  const posts = trimUsageRecords(await ctx.db.query("posts").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  posts.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "posts", record, "thumbnailStorageId", record.thumbnailStorageId);
+    collectUsageMatches(usageMap, candidates, "posts", record, "thumbnail", record.thumbnail);
+    collectUsageMatches(usageMap, candidates, "posts", record, "content", record.content);
+    collectUsageMatches(usageMap, candidates, "posts", record, "markdownRender", record.markdownRender);
+    collectUsageMatches(usageMap, candidates, "posts", record, "htmlRender", record.htmlRender);
+  });
+
+  const orders = trimUsageRecords(await ctx.db.query("orders").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  orders.forEach(record => collectUsageMatches(usageMap, candidates, "orders", record, "items.productImage", record.items));
+
+  const cartItems = trimUsageRecords(await ctx.db.query("cartItems").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  cartItems.forEach(record => collectUsageMatches(usageMap, candidates, "cartItems", record, "productImage", record.productImage));
+
+  const serviceCategories = trimUsageRecords(await ctx.db.query("serviceCategories").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  serviceCategories.forEach(record => collectUsageMatches(usageMap, candidates, "serviceCategories", record, "thumbnail", record.thumbnail));
+
+  const services = trimUsageRecords(await ctx.db.query("services").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  services.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "services", record, "thumbnailStorageId", record.thumbnailStorageId);
+    collectUsageMatches(usageMap, candidates, "services", record, "thumbnail", record.thumbnail);
+    collectUsageMatches(usageMap, candidates, "services", record, "content", record.content);
+    collectUsageMatches(usageMap, candidates, "services", record, "markdownRender", record.markdownRender);
+    collectUsageMatches(usageMap, candidates, "services", record, "htmlRender", record.htmlRender);
+  });
+
+  const promotions = trimUsageRecords(await ctx.db.query("promotions").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  promotions.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "promotions", record, "thumbnail", record.thumbnail);
+    collectUsageMatches(usageMap, candidates, "promotions", record, "discountConfig", record.discountConfig);
+  });
+
+  const landingPages = trimUsageRecords(await ctx.db.query("landingPages").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  landingPages.forEach(record => {
+    collectUsageMatches(usageMap, candidates, "landingPages", record, "heroImage", record.heroImage);
+    collectUsageMatches(usageMap, candidates, "landingPages", record, "content", record.content);
+  });
+
+  const settings = trimUsageRecords(await ctx.db.query("settings").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  settings.forEach(record => collectUsageMatches(usageMap, candidates, "settings", record, "value", record.value));
+
+  const homeComponents = trimUsageRecords(await ctx.db.query("homeComponents").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  homeComponents.forEach(record => collectUsageMatches(usageMap, candidates, "homeComponents", record, "config", record.config));
+
+  const homeComponentSnapshots = trimUsageRecords(await ctx.db.query("homeComponentSnapshots").take(MAX_USAGE_SCAN_PER_TABLE + 1), scanState);
+  homeComponentSnapshots.forEach(record => collectUsageMatches(usageMap, candidates, "homeComponentSnapshots", record, "payload", record.payload));
+
+  return { scanComplete: scanState.complete, usageMap };
 }
 
 // Update mediaStats counter (increment or decrement)
@@ -102,11 +328,13 @@ async function updateMediaFolder(
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => ctx.db.query("images").order("desc").paginate(args.paginationOpts),
-  returns: v.object({
-    continueCursor: v.string(),
-    isDone: v.boolean(),
-    page: v.array(mediaDoc),
-  }),
+  returns: v.any(),
+});
+
+export const listForBackfill = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => ctx.db.query("images").order("desc").paginate(args.paginationOpts),
+  returns: v.any(),
 });
 
 // List all (for System Config preview - limited)
@@ -131,6 +359,32 @@ export const listWithUrls = query({
     );
   },
   returns: v.array(mediaWithUrl),
+});
+
+export const listWithUrlsAndUsage = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 100;
+    const images = await ctx.db.query("images").order("desc").take(limit);
+    const urlsById = new Map<string, string | null>();
+    await Promise.all(images.map(async (img) => {
+      urlsById.set(normalizeValue(img._id), await ctx.storage.getUrl(img.storageId));
+    }));
+    const { usageMap } = await resolveMediaUsageMap(ctx, images, urlsById);
+
+    return images.map((img) => {
+      const id = normalizeValue(img._id);
+      const usages = usageMap.get(id) ?? [];
+      return {
+        ...img,
+        isOrphan: usages.length === 0,
+        usageCount: usages.length,
+        usages,
+        url: urlsById.get(id) ?? null,
+      };
+    });
+  },
+  returns: v.array(v.any()),
 });
 
 // Get by ID
@@ -289,7 +543,8 @@ export const create = mutation({
     width: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert("images", args);
+    const extension = resolveExtension(args.filename, args.mimeType);
+    const id = await ctx.db.insert("images", { ...args, extension });
     const url = await ctx.storage.getUrl(args.storageId);
 
     // Update counters
@@ -304,6 +559,18 @@ export const create = mutation({
     id: v.id("images"),
     url: v.union(v.string(), v.null()),
   }),
+});
+
+export const patchExtension = mutation({
+  args: {
+    id: v.id("images"),
+    extension: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { extension: args.extension });
+    return null;
+  },
+  returns: v.null(),
 });
 
 // Update media metadata
@@ -417,4 +684,49 @@ export const bulkRemove = mutation({
     return validItems.length;
   },
   returns: v.number(),
+});
+
+export const bulkRemoveOnlyOrphans = mutation({
+  args: { ids: v.array(v.id("images")) },
+  handler: async (ctx, args) => {
+    const deleted: string[] = [];
+    const skipped: { filename?: string; id: string; reason: string; usages: MediaUsage[] }[] = [];
+
+    for (const id of args.ids) {
+      const media = await ctx.db.get(id);
+      if (!media) {
+        skipped.push({ id, reason: "Không tìm thấy media", usages: [] });
+        continue;
+      }
+
+      try {
+        await ctx.storage.delete(media.storageId);
+      } catch {
+        // Storage file might already be deleted.
+      }
+
+      await ctx.db.delete(media._id);
+      const typeKey = getMediaTypeKey(media.mimeType);
+      await updateMediaStats(ctx, "total", -1, -media.size);
+      await updateMediaStats(ctx, typeKey, -1, -media.size);
+      await updateMediaFolder(ctx, media.folder, -1);
+      deleted.push(id);
+    }
+
+    return { deleted, skipped };
+  },
+  returns: v.object({
+    deleted: v.array(v.string()),
+    skipped: v.array(v.object({
+      filename: v.optional(v.string()),
+      id: v.string(),
+      reason: v.string(),
+      usages: v.array(v.object({
+        field: v.string(),
+        label: v.optional(v.string()),
+        recordId: v.string(),
+        table: v.string(),
+      })),
+    })),
+  }),
 });

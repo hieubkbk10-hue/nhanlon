@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { BrandBadge, IconContainer, CheckIcon, AccentLine } from '@/components/site/shared/BrandColorHelpers';
 import { 
   ArrowRight, Briefcase, Building2, Check, ChevronDown, ChevronLeft,
@@ -2603,7 +2603,7 @@ export const CTAPreview = ({ config, brandColor, secondary, selectedStyle, onSty
   );
 };
 
-export type AboutStyle = 'classic' | 'bento' | 'minimal' | 'split' | 'timeline' | 'showcase';
+export type AboutStyle = 'classic' | 'bento' | 'minimal' | 'split' | 'timeline' | 'showcase' | 'spaCollage' | 'solarFeature';
 
 // ============ BENEFITS PREVIEW (Why Choose Us) ============
 // 6 Professional Styles: Solid Cards, Accent List, Bold Bento, Icon Row, Carousel, Timeline
@@ -5036,8 +5036,8 @@ export const FeaturesPreview = ({ items, brandColor: _brandColor, secondary, mod
 };
 
 // ============ PROCESS/HOW IT WORKS PREVIEW ============
-// 6 Professional Styles: Horizontal, Stepper, Cards, Accordion, Minimal, Grid
-export type ProcessStyle = 'horizontal' | 'stepper' | 'cards' | 'accordion' | 'minimal' | 'grid';
+// 7 Professional Styles: Horizontal, Stepper, Cards, Accordion, Minimal, Grid, Alternating
+export type ProcessStyle = 'horizontal' | 'stepper' | 'cards' | 'accordion' | 'minimal' | 'grid' | 'alternating';
 
 export const ProcessPreview = ({
   steps,
@@ -6888,3 +6888,4 @@ export const VoucherPromotionsPreview = ({
     </PreviewWrapper>
   );
 };
+

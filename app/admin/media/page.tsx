@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import Link from 'next/link';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
@@ -21,6 +21,32 @@ import { resolveNamingContext } from '@/lib/image/uploadNaming';
 const MODULE_KEY = 'media';
 type ViewMode = 'grid' | 'list';
 type FilterType = 'all' | 'image' | 'video' | 'document';
+type UsageFilter = 'all' | 'used' | 'orphan';
+type SortMode = 'newest' | 'oldest' | 'size-desc' | 'size-asc' | 'name-asc' | 'name-desc' | 'type-asc' | 'usage-desc' | 'usage-asc';
+
+type MediaUsage = {
+  field: string;
+  label?: string;
+  recordId: string;
+  table: string;
+};
+
+type MediaItem = {
+  _id: Id<"images">;
+  _creationTime: number;
+  storageId: Id<"_storage">;
+  filename: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  alt?: string;
+  folder?: string;
+  url: string | null;
+  isOrphan?: boolean;
+  usageCount?: number;
+  usages?: MediaUsage[];
+};
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) {return '0 B';}
@@ -43,6 +69,10 @@ function getMimeTypeLabel(mimeType: string): string {
   return 'Tài liệu';
 }
 
+function formatUsage(usage: MediaUsage): string {
+  return `${usage.table}.${usage.field}${usage.label ? ` · ${usage.label}` : ''}`;
+}
+
 export default function MediaPage() {
   return (
     <ModuleGuard moduleKey="media">
@@ -52,15 +82,14 @@ export default function MediaPage() {
 }
 
 function MediaContent() {
-  const mediaData = useQuery(api.media.listWithUrls, { limit: 100 });
+  const mediaData = useQuery(api.media.listWithUrlsAndUsage, { limit: 100 }) as MediaItem[] | undefined;
   const foldersData = useQuery(api.media.getFolders);
   const statsData = useQuery(api.media.getStats);
   const featuresData = useQuery(api.admin.modules.listModuleFeatures, { moduleKey: MODULE_KEY });
   
   const generateUploadUrl = useMutation(api.media.generateUploadUrl);
   const createMedia = useMutation(api.media.create);
-  const removeMedia = useMutation(api.media.remove);
-  const bulkRemoveMedia = useMutation(api.media.bulkRemove);
+  const bulkRemoveOrphanMedia = useMutation(api.media.bulkRemoveOnlyOrphans);
 
   // Check enabled features
   const enabledFeatures = useMemo(() => {
@@ -75,22 +104,12 @@ function MediaContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterFolder, setFilterFolder] = useState('');
+  const [usageFilter, setUsageFilter] = useState<UsageFilter>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [selectedIds, setSelectedIds] = useState<Id<"images">[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [previewMedia, setPreviewMedia] = useState<{
-    _id: Id<"images">;
-    _creationTime: number;
-    storageId: Id<"_storage">;
-    filename: string;
-    mimeType: string;
-    size: number;
-    width?: number;
-    height?: number;
-    alt?: string;
-    folder?: string;
-    url: string | null;
-  } | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -122,9 +141,28 @@ function MediaContent() {
     if (filterFolder) {
       data = data.filter(m => m.folder === filterFolder);
     }
+
+    if (usageFilter === 'used') {
+      data = data.filter(m => (m.usageCount ?? 0) > 0);
+    } else if (usageFilter === 'orphan') {
+      data = data.filter(m => m.isOrphan);
+    }
+
+    data.sort((a, b) => {
+      if (sortMode === 'newest') {return b._creationTime - a._creationTime;}
+      if (sortMode === 'oldest') {return a._creationTime - b._creationTime;}
+      if (sortMode === 'size-desc') {return b.size - a.size;}
+      if (sortMode === 'size-asc') {return a.size - b.size;}
+      if (sortMode === 'name-asc') {return a.filename.localeCompare(b.filename);}
+      if (sortMode === 'name-desc') {return b.filename.localeCompare(a.filename);}
+      if (sortMode === 'type-asc') {return a.mimeType.localeCompare(b.mimeType);}
+      if (sortMode === 'usage-desc') {return (b.usageCount ?? 0) - (a.usageCount ?? 0);}
+      if (sortMode === 'usage-asc') {return (a.usageCount ?? 0) - (b.usageCount ?? 0);}
+      return 0;
+    });
     
     return data;
-  }, [mediaData, searchTerm, filterType, filterFolder]);
+  }, [mediaData, searchTerm, filterType, filterFolder, usageFilter, sortMode]);
 
   // Selection handlers
   const toggleSelectAll = () => {
@@ -201,26 +239,36 @@ function MediaContent() {
 
   // Delete handlers
   const handleDelete = async (id: Id<"images">) => {
-    if (!confirm('Xóa file này? Thao tác không thể hoàn tác.')) {return;}
+    if (!confirm('Chỉ xóa nếu file này đang cô đơn, không còn được tham chiếu ở đâu. Tiếp tục?')) {return;}
     
     try {
-      await removeMedia({ id });
+      const result = await bulkRemoveOrphanMedia({ ids: [id] });
       setSelectedIds(prev => prev.filter(i => i !== id));
-      toast.success('Đã xóa file');
-    } catch {
-      toast.error('Có lỗi khi xóa file');
+      if (result.deleted.length > 0) {
+        toast.success('Đã xóa file cô đơn');
+      } else {
+        toast.warning('Không xóa vì file vẫn đang được sử dụng');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Có lỗi khi xóa file');
     }
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`Xóa ${selectedIds.length} file đã chọn? Thao tác không thể hoàn tác.`)) {return;}
+    const selectedOrphanCount = filteredMedia.filter(media => selectedIds.includes(media._id) && media.isOrphan).length;
+    if (selectedOrphanCount === 0) {
+      toast.warning('Chưa chọn ảnh cô đơn nào để xóa');
+      return;
+    }
+    if (!confirm(`Xóa ${selectedOrphanCount} ảnh cô đơn đã chọn? Server sẽ kiểm tra lại usage ngay trước khi xóa.`)) {return;}
     
     try {
-      const count = await bulkRemoveMedia({ ids: selectedIds });
+      const result = await bulkRemoveOrphanMedia({ ids: selectedIds });
       setSelectedIds([]);
-      toast.success(`Đã xóa ${count} file`);
-    } catch {
-      toast.error('Có lỗi khi xóa files');
+      const skippedText = result.skipped.length > 0 ? `, bỏ qua ${result.skipped.length} file chưa đủ an toàn để xóa` : '';
+      toast.success(`Đã xóa ${result.deleted.length} ảnh cô đơn${skippedText}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Có lỗi khi xóa files');
     }
   };
 
@@ -337,6 +385,32 @@ function MediaContent() {
                 ))}
               </select>
             )}
+
+            <select
+              className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+              value={usageFilter}
+              onChange={(e) =>{  setUsageFilter(e.target.value as UsageFilter); }}
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="used">Đang được dùng</option>
+              <option value="orphan">Ảnh cô đơn</option>
+            </select>
+
+            <select
+              className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+              value={sortMode}
+              onChange={(e) =>{  setSortMode(e.target.value as SortMode); }}
+            >
+              <option value="newest">Mới nhất</option>
+              <option value="oldest">Cũ nhất</option>
+              <option value="size-desc">Dung lượng lớn nhất</option>
+              <option value="size-asc">Dung lượng nhỏ nhất</option>
+              <option value="name-asc">Tên A-Z</option>
+              <option value="name-desc">Tên Z-A</option>
+              <option value="type-asc">Loại file</option>
+              <option value="usage-desc">Được dùng nhiều nhất</option>
+              <option value="usage-asc">Ít usage nhất</option>
+            </select>
           </div>
 
           {/* View mode */}
@@ -453,7 +527,20 @@ function MediaContent() {
                     {/* Info */}
                     <div className="p-2">
                       <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{media.filename}</p>
-                      <p className="text-xs text-slate-400">{formatBytes(media.size)}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <span className="text-xs text-slate-400">{formatBytes(media.size)}</span>
+                        <Badge
+                          variant={media.isOrphan ? 'warning' : 'success'}
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {media.isOrphan ? 'Cô đơn' : `${media.usageCount ?? 0} dùng`}
+                        </Badge>
+                      </div>
+                      {!media.isOrphan && media.usages?.[0] && (
+                        <p className="mt-1 text-[11px] text-slate-500 truncate" title={formatUsage(media.usages[0])}>
+                          {formatUsage(media.usages[0])}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
@@ -511,11 +598,37 @@ function MediaContent() {
                             {media.folder}
                           </Badge>
                         )}
+                        <Badge variant={media.isOrphan ? 'warning' : 'success'} className="text-xs">
+                          {media.isOrphan ? 'Ảnh cô đơn' : `Đang dùng: ${media.usageCount ?? 0}`}
+                        </Badge>
                       </div>
+                      {!media.isOrphan && media.usages && media.usages.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {media.usages.slice(0, 3).map((usage, index) => (
+                            <Badge key={`${usage.table}-${usage.recordId}-${usage.field}-${index}`} variant="outline" className="max-w-[240px] truncate text-xs">
+                              {formatUsage(usage)}
+                            </Badge>
+                          ))}
+                          {media.usages.length > 3 && (
+                            <Badge variant="outline" className="text-xs">+{media.usages.length - 3}</Badge>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
+                      {media.url && (
+                        <a
+                          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                          href={media.url}
+                          rel="noreferrer"
+                          target="_blank"
+                          title="Mở tab mới"
+                        >
+                          <Eye size={16} className="text-slate-400" />
+                        </a>
+                      )}
                       <button
                         className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                         onClick={ async () => handleCopyUrl(media.url, media._id)}
@@ -572,11 +685,19 @@ function MediaContent() {
             onClick={(e) =>{  e.stopPropagation(); }}
           />
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur px-4 py-2 rounded-lg text-white text-sm">
-            {previewMedia.filename} - {formatBytes(previewMedia.size)}
-            {previewMedia.width && previewMedia.height && ` - ${previewMedia.width}x${previewMedia.height}`}
+            <div>
+              {previewMedia.filename} - {formatBytes(previewMedia.size)}
+              {previewMedia.width && previewMedia.height && ` - ${previewMedia.width}x${previewMedia.height}`}
+            </div>
+            <div className="mt-1 text-xs text-white/80">
+              {previewMedia.isOrphan
+                ? 'Ảnh cô đơn: chưa thấy nơi nào đang dùng'
+                : `Đang dùng: ${previewMedia.usages?.slice(0, 2).map(formatUsage).join('; ')}`}
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+

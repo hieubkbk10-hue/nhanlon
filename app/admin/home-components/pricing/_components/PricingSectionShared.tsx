@@ -13,6 +13,19 @@ import type {
 
 type PricingSharedContext = 'preview' | 'site';
 
+const MAX_PRICING_PLANS = 4;
+
+/** Section-level: Be Vietnam Pro + 85% font size (giảm 15%) */
+const PRICING_SECTION_FONT: React.CSSProperties = {
+  fontFamily: 'var(--font-be-vietnam-pro)',
+  fontSize: '0.85em',
+};
+
+/** Price text: giữ gần nguyên gốc (0.85 × 1.15 ≈ 0.98) */
+const PRICING_PRICE_SCALE: React.CSSProperties = {
+  fontSize: '1.15em',
+};
+
 interface PricingSectionSharedProps {
   context: PricingSharedContext;
   title: string;
@@ -28,6 +41,11 @@ interface PricingSectionSharedProps {
   yearlyLabel: string;
   yearlySavingText: string;
   onBillingToggle?: (value: boolean) => void;
+  skipHeader?: boolean;
+  /** When set, responsive grid uses this instead of viewport breakpoints */
+  previewDevice?: 'desktop' | 'tablet' | 'mobile';
+  /** Grid columns: 3 or 4. Affects responsive breakpoints. */
+  gridCols?: 3 | 4;
 }
 
 const formatPriceDisplay = (value?: string) => {
@@ -44,8 +62,8 @@ const normalizePeriod = (value?: string, isYearly = false) => {
   return trimmed;
 };
 
-const sanitizeFeatures = (features: string[]) => (
-  features
+const sanitizeFeatures = (features?: string[]) => (
+  (features || [])
     .map((feature) => String(feature ?? '').trim())
     .filter((feature) => feature.length > 0)
 );
@@ -55,6 +73,15 @@ const getPlanPrice = (plan: PricingPlan, isYearly: boolean) => {
     return formatPriceDisplay(plan.yearlyPrice);
   }
   return formatPriceDisplay(plan.price);
+};
+
+/** Chỉ thêm 'đ' khi giá là số; text như 'Liên hệ' giữ nguyên */
+const formatPriceWithSuffix = (price: string) => {
+  const cleaned = price.replace(/[.,\s]/g, '');
+  if (/^\d+$/.test(cleaned)) {
+    return `${price}đ`;
+  }
+  return price;
 };
 
 const wrapAction = ({
@@ -192,6 +219,9 @@ export function PricingSectionShared({
   yearlyLabel,
   yearlySavingText,
   onBillingToggle,
+  skipHeader = false,
+  previewDevice,
+  gridCols = 3,
 }: PricingSectionSharedProps) {
   const renderPlanFeatures = (features: string[]) => {
     const list = sanitizeFeatures(features).slice(0, 8);
@@ -201,18 +231,35 @@ export function PricingSectionShared({
     return list;
   };
 
-  const displayPlans = plans.filter((plan) => plan.name.trim() || plan.price.trim() || plan.yearlyPrice?.trim() || sanitizeFeatures(plan.features).length > 0);
+  const displayPlans = plans
+    .filter((plan) => plan.name.trim() || plan.price.trim() || plan.yearlyPrice?.trim() || sanitizeFeatures(plan.features).length > 0)
+    .slice(0, MAX_PRICING_PLANS);
 
-  const gridCountClass = displayPlans.length <= 1
-    ? 'grid-cols-1 max-w-md mx-auto'
-    : displayPlans.length === 2
-      ? 'md:grid-cols-2 max-w-3xl mx-auto'
-      : 'md:grid-cols-3';
+  const getGridCountClass = (gapClass: string) => {
+    if (displayPlans.length <= 1) {
+      return `${gapClass} grid-cols-1 max-w-md mx-auto`;
+    }
+
+    if (previewDevice) {
+      if (gridCols === 4) {
+        return `${gapClass} ${previewDevice === 'desktop' ? 'grid-cols-4' : 'grid-cols-2'}`;
+      }
+
+      return `${gapClass} ${previewDevice === 'mobile' ? 'grid-cols-1' : 'grid-cols-3'}`;
+    }
+
+    return gridCols === 4
+      ? `${gapClass} grid-cols-2 @lg:grid-cols-4`
+      : `${gapClass} grid-cols-1 @md:grid-cols-3`;
+  };
+
+  const cardsGridClass = getGridCountClass('gap-5');
+  const compactGridClass = getGridCountClass('gap-3');
 
   const sectionBase = (
-    <section className="bg-white py-10 px-4" data-mode={mode}>
+    <section className="bg-white py-10 px-4" data-mode={mode} style={PRICING_SECTION_FONT}>
       <div className="mx-auto max-w-6xl">
-        {renderSectionHeader({ title, subtitle, tokens })}
+        {!skipHeader && renderSectionHeader({ title, subtitle, tokens })}
         <BillingToggle
           showBillingToggle={showBillingToggle}
           isYearly={isYearly}
@@ -233,9 +280,9 @@ export function PricingSectionShared({
 
   if (style === 'cards') {
     return (
-      <section className="bg-white py-10 px-4" data-mode={mode}>
+      <section className="bg-white py-10 px-4" data-mode={mode} style={PRICING_SECTION_FONT}>
         <div className="mx-auto max-w-6xl">
-          {renderSectionHeader({ title, subtitle, tokens })}
+          {!skipHeader && renderSectionHeader({ title, subtitle, tokens })}
           <BillingToggle
             showBillingToggle={showBillingToggle}
             isYearly={isYearly}
@@ -246,7 +293,7 @@ export function PricingSectionShared({
             tokens={tokens}
           />
 
-          <div className={cn('grid gap-5', gridCountClass)}>
+          <div className={cn('grid', cardsGridClass)}>
             {displayPlans.map((plan, index) => {
               const isPopular = Boolean(plan.isPopular);
               const actionHref = plan.buttonLink.trim() || '#';
@@ -279,8 +326,8 @@ export function PricingSectionShared({
                     {plan.name.trim() || `${texts.defaultPlanName || 'Gói'} ${index + 1}`}
                   </h3>
                   <div className="mt-3 text-center">
-                    <span className="text-3xl font-bold tabular-nums" style={{ color: tokens.priceText }}>
-                      {getPlanPrice(plan, isYearly)}đ
+                    <span className="text-3xl font-bold tabular-nums" style={{ color: tokens.priceText, ...PRICING_PRICE_SCALE }}>
+                      {formatPriceWithSuffix(getPlanPrice(plan, isYearly))}
                     </span>
                     <span className="ml-1 text-sm" style={{ color: tokens.periodText }}>
                       {normalizePeriod(plan.period, isYearly)}
@@ -328,9 +375,9 @@ export function PricingSectionShared({
 
   if (style === 'horizontal') {
     return (
-      <section className="bg-white py-10 px-4" data-mode={mode}>
+      <section className="bg-white py-10 px-4" data-mode={mode} style={PRICING_SECTION_FONT}>
         <div className="mx-auto max-w-4xl">
-          {renderSectionHeader({ title, subtitle, tokens })}
+          {!skipHeader && renderSectionHeader({ title, subtitle, tokens })}
           <BillingToggle
             showBillingToggle={showBillingToggle}
             isYearly={isYearly}
@@ -348,7 +395,7 @@ export function PricingSectionShared({
               return (
                 <article
                   key={`${String(plan.id ?? index)}-${index}`}
-                  className="rounded-xl border p-4 md:flex md:items-center md:justify-between"
+                  className="rounded-xl border p-4 @md:flex @md:items-center @md:justify-between"
                   style={{ backgroundColor: tokens.cardBackground, borderColor: plan.isPopular ? tokens.cardPopularBorder : tokens.cardBorder }}
                 >
                   <div className="min-w-0 flex-1">
@@ -366,9 +413,9 @@ export function PricingSectionShared({
                     <p className="mt-1 truncate text-xs" style={{ color: tokens.mutedText }}>{featureText}</p>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-3 md:mt-0 md:flex-shrink-0">
-                    <span className="text-xl font-bold tabular-nums" style={{ color: tokens.priceText }}>
-                      {getPlanPrice(plan, isYearly)}đ
+                  <div className="mt-3 flex items-center justify-between gap-3 @md:mt-0 @md:flex-shrink-0">
+                    <span className="text-xl font-bold tabular-nums" style={{ color: tokens.priceText, ...PRICING_PRICE_SCALE }}>
+                      {formatPriceWithSuffix(getPlanPrice(plan, isYearly))}
                       <span className="ml-1 text-sm font-normal" style={{ color: tokens.periodText }}>
                         {normalizePeriod(plan.period, isYearly)}
                       </span>
@@ -392,9 +439,9 @@ export function PricingSectionShared({
 
   if (style === 'minimal') {
     return (
-      <section className="bg-white py-10 px-4" data-mode={mode}>
+      <section className="bg-white py-10 px-4" data-mode={mode} style={PRICING_SECTION_FONT}>
         <div className="mx-auto max-w-4xl">
-          {renderSectionHeader({ title, subtitle, tokens })}
+          {!skipHeader && renderSectionHeader({ title, subtitle, tokens })}
           <BillingToggle
             showBillingToggle={showBillingToggle}
             isYearly={isYearly}
@@ -412,7 +459,7 @@ export function PricingSectionShared({
               return (
                 <article
                   key={`${String(plan.id ?? index)}-${index}`}
-                  className={cn('p-5 md:flex md:items-center md:justify-between', index !== displayPlans.length - 1 ? 'border-b' : '')}
+                  className={cn('p-5 @md:flex @md:items-center @md:justify-between', index !== displayPlans.length - 1 ? 'border-b' : '')}
                   style={{
                     backgroundColor: plan.isPopular ? tokens.comparisonPopularColumnBg : tokens.cardBackground,
                     borderColor: tokens.neutralBorder,
@@ -433,9 +480,9 @@ export function PricingSectionShared({
                     <p className="mt-1 text-xs" style={{ color: tokens.mutedText }}>{featureText}</p>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-4 md:mt-0">
-                    <span className="text-2xl font-bold tabular-nums" style={{ color: tokens.priceText }}>
-                      {getPlanPrice(plan, isYearly)}đ
+                  <div className="mt-3 flex items-center gap-4 @md:mt-0">
+                    <span className="text-2xl font-bold tabular-nums" style={{ color: tokens.priceText, ...PRICING_PRICE_SCALE }}>
+                      {formatPriceWithSuffix(getPlanPrice(plan, isYearly))}
                       <span className="ml-1 text-sm font-normal" style={{ color: tokens.periodText }}>
                         {normalizePeriod(plan.period, isYearly)}
                       </span>
@@ -470,9 +517,9 @@ export function PricingSectionShared({
     const allFeatures = [...new Set(comparisonPlans.flatMap((plan) => renderPlanFeatures(plan.features)))].slice(0, 12);
 
     return (
-      <section className="bg-white py-10 px-4" data-mode={mode}>
+      <section className="bg-white py-10 px-4" data-mode={mode} style={PRICING_SECTION_FONT}>
         <div className="mx-auto max-w-6xl">
-          {renderSectionHeader({ title, subtitle, tokens })}
+          {!skipHeader && renderSectionHeader({ title, subtitle, tokens })}
           <BillingToggle
             showBillingToggle={showBillingToggle}
             isYearly={isYearly}
@@ -498,8 +545,8 @@ export function PricingSectionShared({
                       }}
                     >
                       <div className="text-sm font-semibold" style={{ color: tokens.neutralText }}>{plan.name.trim() || `${texts.defaultPlanName || 'Gói'} ${index + 1}`}</div>
-                      <div className="mt-1 text-2xl font-bold tabular-nums" style={{ color: tokens.priceText }}>
-                        {getPlanPrice(plan, isYearly)}đ
+                      <div className="mt-1 text-2xl font-bold tabular-nums" style={{ color: tokens.priceText, ...PRICING_PRICE_SCALE }}>
+                        {formatPriceWithSuffix(getPlanPrice(plan, isYearly))}
                       </div>
                       {plan.isPopular ? (
                         <div className="mt-2">
@@ -589,9 +636,9 @@ export function PricingSectionShared({
     const actionHref = featuredPlan.buttonLink.trim() || '#';
 
     return (
-      <section className="bg-white py-10 px-4" data-mode={mode}>
+      <section className="bg-white py-10 px-4" data-mode={mode} style={PRICING_SECTION_FONT}>
         <div className="mx-auto max-w-6xl">
-          {renderSectionHeader({ title, subtitle, tokens })}
+          {!skipHeader && renderSectionHeader({ title, subtitle, tokens })}
           <BillingToggle
             showBillingToggle={showBillingToggle}
             isYearly={isYearly}
@@ -602,7 +649,7 @@ export function PricingSectionShared({
             tokens={tokens}
           />
 
-          <div className="flex flex-col gap-5 lg:flex-row">
+          <div className="flex flex-col gap-5 @lg:flex-row">
             <article
               className="relative flex flex-1 flex-col rounded-2xl border p-7"
               style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardPopularBorder }}
@@ -621,8 +668,8 @@ export function PricingSectionShared({
               </h3>
 
               <div className="my-6 text-center">
-                <span className="text-4xl font-bold tabular-nums" style={{ color: tokens.priceText }}>
-                  {getPlanPrice(featuredPlan, isYearly)}đ
+                <span className="text-4xl font-bold tabular-nums" style={{ color: tokens.priceText, ...PRICING_PRICE_SCALE }}>
+                  {formatPriceWithSuffix(getPlanPrice(featuredPlan, isYearly))}
                 </span>
                 <span className="ml-1 text-sm" style={{ color: tokens.periodText }}>
                   {normalizePeriod(featuredPlan.period, isYearly)}
@@ -648,7 +695,7 @@ export function PricingSectionShared({
             </article>
 
             {sidePlans.length > 0 ? (
-              <div className="flex flex-col gap-4 lg:w-72">
+              <div className="flex flex-col gap-4 @lg:w-72">
                 {sidePlans.map((plan, index) => {
                   const sideHref = plan.buttonLink.trim() || '#';
                   return (
@@ -658,8 +705,8 @@ export function PricingSectionShared({
                       style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
                     >
                       <h4 className="text-sm font-semibold" style={{ color: tokens.neutralText }}>{plan.name.trim() || `${texts.defaultPlanName || 'Gói'} ${index + 1}`}</h4>
-                      <p className="mt-2 text-xl font-bold tabular-nums" style={{ color: tokens.priceText }}>
-                        {getPlanPrice(plan, isYearly)}đ
+                      <p className="mt-2 text-xl font-bold tabular-nums" style={{ color: tokens.priceText, ...PRICING_PRICE_SCALE }}>
+                        {formatPriceWithSuffix(getPlanPrice(plan, isYearly))}
                         <span className="ml-1 text-xs font-normal" style={{ color: tokens.periodText }}>{normalizePeriod(plan.period, isYearly)}</span>
                       </p>
                       <p className="mt-2 flex-1 text-xs" style={{ color: tokens.mutedText }}>
@@ -685,12 +732,12 @@ export function PricingSectionShared({
     );
   }
 
-  const compactPlans = displayPlans.slice(0, 6);
+  const compactPlans = displayPlans;
 
   return (
-    <section className="bg-white py-10 px-4" data-mode={mode}>
+    <section className="bg-white py-10 px-4" data-mode={mode} style={PRICING_SECTION_FONT}>
       <div className="mx-auto max-w-5xl">
-        {renderSectionHeader({ title, subtitle, tokens })}
+        {!skipHeader && renderSectionHeader({ title, subtitle, tokens })}
         <BillingToggle
           showBillingToggle={showBillingToggle}
           isYearly={isYearly}
@@ -701,7 +748,7 @@ export function PricingSectionShared({
           tokens={tokens}
         />
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className={cn('grid', compactGridClass)}>
           {compactPlans.map((plan, index) => {
             const actionHref = plan.buttonLink.trim() || '#';
             return (
@@ -727,7 +774,7 @@ export function PricingSectionShared({
                   {plan.name.trim() || `${texts.defaultPlanName || 'Gói'} ${index + 1}`}
                 </h4>
                 <div className="my-2">
-                  <span className="text-xl font-bold tabular-nums" style={{ color: tokens.priceText }}>{getPlanPrice(plan, isYearly)}đ</span>
+                  <span className="text-xl font-bold tabular-nums" style={{ color: tokens.priceText, ...PRICING_PRICE_SCALE }}>{formatPriceWithSuffix(getPlanPrice(plan, isYearly))}</span>
                   <span className="block text-[10px]" style={{ color: tokens.periodText }}>{normalizePeriod(plan.period, isYearly)}</span>
                 </div>
                 <p className="mb-2 min-h-[2rem] text-[11px]" style={{ color: tokens.mutedText }}>

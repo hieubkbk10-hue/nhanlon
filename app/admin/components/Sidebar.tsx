@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { 
@@ -22,7 +22,7 @@ interface SidebarItemProps {
   label: string;
   href: string;
   active: boolean;
-  subItems?: { label: string, href: string, moduleKey?: string }[];
+  subItems?: { label: string, href: string, moduleKey?: string, visible?: boolean }[];
   isCollapsed: boolean;
   isExpanded: boolean;
   onToggle: () => void;
@@ -44,7 +44,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
 }) => {
   const filteredSubItems = useMemo(() => {
     if (!subItems) {return [];}
-    return subItems.filter(sub => !sub.moduleKey || isModuleEnabled(sub.moduleKey));
+    return subItems.filter((sub) => (sub.visible ?? true) && (!sub.moduleKey || isModuleEnabled(sub.moduleKey)));
   }, [subItems, isModuleEnabled]);
 
   const hasSub = filteredSubItems.length > 0;
@@ -144,6 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
   const productSettings = useQuery(api.admin.modules.listModuleSettings, { moduleKey: 'products' });
   const userFeatures = useQuery(api.admin.modules.listModuleFeatures, { moduleKey: 'users' });
   const siteSettings = useQuery(api.settings.getMultiple, { keys: ['site_logo', 'site_name'] });
+  const trustPagesFeature = useQuery(api.admin.modules.getModuleFeature, { moduleKey: 'settings', featureKey: 'enableTrustPages' });
 
   const isActive = (route: string) => pathname.startsWith(route);
 
@@ -165,8 +166,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
     if (pathname.startsWith('/admin/users') || pathname.startsWith('/admin/roles')) {
       return 'Người dùng';
     }
-    if (pathname.startsWith('/admin/menus') || pathname.startsWith('/admin/home-components')) {
+    if (pathname.startsWith('/admin/menus') || pathname.startsWith('/admin/home-components') || pathname.startsWith('/admin/trust-pages')) {
       return 'Website';
+    }
+    if (pathname.startsWith('/admin/settings')) {
+      return 'Cài đặt';
+    }
+    if (pathname.startsWith('/admin/bookings')) {
+      return 'Dịch vụ';
     }
     return null;
   }, [pathname]);
@@ -189,12 +196,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
   const showPostComments = isModuleEnabled('posts') && isModuleEnabled('comments');
   // Services section
   const showServicesSection = isModuleEnabled('services');
+  const showBookingsSection = isModuleEnabled('bookings');
   const showCommerceSection = isModuleEnabled('products') || isModuleEnabled('customers') || isModuleEnabled('orders') || isModuleEnabled('wishlist');
   // Product reviews chỉ hiện khi products VÀ comments đều bật  
   const showProductReviews = isModuleEnabled('products') && isModuleEnabled('comments');
   const showMediaSection = isModuleEnabled('media');
   const showUsersSection = isModuleEnabled('users') || isModuleEnabled('roles');
-  const showWebsiteSection = isModuleEnabled('menus') || isModuleEnabled('homepage');
+  const showWebsiteSection = isModuleEnabled('menus') || isModuleEnabled('homepage') || isModuleEnabled('settings');
   const showKanbanSection = isModuleEnabled('kanban');
   const showSubscriptionsSection = isModuleEnabled('subscriptions');
   const showSettingsSection = isModuleEnabled('settings');
@@ -202,6 +210,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
   const showNotificationsSection = isModuleEnabled('notifications');
   const showPromotionsSection = isModuleEnabled('promotions');
   const variantEnabled = Boolean(productSettings?.find(setting => setting.settingKey === 'variantEnabled')?.value);
+  const productFramesEnabled = Boolean(productSettings?.find(setting => setting.settingKey === 'enableProductFrames')?.value);
+  const productSupplementalContentEnabled = Boolean(productSettings?.find(setting => setting.settingKey === 'enableProductSupplementalContent')?.value);
+
+  const analyticsSectionItemCount = showAnalyticsSection ? 1 : 0;
+  const contentSectionItemCount = Number(showPostsSection) + Number(showServicesSection);
+  const commerceSectionItemCount = showCommerceSection ? 1 : 0;
+  const mediaSectionItemCount = showMediaSection ? 1 : 0;
+  const marketingSectionItemCount = Number(showNotificationsSection) + Number(showPromotionsSection);
+  const systemSectionItemCount = Number(showUsersSection) + Number(showWebsiteSection) + Number(showContactInboxSection) + Number(showKanbanSection) + Number(showSubscriptionsSection) + Number(showSettingsSection);
+
+  const shouldShowGroupTitle = (itemCount: number) => !isSidebarCollapsed && itemCount > 1;
+  const getSectionClassName = (showTitle: boolean) => cn('space-y-1', !showTitle && '-mt-2');
+
+  const showAnalyticsTitle = shouldShowGroupTitle(analyticsSectionItemCount);
+  const showContentTitle = shouldShowGroupTitle(contentSectionItemCount);
+  const showCommerceTitle = shouldShowGroupTitle(commerceSectionItemCount);
+  const showMediaTitle = shouldShowGroupTitle(mediaSectionItemCount);
+  const showMarketingTitle = shouldShowGroupTitle(marketingSectionItemCount);
+  const showSystemTitle = shouldShowGroupTitle(systemSectionItemCount);
 
   const enabledFeatures = useMemo(() => {
     const features: Record<string, boolean> = {};
@@ -291,15 +318,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
             <Loader2 size={24} className="animate-spin text-slate-400" />
           </div>
         ) : (
-          <div className="flex-1 py-6 px-3 space-y-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+          <div className="admin-sidebar-scroll flex-1 py-6 px-3 space-y-6 overflow-y-auto scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
             
             {/* Dashboard/Analytics */}
             {showAnalyticsSection && (
-              <div className="space-y-1">
-                {!isSidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng quan</div>}
+              <div className={getSectionClassName(showAnalyticsTitle)}>
+                {showAnalyticsTitle && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng quan</div>}
                 <SidebarItem 
                   icon={LayoutDashboard} 
-                  label="Dashboard" 
+                  label="Tổng quan" 
                   href="/admin/dashboard" 
                   active={pathname === '/admin/dashboard' || pathname === '/admin'} 
                   isCollapsed={isSidebarCollapsed}
@@ -313,8 +340,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
 
             {/* Posts Section */}
             {showPostsSection && (
-              <div className="space-y-1">
-                {!isSidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Nội dung</div>}
+              <div className={getSectionClassName(showContentTitle)}>
+                {showContentTitle && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Nội dung</div>}
                 <SidebarItem 
                   icon={FileText} 
                   label="Quản lý bài viết" 
@@ -336,13 +363,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
 
             {/* Services Section */}
             {showServicesSection && (
-              <div className="space-y-1">
-                {!isSidebarCollapsed && !showPostsSection && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Nội dung</div>}
+              <div className={getSectionClassName(showContentTitle)}>
+                {!showPostsSection && showContentTitle && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Nội dung</div>}
                 <SidebarItem 
                   icon={Briefcase} 
                   label="Dịch vụ" 
                   href="/admin/services" 
-                  active={isActive('/admin/services') || isActive('/admin/service-categories')}
+                  active={isActive('/admin/services') || isActive('/admin/service-categories') || isActive('/admin/bookings')}
                   isCollapsed={isSidebarCollapsed}
                   isExpanded={currentExpandedMenu === 'Dịch vụ'}
                   onToggle={() =>{  handleMenuToggle('Dịch vụ'); }}
@@ -351,6 +378,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
                   subItems={[
                     { href: '/admin/services', label: 'Tất cả dịch vụ', moduleKey: 'services' },
                     { href: '/admin/service-categories', label: 'Danh mục dịch vụ', moduleKey: 'services' },
+                    ...(showBookingsSection ? [{ href: '/admin/bookings', label: 'Đặt lịch', moduleKey: 'bookings' }] : []),
+                    ...(showBookingsSection ? [{ href: '/admin/bookings/settings', label: 'Cài đặt lịch', moduleKey: 'bookings' }] : []),
                   ]}
                 />
               </div>
@@ -358,8 +387,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
 
             {/* Commerce Section */}
             {showCommerceSection && (
-              <div className="space-y-1">
-                {!isSidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Bán hàng</div>}
+              <div className={getSectionClassName(showCommerceTitle)}>
+                {showCommerceTitle && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Bán hàng</div>}
                 <SidebarItem 
                   icon={ShoppingCart} 
                   label="Bán hàng & sản phẩm" 
@@ -386,8 +415,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
 
             {/* Media Section */}
             {showMediaSection && (
-              <div className="space-y-1">
-                {!isSidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Media</div>}
+              <div className={getSectionClassName(showMediaTitle)}>
+                {showMediaTitle && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Media</div>}
                 <SidebarItem 
                   icon={ImageIcon} 
                   label="Thư viện Media" 
@@ -404,8 +433,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
 
             {/* Marketing Section */}
             {(showNotificationsSection || showPromotionsSection) && (
-              <div className="space-y-1">
-                {!isSidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Marketing</div>}
+              <div className={getSectionClassName(showMarketingTitle)}>
+                {showMarketingTitle && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Marketing</div>}
                 {showNotificationsSection && (
                   <SidebarItem 
                     icon={Bell} 
@@ -437,8 +466,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
 
             {/* System Section */}
             {(showUsersSection || showWebsiteSection || showSettingsSection || showKanbanSection || showSubscriptionsSection || showContactInboxSection) && (
-              <div className="space-y-1">
-                {!isSidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Hệ thống</div>}
+              <div className={getSectionClassName(showSystemTitle)}>
+                {showSystemTitle && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Hệ thống</div>}
                 
                 {showUsersSection && (
                   <SidebarItem 
@@ -463,7 +492,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
                     icon={Globe} 
                     label="Website" 
                     href="/admin/menus"
-                    active={isActive('/admin/menus') || isActive('/admin/home-components')}
+                    active={isActive('/admin/menus') || isActive('/admin/home-components') || isActive('/admin/trust-pages')}
                     isCollapsed={isSidebarCollapsed}
                     isExpanded={currentExpandedMenu === 'Website'}
                     onToggle={() =>{  handleMenuToggle('Website'); }}
@@ -472,6 +501,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
                     subItems={[
                       { href: '/admin/menus', label: 'Menu', moduleKey: 'menus' },
                       { href: '/admin/home-components', label: 'Giao diện trang chủ', moduleKey: 'homepage' },
+                      { href: '/admin/trust-pages', label: 'Trang tin cậy', moduleKey: 'settings', visible: trustPagesFeature?.enabled ?? true },
                     ]}
                   />
                 )}
@@ -525,10 +555,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
                     href="/admin/settings" 
                     active={isActive('/admin/settings')} 
                     isCollapsed={isSidebarCollapsed}
-                    isExpanded={false}
-                    onToggle={() => {}}
+                    isExpanded={currentExpandedMenu === 'Cài đặt'}
+                    onToggle={() =>{  handleMenuToggle('Cài đặt'); }}
                     pathname={pathname}
                     isModuleEnabled={isModuleEnabled}
+                    subItems={[
+                      { href: '/admin/settings/general', label: 'Thông tin chung', moduleKey: 'settings' },
+                      { href: '/admin/settings/contact', label: 'Liên hệ', moduleKey: 'settings' },
+                      { href: '/admin/settings/seo', label: 'SEO', moduleKey: 'settings' },
+                      ...(productFramesEnabled ? [{ href: '/admin/settings/product-frames', label: 'Khung sản phẩm', moduleKey: 'settings' }] : []),
+                      ...(productSupplementalContentEnabled ? [{ href: '/admin/settings/product-supplemental-content', label: 'Nội dung bổ sung SP', moduleKey: 'settings' }] : []),
+                    ]}
                   />
                 )}
               </div>
@@ -536,10 +573,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
           </div>
         )}
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+        <div className="px-3 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5">
           <button 
             onClick={() =>{  setIsSidebarCollapsed(!isSidebarCollapsed); }}
-            className="hidden lg:flex items-center justify-center w-full h-9 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            className="hidden lg:flex items-center justify-center w-full h-8 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             title={isSidebarCollapsed ? "Mở rộng" : "Thu gọn"}
           >
             {isSidebarCollapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
@@ -609,3 +646,4 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
     </>
   );
 };
+

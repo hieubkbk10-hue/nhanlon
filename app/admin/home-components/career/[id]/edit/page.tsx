@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Briefcase, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -32,6 +32,7 @@ import type {
   CareerTexts,
   JobPosition,
 } from '../../_types';
+import { AiDemoCareerImport } from '../../../product-list/_components/AiDemoProductsImport';
 
 const COMPONENT_TYPE = 'Career';
 
@@ -267,38 +268,24 @@ export default function CareerEditPage({ params }: { params: Promise<{ id: strin
                 placeholder="Nhập tiêu đề component..."
               />
             </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5',
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
+</CardContent>
         </Card>
 
         <Card className="mb-6">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Vị trí tuyển dụng</CardTitle>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAddJob}
-              className="gap-2"
-            >
-              <Plus size={14} /> Thêm vị trí
-            </Button>
+            <div className="flex items-center gap-2">
+              <AiDemoCareerImport onApply={(items) => setJobs(items as JobPosition[])} />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddJob}
+                className="gap-2"
+              >
+                <Plus size={14} /> Thêm vị trí
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {jobs.map((job, idx) => (
@@ -495,6 +482,8 @@ export default function CareerEditPage({ params }: { params: Promise<{ id: strin
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

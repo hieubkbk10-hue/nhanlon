@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { ModuleGuard } from '../components/ModuleGuard';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -112,7 +113,7 @@ function DashboardContent() {
           <CardContent className="p-12 text-center">
             <p className="text-slate-500 dark:text-slate-400">
               Chưa có báo cáo nào được bật. Vui lòng cấu hình tại{' '}
-              <a href="/system/modules/analytics" className="text-cyan-600 hover:underline">/system/modules/analytics</a>
+              <Link href="/system/modules/analytics" className="text-cyan-600 hover:underline">/system/modules/analytics</Link>
             </p>
           </CardContent>
         </Card>
@@ -374,7 +375,7 @@ function DashboardContent() {
             <div className="flex items-center gap-3 mb-4">
               <Badge variant="warning">Mới: {inboxStats?.new ?? 0}</Badge>
               <Badge variant="secondary">Tổng: {inboxStats?.total ?? 0}</Badge>
-              <a href="/admin/contact-inbox" className="text-sm text-cyan-600 hover:underline">Xem tất cả</a>
+              <Link href="/admin/contact-inbox" className="text-sm text-cyan-600 hover:underline">Xem tất cả</Link>
             </div>
             <div className="space-y-3">
               {(recentInbox ?? []).map((item) => (
@@ -619,3 +620,4 @@ function DashboardContent() {
     </div>
   );
 }
+

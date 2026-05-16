@@ -6,11 +6,14 @@ import { getBrandColors } from '@/lib/utils/colors';
 import { cn } from '../../../components/ui';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { PreviewImage } from '../../_shared/components/PreviewImage';
+import { isVideoUrl } from '@/lib/utils/media';
+import { parseHighlightedHeading } from '@/lib/utils/heroText';
 import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 import {
   getBentoColors,
+  getAPCATextColor,
   getFadeColors,
   getFullscreenColors,
   getHeroColors,
@@ -32,7 +35,7 @@ export const HeroPreview = ({
   fontStyle,
   fontClassName,
 }: { 
-  slides: { id: number; image: string; link: string }[]; 
+  slides: { id: number; image: string; link: string; mediaType?: 'image' | 'video' }[]; 
   brandColor: string;
   secondary: string;
   mode?: 'single' | 'dual';
@@ -48,7 +51,7 @@ export const HeroPreview = ({
   const previewStyle = selectedStyle ?? 'slider';
   const setPreviewStyle = (style: string) => onStyleChange?.(style as HeroStyle);
   const modeLabel = mode === 'dual' ? '2 màu' : '1 màu';
-  const info = previewStyle !== 'bento'
+  const info = (previewStyle !== 'bento' && previewStyle !== 'triple' && previewStyle !== 'triple2')
     ? `Slide ${currentSlide + 1} / ${slides.length || 1} • ${modeLabel}`
     : modeLabel;
   const brandColors = getBrandColors({
@@ -67,6 +70,7 @@ export const HeroPreview = ({
 
   const nextSlide = () =>{  setCurrentSlide((prev) => (prev + 1) % slides.length); };
   const prevSlide = () =>{  setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length); };
+  const getSlideKey = (slide: { id?: number | string; image?: string }, index: number) => `${slide.id ?? 'slide'}-${index}-${slide.image ?? ''}`;
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     touchStartX.current = event.touches[0]?.clientX ?? null;
   };
@@ -92,55 +96,91 @@ export const HeroPreview = ({
     prevSlide();
   };
 
-  const renderSlideWithBlur = (slide: { image: string }, idx: number) => (
-    <div className="block w-full h-full relative">
-      <div 
-        className="absolute inset-0 scale-110"
-        style={{
-          backgroundImage: `url(${slide.image})`,
-          backgroundPosition: 'center',
-          backgroundSize: 'cover',
-          filter: 'blur(30px)',
-        }}
-      />
-      <div className="absolute inset-0 bg-black/20" />
-      <PreviewImage 
-        src={slide.image} 
-        alt={`Slide ${idx + 1}`}
-        className="relative w-full h-full object-contain z-10"
-      />
-    </div>
-  );
+  const renderSlideWithBlur = (slide: { image: string; mediaType?: 'image' | 'video' }, idx: number) => {
+    if (slide.mediaType === 'video') {
+      return (
+        <div className="block w-full h-full relative bg-black">
+          <video
+            src={slide.image}
+            className="w-full h-full object-cover"
+            muted
+            loop
+            autoPlay
+            playsInline
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="block w-full h-full relative">
+        <div 
+          className="absolute inset-0 scale-110"
+          style={{
+            backgroundImage: `url(${slide.image})`,
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+            filter: 'blur(30px)',
+          }}
+        />
+        <div className="absolute inset-0 bg-black/20" />
+        <PreviewImage 
+          src={slide.image} 
+          alt={`Slide ${idx + 1}`}
+          className="relative w-full h-full object-contain z-10"
+        />
+      </div>
+    );
+  };
 
   const renderSlideWithContain = (
-    slide: { image: string },
+    slide: { image: string; mediaType?: 'image' | 'video' },
     options?: {
       blur?: number;
       overlay?: React.ReactNode;
       fit?: 'contain' | 'cover';
     }
-  ) => (
-    <div className="w-full h-full relative">
-      <div
-        className="absolute inset-0 scale-110"
-        style={{
-          backgroundImage: `url(${slide.image})`,
-          backgroundPosition: 'center',
-          backgroundSize: 'cover',
-          filter: `blur(${options?.blur ?? 25}px)`,
-        }}
-      />
-      <PreviewImage
-        src={slide.image}
-        alt=""
-        className={cn(
-          "relative w-full h-full z-10",
-          options?.fit === 'cover' ? 'object-cover' : 'object-contain'
-        )}
-      />
-      {options?.overlay}
-    </div>
-  );
+  ) => {
+    if (slide.mediaType === 'video') {
+      return (
+        <div className="w-full h-full relative bg-black">
+          <video
+            src={slide.image}
+            className={cn(
+              "w-full h-full z-10",
+              options?.fit === 'cover' ? 'object-cover' : 'object-contain'
+            )}
+            muted
+            loop
+            autoPlay
+            playsInline
+          />
+          {options?.overlay}
+        </div>
+      );
+    }
+    return (
+      <div className="w-full h-full relative">
+        <div
+          className="absolute inset-0 scale-110"
+          style={{
+            backgroundImage: `url(${slide.image})`,
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+            filter: `blur(${options?.blur ?? 25}px)`,
+          }}
+        />
+        <PreviewImage
+          src={slide.image}
+          alt=""
+          className={cn(
+            "relative w-full h-full z-10",
+            options?.fit === 'cover' ? 'object-cover' : 'object-contain'
+          )}
+        />
+        {options?.overlay}
+      </div>
+    );
+  };
 
   const renderPlaceholder = (
     idx: number,
@@ -179,7 +219,7 @@ export const HeroPreview = ({
           <>
             {slides.map((slide, idx) => (
               <div
-                key={slide.id}
+                key={getSlideKey(slide, idx)}
                 className={cn("absolute inset-0 transition-opacity duration-700 hover:ring-2 hover:ring-offset-2 hover:ring-offset-slate-900", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}
                 style={{ '--tw-ring-color': sliderColors.hoverRingColor } as React.CSSProperties}
               >
@@ -257,7 +297,7 @@ export const HeroPreview = ({
         {slides.length > 0 ? (
           <>
             {slides.map((slide, idx) => (
-              <div key={slide.id} className={cn("absolute inset-0 transition-opacity duration-700", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
+              <div key={getSlideKey(slide, idx)} className={cn("absolute inset-0 transition-opacity duration-700", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
                 {slide.image ? renderSlideWithBlur(slide, idx) : renderPlaceholder(idx, { backgroundColor: fadeColors.placeholderBg, iconColor: fadeColors.placeholderIconColor })}
               </div>
             ))}
@@ -292,13 +332,17 @@ export const HeroPreview = ({
           {device === 'mobile' ? (
             <div className="grid grid-cols-2 gap-2 h-full">
               {bentoSlides.slice(0, 4).map((slide, idx) => (
-                <div key={slide.id} className="relative rounded-xl overflow-hidden aspect-video">
+                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden aspect-video">
                   {slide.image ? (
+                    isVideoUrl(slide.image) ? (
+                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
                     <div className="w-full h-full relative">
                       <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
                       <div className="absolute inset-0 bg-black/20" />
                       <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
                     </div>
+                    )
                   ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
                     <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
@@ -311,11 +355,15 @@ export const HeroPreview = ({
             <div className="grid grid-cols-4 grid-rows-2 gap-2 h-full" style={{ height: device === 'desktop' ? '280px' : '260px' }}>
               <div className="col-span-2 row-span-2 relative rounded-xl overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900" style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
                 {bentoSlides[0]?.image ? (
+                  isVideoUrl(bentoSlides[0].image) ? (
+                    <video src={bentoSlides[0].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
                     <PreviewImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" />
                   </div>
+                  )
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center" style={{ backgroundColor: placeholderTints[0] }}>
                     <ImageIcon size={28} style={{ color: bentoColors.placeholderIcon }} /><span className="text-xs text-slate-400 mt-1">Banner chính</span>
@@ -324,11 +372,15 @@ export const HeroPreview = ({
               </div>
               <div className="col-span-2 relative rounded-xl overflow-hidden">
                 {bentoSlides[1]?.image ? (
+                  isVideoUrl(bentoSlides[1].image) ? (
+                    <video src={bentoSlides[1].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[1].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
                     <PreviewImage src={bentoSlides[1].image} alt="" className="relative w-full h-full object-contain z-10" />
                   </div>
+                  )
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[1] }}>
                     <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
@@ -337,11 +389,15 @@ export const HeroPreview = ({
               </div>
               <div className="relative rounded-xl overflow-hidden">
                 {bentoSlides[2]?.image ? (
+                  isVideoUrl(bentoSlides[2].image) ? (
+                    <video src={bentoSlides[2].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[2].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
                     <PreviewImage src={bentoSlides[2].image} alt="" className="relative w-full h-full object-contain z-10" />
                   </div>
+                  )
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[2] }}>
                     <ImageIcon size={16} style={{ color: bentoColors.placeholderIcon }} />
@@ -350,11 +406,15 @@ export const HeroPreview = ({
               </div>
               <div className="relative rounded-xl overflow-hidden">
                 {bentoSlides[3]?.image ? (
+                  isVideoUrl(bentoSlides[3].image) ? (
+                    <video src={bentoSlides[3].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[3].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
                     <PreviewImage src={bentoSlides[3].image} alt="" className="relative w-full h-full object-contain z-10" />
                   </div>
+                  )
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[3] }}>
                     <ImageIcon size={16} style={{ color: bentoColors.placeholderIcon }} />
@@ -368,12 +428,160 @@ export const HeroPreview = ({
     );
   };
 
+  const renderTripleStyle = () => {
+    const tripleSlides = slides.slice(0, 3);
+    const placeholderTints = ['#f1f5f9', '#e2e8f0', '#f1f5f9'];
+    return (
+      <section className="relative w-full bg-slate-900 overflow-hidden p-2">
+        <div className={cn(
+          "relative w-full",
+          device === 'mobile' ? 'max-h-[360px]' : (device === 'tablet' ? 'max-h-[280px]' : 'max-h-[300px]')
+        )}>
+          {device === 'mobile' ? (
+            <div className="flex flex-col gap-2 h-full">
+              {tripleSlides.slice(0, 3).map((slide, idx) => (
+                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden aspect-video">
+                  {slide.image ? (
+                    isVideoUrl(slide.image) ? (
+                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
+                    <div className="w-full h-full relative">
+                      <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
+                      <div className="absolute inset-0 bg-black/20" />
+                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+                    </div>
+                    )
+                  ) : (
+                  <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
+                    <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
+                  </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 h-full" style={{ height: device === 'desktop' ? '280px' : '260px' }}>
+              {tripleSlides.map((slide, idx) => (
+                <div key={getSlideKey(slide, idx)} className={cn("relative rounded-xl overflow-hidden", idx === 0 && 'ring-2 ring-offset-1 ring-offset-slate-900')} style={idx === 0 ? { '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties : undefined}>
+                  {slide.image ? (
+                    isVideoUrl(slide.image) ? (
+                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
+                    <div className="w-full h-full relative">
+                      <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${20 - idx * 5}px)` }} />
+                      <div className="absolute inset-0 bg-black/20" />
+                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+                    </div>
+                    )
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center" style={{ backgroundColor: placeholderTints[idx] }}>
+                      <ImageIcon size={idx === 0 ? 28 : 20} style={{ color: bentoColors.placeholderIcon }} />
+                      {idx === 0 && <span className="text-xs text-slate-400 mt-1">Banner chính</span>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  };
+
+  const renderTriple2Style = () => {
+    const tripleSlides = slides.slice(0, 3);
+    const placeholderTints = ['#f1f5f9', '#e2e8f0', '#f1f5f9'];
+    return (
+      <section className="relative w-full bg-slate-900 overflow-hidden p-2">
+        <div className={cn(
+          "relative w-full",
+          device === 'mobile' ? 'max-h-[360px]' : (device === 'tablet' ? 'max-h-[280px]' : 'max-h-[300px]')
+        )}>
+          {device === 'mobile' ? (
+            <div className="flex flex-col gap-2 h-full">
+              {tripleSlides.slice(0, 3).map((slide, idx) => (
+                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden aspect-video">
+                  {slide.image ? (
+                    isVideoUrl(slide.image) ? (
+                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
+                    <div className="w-full h-full relative">
+                      <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
+                      <div className="absolute inset-0 bg-black/20" />
+                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+                    </div>
+                    )
+                  ) : (
+                  <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
+                    <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
+                  </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 grid-rows-2 gap-2 h-full" style={{ height: device === 'desktop' ? '280px' : '260px' }}>
+              {/* Ảnh chính: chiếm 2/3 */}
+              <div className={cn("col-span-2 row-span-2 relative rounded-xl overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900")} style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
+                {tripleSlides[0]?.image ? (
+                  isVideoUrl(tripleSlides[0].image) ? (
+                    <video src={tripleSlides[0].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  ) : (
+                  <div className="w-full h-full relative">
+                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${tripleSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
+                    <div className="absolute inset-0 bg-black/20" />
+                    <PreviewImage src={tripleSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" />
+                  </div>
+                  )
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center" style={{ backgroundColor: placeholderTints[0] }}>
+                    <ImageIcon size={28} style={{ color: bentoColors.placeholderIcon }} />
+                    <span className="text-xs text-slate-400 mt-1">Banner chính</span>
+                  </div>
+                )}
+              </div>
+              {/* 2 ảnh phụ xếp dọc bên phải */}
+              {tripleSlides.slice(1, 3).map((slide, idx) => (
+                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden">
+                  {slide.image ? (
+                    isVideoUrl(slide.image) ? (
+                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
+                    <div className="w-full h-full relative">
+                      <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${15 - idx * 5}px)` }} />
+                      <div className="absolute inset-0 bg-black/20" />
+                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+                    </div>
+                    )
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx + 1] }}>
+                      <ImageIcon size={16} style={{ color: bentoColors.placeholderIcon }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  };
+
   const renderFullscreenStyle = () => {
     const mainSlide = slides[currentSlide] || slides[0];
     const c = content ?? {};
     const primaryHref = c.primaryButtonLink || slides[currentSlide]?.link || '#';
     const secondaryHref = c.secondaryButtonLink || '#';
     const showFullscreenContent = c.showFullscreenContent !== false;
+    const primaryButtonBg = c.primaryButtonColor || fullscreenColors.primaryCTA;
+    const primaryButtonText = getAPCATextColor(primaryButtonBg, 16, 600);
+    const secondaryButtonStyle = c.secondaryButtonColor
+      ? {
+        backgroundColor: c.secondaryButtonColor,
+        borderColor: c.secondaryButtonColor,
+        color: getAPCATextColor(c.secondaryButtonColor, 16, 600),
+      }
+      : { borderColor: 'rgba(255,255,255,0.3)', color: '#ffffff' };
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden">
         <div className={cn(
@@ -383,12 +591,12 @@ export const HeroPreview = ({
           {slides.length > 0 && mainSlide ? (
             <>
               {slides.map((slide, idx) => (
-                <div key={slide.id} className={cn("absolute inset-0 transition-opacity duration-1000", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
+                <div key={getSlideKey(slide, idx)} className={cn("absolute inset-0 transition-opacity duration-1000", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
                   {slide.image ? (
                     renderSlideWithContain(slide, {
                       fit: 'cover',
                       overlay: showFullscreenContent ? (
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent z-20" />
+                        <div className="absolute inset-0 z-20" style={{ background: `linear-gradient(to right, rgba(0,0,0,${(c.overlayOpacity ?? 50) / 100}), rgba(0,0,0,${(c.overlayOpacity ?? 50) / 250}), transparent)` }} />
                       ) : null,
                     })
                   ) : renderPlaceholder(idx, { backgroundColor: fullscreenColors.placeholderBg, iconColor: fullscreenColors.placeholderIcon })}
@@ -397,7 +605,9 @@ export const HeroPreview = ({
               {showFullscreenContent && (
                 <div className={cn(
                   "absolute inset-0 z-30 flex flex-col justify-center",
-                  device === 'mobile' ? 'px-4' : 'px-8 md:px-16'
+                  device === 'mobile' ? 'px-4' : 'px-8 md:px-16',
+                  c.textAlign === 'center' && 'items-center text-center',
+                  c.textAlign === 'right' && 'items-end text-right'
                 )}>
                   <div className={cn("max-w-xl", device === 'mobile' ? 'space-y-3' : 'space-y-4')}>
                     {c.badge && (
@@ -407,21 +617,24 @@ export const HeroPreview = ({
                       </div>
                     )}
                     <h1 className={cn("font-bold text-white leading-tight", device === 'mobile' ? 'text-xl' : (device === 'tablet' ? 'text-2xl' : 'text-3xl md:text-4xl'))}>
-                      {c.heading ?? 'Tiêu đề chính'}
+                      {parseHighlightedHeading(c.heading ?? 'Tiêu đề chính', c.highlightColor)}
                     </h1>
                     {c.description && (
                       <p className={cn("text-white/80", device === 'mobile' ? 'text-sm line-clamp-2' : 'text-base')}>
                         {c.description}
                       </p>
                     )}
-                    <div className={cn("flex gap-3", device === 'mobile' ? 'flex-col' : 'flex-row')}>
+                    <div className={cn("flex gap-3", device === 'mobile' ? 'flex-col' : 'flex-row',
+                      c.textAlign === 'center' && 'justify-center',
+                      c.textAlign === 'right' && 'justify-end'
+                    )}>
                       {c.primaryButtonText && (
-                        <a href={primaryHref} className={cn("font-medium rounded-lg text-white", device === 'mobile' ? 'px-4 py-2 text-sm' : 'px-6 py-2.5')} style={{ backgroundColor: fullscreenColors.primaryCTA, color: fullscreenColors.primaryCTAText }}>
+                        <a href={primaryHref} className={cn("font-medium rounded-lg", device === 'mobile' ? 'px-4 py-2 text-sm' : 'px-6 py-2.5')} style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>
                           {c.primaryButtonText}
                         </a>
                       )}
                       {c.secondaryButtonText && (
-                        <a href={secondaryHref} className={cn("font-medium rounded-lg border border-white/30 text-white hover:bg-white/10", device === 'mobile' ? 'px-4 py-2 text-sm' : 'px-6 py-2.5')}>
+                        <a href={secondaryHref} className={cn("font-medium rounded-lg border hover:bg-white/10", device === 'mobile' ? 'px-4 py-2 text-sm' : 'px-6 py-2.5')} style={secondaryButtonStyle}>
                           {c.secondaryButtonText}
                         </a>
                       )}
@@ -453,8 +666,10 @@ export const HeroPreview = ({
     const mainSlide = slides[currentSlide] || slides[0];
     const c = content ?? {};
     const primaryHref = c.primaryButtonLink || slides[currentSlide]?.link || '#';
+    const primaryButtonBg = c.primaryButtonColor || splitColors.primaryCTA;
+    const primaryButtonText = getAPCATextColor(primaryButtonBg, 16, 600);
     return (
-      <section className="relative w-full bg-white dark:bg-slate-900 overflow-hidden">
+      <section className="relative w-full overflow-hidden" style={{ backgroundColor: splitColors.contentBg }}>
         <div className={cn(
           "relative w-full flex",
           device === 'mobile' ? 'flex-col h-auto' : 'flex-row h-[320px]'
@@ -462,24 +677,30 @@ export const HeroPreview = ({
           {slides.length > 0 && mainSlide ? (
             <>
               <div className={cn(
-                "flex flex-col justify-center bg-slate-50 dark:bg-slate-800/50",
+                "flex flex-col justify-center",
                 device === 'mobile' ? 'p-4 order-2' : 'w-1/2 p-8 lg:p-12'
-              )}>
-                <div className={cn("space-y-3", device === 'mobile' ? '' : 'max-w-md')}>
+              )} style={{ backgroundColor: splitColors.contentBg }}>
+                <div className={cn("space-y-3", device === 'mobile' ? '' : 'max-w-md',
+                  c.textAlign === 'center' && 'text-center',
+                  c.textAlign === 'right' && 'text-right'
+                )}>
                   <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide" style={{ backgroundColor: splitColors.badgeBg, color: splitColors.badgeText }}>
                     {c.badge ?? `Banner ${currentSlide + 1}/${slides.length}`}
                   </span>
-                  <h2 className={cn("font-bold text-slate-900 dark:text-white leading-tight", device === 'mobile' ? 'text-lg' : 'text-2xl lg:text-3xl')}>
-                    {c.heading ?? 'Tiêu đề nổi bật'}
+                  <h2 className={cn("font-bold leading-tight", device === 'mobile' ? 'text-lg' : 'text-2xl lg:text-3xl')} style={{ color: splitColors.headingText }}>
+                    {parseHighlightedHeading(c.heading ?? 'Tiêu đề nổi bật', c.highlightColor)}
                   </h2>
                   {c.description && (
-                    <p className={cn("text-slate-600 dark:text-slate-300", device === 'mobile' ? 'text-sm' : 'text-base')}>
+                    <p className={cn(device === 'mobile' ? 'text-sm' : 'text-base')} style={{ color: splitColors.descriptionText }}>
                       {c.description}
                     </p>
                   )}
                   {c.primaryButtonText && (
-                    <div className="pt-2">
-                      <a href={primaryHref} className={cn("font-medium rounded-lg text-white", device === 'mobile' ? 'px-4 py-2 text-sm' : 'px-6 py-2.5')} style={{ backgroundColor: splitColors.primaryCTA, color: splitColors.primaryCTAText }}>
+                    <div className={cn("pt-2",
+                      c.textAlign === 'center' && 'text-center',
+                      c.textAlign === 'right' && 'text-right'
+                    )}>
+                      <a href={primaryHref} className={cn("font-medium rounded-lg", device === 'mobile' ? 'px-4 py-2 text-sm' : 'px-6 py-2.5')} style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>
                         {c.primaryButtonText}
                       </a>
                     </div>
@@ -500,9 +721,13 @@ export const HeroPreview = ({
                 device === 'mobile' ? 'w-full h-[200px] order-1' : 'w-1/2'
               )}>
                 {slides.map((slide, idx) => (
-                  <div key={slide.id} className={cn("absolute inset-0 transition-all duration-700", idx === currentSlide ? "opacity-100 scale-100" : "opacity-0 scale-105 pointer-events-none")}>
+                  <div key={getSlideKey(slide, idx)} className={cn("absolute inset-0 transition-all duration-700", idx === currentSlide ? "opacity-100 scale-100" : "opacity-0 scale-105 pointer-events-none")}>
                     {slide.image ? (
+                      isVideoUrl(slide.image) ? (
+                        <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                      ) : (
                       <PreviewImage src={slide.image} alt="" className="w-full h-full object-cover" />
+                      )
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-slate-200 dark:bg-slate-700">
                         <ImageIcon size={40} className="text-slate-400" />
@@ -536,6 +761,8 @@ export const HeroPreview = ({
     const mainSlide = slides[currentSlide] || slides[0];
     const c = content ?? {};
     const primaryHref = c.primaryButtonLink || slides[currentSlide]?.link || '#';
+    const primaryButtonBg = c.primaryButtonColor || parallaxColors.primaryCTA;
+    const primaryButtonText = getAPCATextColor(primaryButtonBg, 14, 600);
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden">
         <div className={cn(
@@ -545,11 +772,11 @@ export const HeroPreview = ({
           {slides.length > 0 && mainSlide ? (
             <>
               {slides.map((slide, idx) => (
-                <div key={slide.id} className={cn("absolute inset-0 transition-opacity duration-700", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
+                <div key={getSlideKey(slide, idx)} className={cn("absolute inset-0 transition-opacity duration-700", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
                   {slide.image ? (
                     renderSlideWithContain(slide, {
                       overlay: (
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/10 z-20" />
+                        <div className="absolute inset-0 z-20" style={{ background: `linear-gradient(to top, rgba(0,0,0,${(c.overlayOpacity ?? 50) / 100}), rgba(0,0,0,${(c.overlayOpacity ?? 50) / 300}), rgba(0,0,0,${(c.overlayOpacity ?? 50) / 500}))` }} />
                       ),
                     })
                   ) : renderPlaceholder(idx, { backgroundColor: parallaxColors.placeholderBg, iconColor: parallaxColors.placeholderIcon })}
@@ -560,31 +787,31 @@ export const HeroPreview = ({
                 device === 'mobile' ? 'inset-x-3 bottom-3' : 'inset-x-6 bottom-6'
               )}>
                 <div className={cn(
-                  "bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-xl shadow-2xl",
+                  "rounded-xl shadow-2xl",
                   device === 'mobile' ? 'p-3 w-full' : 'p-5 max-w-lg'
-                )}>
+                )} style={{ backgroundColor: parallaxColors.cardBg }}>
                   {c.badge && (
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: parallaxColors.cardBadgeDot }} />
                       <span className="text-xs font-semibold uppercase tracking-wide px-2.5 py-0.5 rounded-full" style={{ backgroundColor: parallaxColors.cardBadgeBg, color: parallaxColors.cardBadgeText }}>{c.badge}</span>
                     </div>
                   )}
-                  <h3 className={cn("font-bold text-slate-900 dark:text-white", device === 'mobile' ? 'text-base' : 'text-xl')}>
-                    {c.heading ?? 'Tiêu đề nổi bật'}
+                  <h3 className={cn("font-bold", device === 'mobile' ? 'text-base' : 'text-xl')} style={{ color: parallaxColors.headingText }}>
+                    {parseHighlightedHeading(c.heading ?? 'Tiêu đề nổi bật', c.highlightColor)}
                   </h3>
                   {c.description && (
-                    <p className={cn("text-slate-600 dark:text-slate-300 mt-1", device === 'mobile' ? 'text-xs' : 'text-sm')}>
+                    <p className={cn("mt-1", device === 'mobile' ? 'text-xs' : 'text-sm')} style={{ color: parallaxColors.descriptionText }}>
                       {c.description}
                     </p>
                   )}
                   <div className="flex items-center gap-3 mt-3">
                     {c.primaryButtonText && (
-                      <a href={primaryHref} className={cn("font-medium rounded-lg text-white", device === 'mobile' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2 text-sm')} style={{ backgroundColor: parallaxColors.primaryCTA, color: parallaxColors.primaryCTAText }}>
+                      <a href={primaryHref} className={cn("font-medium rounded-lg", device === 'mobile' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2 text-sm')} style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>
                         {c.primaryButtonText}
                       </a>
                     )}
                     {c.countdownText && (
-                      <span className={cn("text-slate-500", device === 'mobile' ? 'text-xs' : 'text-sm')}>{c.countdownText}</span>
+                      <span className={cn(device === 'mobile' ? 'text-xs' : 'text-sm')} style={{ color: parallaxColors.countdownText }}>{c.countdownText}</span>
                     )}
                   </div>
                 </div>
@@ -637,6 +864,8 @@ export const HeroPreview = ({
           {previewStyle === 'slider' && renderSliderStyle()}
           {previewStyle === 'fade' && renderFadeStyle()}
           {previewStyle === 'bento' && renderBentoStyle()}
+          {previewStyle === 'triple' && renderTripleStyle()}
+          {previewStyle === 'triple2' && renderTriple2Style()}
           {previewStyle === 'fullscreen' && renderFullscreenStyle()}
           {previewStyle === 'split' && renderSplitStyle()}
           {previewStyle === 'parallax' && renderParallaxStyle()}
@@ -656,6 +885,16 @@ export const HeroPreview = ({
         </div>
       )}
       {previewStyle === 'bento' && mode === 'dual' && bentoColors.similarity > 0.9 && (
+        <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+          ⚠️ Hai màu quá giống nhau (similarity: {(bentoColors.similarity * 100).toFixed(0)}%). Khuyến nghị chọn màu phụ khác biệt hơn.
+        </div>
+      )}
+      {previewStyle === 'triple' && mode === 'dual' && bentoColors.similarity > 0.9 && (
+        <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+          ⚠️ Hai màu quá giống nhau (similarity: {(bentoColors.similarity * 100).toFixed(0)}%). Khuyến nghị chọn màu phụ khác biệt hơn.
+        </div>
+      )}
+      {previewStyle === 'triple2' && mode === 'dual' && bentoColors.similarity > 0.9 && (
         <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-300">
           ⚠️ Hai màu quá giống nhau (similarity: {(bentoColors.similarity * 100).toFixed(0)}%). Khuyến nghị chọn màu phụ khác biệt hơn.
         </div>
@@ -690,6 +929,12 @@ export const HeroPreview = ({
             )}
             {previewStyle === 'bento' && (
               <p><strong>Slot 1:</strong> 800×500 • <strong>Slot 2:</strong> 800×250 • <strong>Slot 3-4:</strong> 400×250 • Tối đa 4 ảnh</p>
+            )}
+            {previewStyle === 'triple' && (
+              <p><strong>1920×1080px</strong> (16:9) • 3 ảnh ngang bằng nhau, tỉ lệ 16:9</p>
+            )}
+            {previewStyle === 'triple2' && (
+              <p><strong>Ảnh chính:</strong> 1280×720 (16:9) chiếm 2/3 • <strong>2 ảnh phụ:</strong> 640×360 xếp dọc 1/3</p>
             )}
             {previewStyle === 'fullscreen' && (
               <p><strong>1920×1080px</strong> (16:9) • Subject đặt bên phải (trái có overlay text)</p>

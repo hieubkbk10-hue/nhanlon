@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ChevronDown, Download, Edit, ExternalLink, Layers, Loader2, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { ChevronDown, Copy, Download, Edit, ExternalLink, Layers, Loader2, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, Input, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui';
 import { BulkActionBar, ColumnToggle, generatePaginationItems, SelectCheckbox, SortableHeader, useSortableData } from '../components/TableUtilities';
@@ -50,7 +50,9 @@ function ProductsContent() {
   const productStats = useQuery(api.products.getStats);
   
   const deleteProduct = useMutation(api.products.remove);
+  const duplicateProduct = useMutation(api.products.duplicate);
   const bulkRemove = useMutation(api.products.bulkRemove);
+  const bulkUpdateStatus = useMutation(api.products.bulkUpdateStatus);
   const importProducts = useMutation(api.products.importFromExcelRows);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -76,6 +78,8 @@ function ProductsContent() {
   const [manualSelectedIds, setManualSelectedIds] = useState<Id<"products">[]>([]);
   const [selectionMode, setSelectionMode] = useState<'manual' | 'all'>('manual');
   const [currentPage, setCurrentPage] = useState(1);
+  const [cloningProductId, setCloningProductId] = useState<Id<"products"> | null>(null);
+  const [bulkStatusLoading, setBulkStatusLoading] = useState<'publish' | 'unpublish' | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<Id<"products"> | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -652,6 +656,36 @@ function ProductsContent() {
     }
   };
 
+  const handleDuplicateProduct = async (id: Id<"products">) => {
+    setCloningProductId(id);
+    try {
+      const result = await duplicateProduct({ id });
+      toast.success(`Đã tạo bản sao: ${result.name}`);
+    } catch {
+      toast.error('Không thể copy sản phẩm');
+    } finally {
+      setCloningProductId(null);
+    }
+  };
+
+  const handleBulkStatusUpdate = async (mode: 'publish' | 'unpublish') => {
+    const nextStatus = mode === 'publish' ? 'Active' : 'Draft';
+    setBulkStatusLoading(mode);
+    try {
+      const result = await bulkUpdateStatus({ ids: selectedIds, status: nextStatus });
+      applyManualSelection([]);
+      if (result.updated > 0) {
+        toast.success(`Đã cập nhật ${result.updated} sản phẩm${result.skipped > 0 ? `, bỏ qua ${result.skipped} sản phẩm` : ''}`);
+      } else {
+        toast.info('Không có sản phẩm nào cần cập nhật');
+      }
+    } catch {
+      toast.error('Có lỗi khi cập nhật trạng thái');
+    } finally {
+      setBulkStatusLoading(null);
+    }
+  };
+
   // FIX #10: Add loading state for bulk delete
   const handleBulkDelete = async () => {
     if (confirm(`Xóa ${selectedIds.length} sản phẩm đã chọn? Tất cả dữ liệu liên quan sẽ bị xóa.`)) {
@@ -856,6 +890,9 @@ function ProductsContent() {
         onSelectPage={() =>{  applyManualSelection(paginatedData.map(product => product._id)); }}
         onSelectAllResults={() =>{  setSelectionMode('all'); }}
         isSelectingAllResults={isSelectingAll}
+        onPublish={() =>{  void handleBulkStatusUpdate('publish'); }}
+        onUnpublish={() =>{  void handleBulkStatusUpdate('unpublish'); }}
+        isStatusLoading={bulkStatusLoading}
         onDelete={handleBulkDelete} 
         onClearSelection={() =>{  applyManualSelection([]); }} 
         isLoading={isDeleting}
@@ -978,6 +1015,15 @@ function ProductsContent() {
                           <Button variant="ghost" size="icon" title="Quản lý phiên bản"><Layers size={16} /></Button>
                         </Link>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Copy sản phẩm"
+                        onClick={() =>{  void handleDuplicateProduct(product._id); }}
+                        disabled={cloningProductId === product._id}
+                      >
+                        {cloningProductId === product._id ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />}
+                      </Button>
                       <Link href={`/admin/products/${product._id}/edit`}><Button variant="ghost" size="icon"><Edit size={16}/></Button></Link>
                       <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600" onClick={ async () => handleDelete(product._id)}><Trash2 size={16}/></Button>
                     </div>

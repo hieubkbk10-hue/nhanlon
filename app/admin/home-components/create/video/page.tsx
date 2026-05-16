@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Video as VideoIcon } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../components/ui';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
+import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
+import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
 import { VideoPreview } from '../../video/_components/VideoPreview';
 import {
   DEFAULT_VIDEO_STYLE,
@@ -22,6 +22,21 @@ export default function VideoCreatePage() {
   const { customState: customFontState, effectiveFont, showCustomBlock: showFontCustomBlock, setCustomState: setCustomFontState } = useTypeFontOverrideState(COMPONENT_TYPE, { seedCustomFromSettingsWhenTypeEmpty: true });
   const { primary, secondary, mode } = effectiveColors;
   const fontStyle = { '--font-active': `var(${effectiveFont.fontVariable})` } as React.CSSProperties;
+
+  const headerState = useSectionHeaderState({
+    hideHeader: false,
+    showTitle: true,
+    showSubtitle: true,
+    subtitle: '',
+    headerAlign: 'left',
+    titleColorPrimary: false,
+    subtitleAboveTitle: false,
+    uppercaseText: false,
+    showBadge: true,
+    badgeText: '',
+  });
+
+  const [headerExpanded, setHeaderExpanded] = React.useState(true);
 
   const [config, setConfig] = React.useState<VideoConfig>(() => normalizeVideoConfig({
     autoplay: false,
@@ -40,7 +55,20 @@ export default function VideoCreatePage() {
   const selectedStyle = normalizeVideoStyle(config.style);
 
   const onSubmit = (e: React.FormEvent) => {
-    const normalized = normalizeVideoConfig({ ...config, style: selectedStyle });
+    const normalized = normalizeVideoConfig({ 
+      ...config, 
+      style: selectedStyle,
+      hideHeader: headerState.hideHeader,
+      showTitle: headerState.showTitle,
+      subtitle: headerState.subtitle,
+      showSubtitle: headerState.showSubtitle,
+      headerAlign: headerState.headerAlign,
+      titleColorPrimary: headerState.titleColorPrimary,
+      subtitleAboveTitle: headerState.subtitleAboveTitle,
+      uppercaseText: headerState.uppercaseText,
+      showBadge: headerState.showBadge,
+      badgeText: headerState.badgeText,
+    });
     void handleSubmit(e, normalized);
   };
 
@@ -60,25 +88,43 @@ export default function VideoCreatePage() {
       customFontState={customFontState}
       showFontCustomBlock={showFontCustomBlock}
       setCustomFontState={setCustomFontState}
+      skipTitleInput={true}
     >
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <VideoIcon size={18} />
-            Video
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label>Style layout</Label>
-          <Input value={selectedStyle} readOnly />
-          <p className="text-xs text-slate-500">Đổi style trực tiếp ở khối Preview bên dưới.</p>
-        </CardContent>
-      </Card>
+      <HeaderConfigSection
+        hideHeader={headerState.hideHeader}
+        title={title}
+        showTitle={headerState.showTitle}
+        subtitle={headerState.subtitle}
+        showSubtitle={headerState.showSubtitle}
+        headerAlign={headerState.headerAlign}
+        titleColorPrimary={headerState.titleColorPrimary}
+        subtitleAboveTitle={headerState.subtitleAboveTitle}
+        uppercaseText={headerState.uppercaseText}
+        showBadge={headerState.showBadge}
+        badgeText={headerState.badgeText}
+        onHideHeaderChange={headerState.setHideHeader}
+        onTitleChange={setTitle}
+        onShowTitleChange={headerState.setShowTitle}
+        onSubtitleChange={headerState.setSubtitle}
+        onShowSubtitleChange={headerState.setShowSubtitle}
+        onHeaderAlignChange={headerState.setHeaderAlign}
+        onTitleColorPrimaryChange={headerState.setTitleColorPrimary}
+        onSubtitleAboveTitleChange={headerState.setSubtitleAboveTitle}
+        onUppercaseTextChange={headerState.setUppercaseText}
+        onShowBadgeChange={headerState.setShowBadge}
+        onBadgeTextChange={headerState.setBadgeText}
+        expanded={headerExpanded}
+        onExpandedChange={setHeaderExpanded}
+        titleRequired={true}
+        titleLabel="Tiêu đề hiển thị"
+        titlePlaceholder="Nhập tiêu đề component..."
+      />
 
       <VideoForm
         config={config}
         onChange={setConfig}
         selectedStyle={selectedStyle}
+        defaultExpanded={true}
       />
 
       <VideoPreview
@@ -90,6 +136,17 @@ export default function VideoCreatePage() {
         mode={mode}
         fontStyle={fontStyle}
         fontClassName="font-active"
+        title={title}
+        subtitle={headerState.subtitle}
+        hideHeader={headerState.hideHeader}
+        showTitle={headerState.showTitle}
+        showSubtitle={headerState.showSubtitle}
+        headerAlign={headerState.headerAlign}
+        titleColorPrimary={headerState.titleColorPrimary}
+        subtitleAboveTitle={headerState.subtitleAboveTitle}
+        uppercaseText={headerState.uppercaseText}
+        showBadge={headerState.showBadge}
+        badgeText={headerState.badgeText}
       />
     </ComponentFormWrapper>
   );

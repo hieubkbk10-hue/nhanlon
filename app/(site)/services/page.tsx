@@ -10,6 +10,7 @@ import { getServicesListColors } from '@/components/site/services/colors';
 import { useServicesListConfig } from '@/lib/experiences';
 import { ChevronDown } from 'lucide-react';
 import type { Id } from '@/convex/_generated/dataModel';
+import { buildCategoryPath, buildDetailPath, buildModuleListPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 import {
   FullWidthLayout,
   MagazineLayout,
@@ -153,6 +154,8 @@ function ServicesContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const routeModeSetting = useQuery(api.settings.getValue, { key: 'ia_route_mode', defaultValue: 'unified' });
+  const routeMode = useMemo(() => normalizeRouteMode(routeModeSetting), [routeModeSetting]);
 
   const urlPage = Number(searchParams.get('page')) || 1;
   
@@ -191,12 +194,19 @@ function ServicesContent() {
     [visibleCategories, categories]
   );
 
+  const categorySlugFromPath = useMemo(() => {
+    if (routeMode !== 'unified') {return null;}
+    const segment = pathname.split('/').filter(Boolean)[0];
+    if (!segment || segment === 'services') {return null;}
+    return segment;
+  }, [pathname, routeMode]);
+
   const categoryFromUrl = useMemo(() => {
-    const catSlug = searchParams.get('category');
-    if (!catSlug || categoryOptions.length === 0) return null;
+    const catSlug = categorySlugFromPath ?? searchParams.get('category');
+    if (!catSlug || categoryOptions.length === 0) {return null;}
     const matchedCategory = categoryOptions.find((c) => c.slug === catSlug);
     return matchedCategory?._id ?? null;
-  }, [searchParams, categoryOptions]);
+  }, [categorySlugFromPath, searchParams, categoryOptions]);
 
   const activeCategory = categoryFromUrl;
 
@@ -259,6 +269,18 @@ function ServicesContent() {
     return new Map(categories.map((c) => [c._id, c.name]));
   }, [categories]);
 
+  const categorySlugMap = useMemo(() => {
+    if (!categories) {return new Map<string, string>();}
+    return new Map(categories.map((c) => [c._id, c.slug]));
+  }, [categories]);
+
+  const getServiceDetailHref = useCallback((service: { slug: string; categoryId: Id<'serviceCategories'> }) => buildDetailPath({
+    categorySlug: categorySlugMap.get(service.categoryId),
+    mode: routeMode,
+    moduleKey: 'services',
+    recordSlug: service.slug,
+  }), [categorySlugMap, routeMode]);
+
   useEffect(() => {
     if (listConfig.paginationType === 'infiniteScroll' && inView && infiniteStatus === 'CanLoadMore') {
       loadMore(postsPerPage);
@@ -279,15 +301,21 @@ function ServicesContent() {
     if (categoryId && categoryOptions.length > 0) {
       const category = categoryOptions.find(c => c._id === categoryId);
       if (category) {
+        if (routeMode === 'unified') {
+          router.push(buildCategoryPath({ categorySlug: category.slug, mode: routeMode, moduleKey: 'services' }), { scroll: false });
+          return;
+        }
         params.set('category', category.slug);
       }
     } else {
       params.delete('category');
     }
     
-    const newUrl = params.toString() ? `/services?${params.toString()}` : '/services';
+    const newUrl = params.toString()
+      ? `${buildModuleListPath('services')}?${params.toString()}`
+      : buildModuleListPath('services');
     router.push(newUrl, { scroll: false });
-  }, [searchParams, categoryOptions, router]);
+  }, [searchParams, categoryOptions, router, routeMode]);
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
@@ -317,15 +345,19 @@ function ServicesContent() {
   }, [searchParams, pathname, router]);
 
   useEffect(() => {
-    const catSlug = searchParams.get('category');
+    const catSlug = categorySlugFromPath ?? searchParams.get('category');
     if (!catSlug || categoryOptions.length === 0) {return;}
     const hasMatch = categoryOptions.some((category) => category.slug === catSlug);
     if (hasMatch) {return;}
+    if (routeMode === 'unified' && categorySlugFromPath) {
+      router.replace(buildModuleListPath('services'), { scroll: false });
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete('category');
     const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.replace(nextUrl, { scroll: false });
-  }, [categoryOptions, pathname, router, searchParams]);
+  }, [categoryOptions, categorySlugFromPath, pathname, router, routeMode, searchParams]);
 
   const filterKey = `${activeCategory ?? ''}|${debouncedSearchQuery}|${sortBy}|${postsPerPage}`;
   const prevFilterKeyRef = useRef(filterKey);
@@ -386,6 +418,7 @@ function ServicesContent() {
                 categoryMap={categoryMap}
                 viewMode="grid"
                 enabledFields={enabledFields}
+                getDetailHref={getServiceDetailHref}
               />
             )}
           </>
@@ -409,6 +442,7 @@ function ServicesContent() {
               enabledFields={enabledFields}
                showSearch={listConfig.showSearch}
                showCategories={listConfig.showCategories}
+              getDetailHref={getServiceDetailHref}
             />
           )
         )}
@@ -430,6 +464,7 @@ function ServicesContent() {
               onSortChange={handleSortChange}
               featuredServices={featuredServices ?? []}
               enabledFields={enabledFields}
+              getDetailHref={getServiceDetailHref}
             />
           )
         )}

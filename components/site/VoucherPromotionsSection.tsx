@@ -3,15 +3,20 @@
 import React from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
+import Link from 'next/link';
 import { normalizeVoucherLimit, normalizeVoucherStyle } from '@/lib/home-components/voucher-promotions';
 import {
+  DEFAULT_DEMO_VOUCHERS,
+  normalizeDemoVouchers,
   normalizeVoucherPromotionsTexts,
 } from '@/app/admin/home-components/voucher-promotions/_lib/constants';
+import { extractSectionHeaderConfig } from '@/app/admin/home-components/_shared/hooks/useSectionHeaderState';
 import { getVoucherPromotionsColorTokens } from '@/app/admin/home-components/voucher-promotions/_lib/colors';
 import { VoucherPromotionsSectionShared } from '@/app/admin/home-components/voucher-promotions/_components/VoucherPromotionsSectionShared';
 import type {
   VoucherPromotionItem,
   VoucherPromotionsBrandMode,
+  VoucherPromotionsSelectionMode,
   VoucherPromotionsTexts,
 } from '@/app/admin/home-components/voucher-promotions/_types';
 
@@ -37,13 +42,25 @@ export function VoucherPromotionsSection({
   });
 
   const heading = texts.heading || title || 'Voucher khuyến mãi';
-  const description = texts.description;
+  const headerConfig = extractSectionHeaderConfig(config);
+  const description = headerConfig.subtitle || texts.description;
   const ctaLabel = texts.ctaLabel;
   const ctaUrl = (config.ctaUrl as string) || '/promotions';
+  const showCta = typeof config.showCta === 'boolean' ? config.showCta : true;
+  const ctaVariant = config.ctaVariant === 'textRight' ? 'textRight' : 'button';
   const limit = normalizeVoucherLimit(config.limit as number | undefined);
   const style = normalizeVoucherStyle(config.style as string | undefined);
+  const desktopColumns = config.desktopColumns === 3 ? 3 : 4;
+  const iconName = typeof config.iconName === 'string' ? config.iconName : 'BadgePercent';
+  const selectionMode: VoucherPromotionsSelectionMode = config.selectionMode === 'demo' ? 'demo' : 'auto';
+  const demoVouchers = normalizeDemoVouchers(config.demoVouchers as Partial<VoucherPromotionItem>[] | undefined);
 
-  const vouchers = useQuery(api.promotions.listPublicVouchers, { limit }) as VoucherPromotionItem[] | undefined;
+  const promotionsModule = useQuery(api.admin.modules.getModuleByKey, { key: 'promotions' });
+  const canUseRealData = promotionsModule?.enabled === true;
+  const vouchers = useQuery(
+    api.promotions.listPublicVouchers,
+    selectionMode === 'auto' && canUseRealData ? { limit } : 'skip',
+  ) as VoucherPromotionItem[] | undefined;
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = React.useState(0);
 
@@ -53,11 +70,28 @@ export function VoucherPromotionsSection({
     mode,
   }), [brandColor, secondary, mode]);
 
-  if (!vouchers) {
+  const displayVouchers = React.useMemo(() => {
+    if (selectionMode === 'demo') {
+      const source = demoVouchers.length > 0 ? demoVouchers : DEFAULT_DEMO_VOUCHERS;
+      return source.slice(0, limit).map((voucher) => ({ ...voucher, _id: voucher.id }));
+    }
+
+    return vouchers;
+  }, [demoVouchers, limit, selectionMode, vouchers]);
+
+  if (selectionMode === 'auto' && promotionsModule === undefined) {
     return null;
   }
 
-  if (vouchers.length === 0) {
+  if (selectionMode === 'auto' && !canUseRealData) {
+    return null;
+  }
+
+  if (!displayVouchers) {
+    return null;
+  }
+
+  if (displayVouchers.length === 0) {
     return (
       <section className="py-12 px-4" style={{ backgroundColor: tokens.sectionBg }}>
         <div className="max-w-6xl mx-auto text-center">
@@ -77,7 +111,7 @@ export function VoucherPromotionsSection({
                   <br />• Chưa hết hạn
                 </p>
                 <p className="text-sm text-slate-600 mt-3">
-                  Vào <a href="/admin/promotions" className="text-blue-600 hover:underline font-medium">Quản lý Promotions</a> để tạo voucher mới.
+                  Vào <Link href="/admin/promotions" className="text-blue-600 hover:underline font-medium">Quản lý Promotions</Link> để tạo voucher mới.
                 </p>
               </div>
             </div>
@@ -107,7 +141,9 @@ export function VoucherPromotionsSection({
       description={description}
       ctaLabel={ctaLabel}
       ctaUrl={ctaUrl}
-      vouchers={vouchers}
+      showCta={showCta}
+      ctaVariant={ctaVariant}
+      vouchers={displayVouchers}
       tokens={tokens}
       copiedCode={copiedCode}
       onCopy={(code) => {
@@ -115,6 +151,18 @@ export function VoucherPromotionsSection({
       }}
       currentIndex={currentIndex}
       onCurrentIndexChange={setCurrentIndex}
+      hideHeader={headerConfig.hideHeader}
+      showTitleHeader={headerConfig.showTitle}
+      showSubtitleHeader={headerConfig.showSubtitle}
+      showBadge={headerConfig.showBadge}
+      badgeText={headerConfig.badgeText}
+      headerAlign={headerConfig.headerAlign}
+      titleColorPrimary={headerConfig.titleColorPrimary}
+      subtitleAboveTitle={headerConfig.subtitleAboveTitle}
+      uppercaseText={headerConfig.uppercaseText}
+      brandColor={brandColor}
+      desktopColumns={desktopColumns}
+      iconName={iconName}
     />
   );
 }

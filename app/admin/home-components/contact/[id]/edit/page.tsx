@@ -6,14 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Phone, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
-import { ToggleSwitch } from '@/components/modules/shared';
+import { Card, CardContent } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { ConfigEditor } from '../../_components/ConfigEditor';
 import { ContactPreview } from '../../_components/ContactPreview';
@@ -49,6 +50,22 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [contactDataExpanded, setContactDataExpanded] = useState(false);
+  const [formExpanded, setFormExpanded] = useState(false);
+  const [socialExpanded, setSocialExpanded] = useState(false);
+  const [labelsExpanded, setLabelsExpanded] = useState(false);
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [subtitle, setSubtitle] = useState('');
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+
   useEffect(() => {
     if (!component) {return;}
 
@@ -58,10 +75,23 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
     }
 
     const normalizedConfig = normalizeContactConfig(component.config ?? {});
+    const headerConfig = extractSectionHeaderConfig(component.config);
 
     setTitle(component.title);
     setActive(component.active);
     setConfig(normalizedConfig);
+
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitle(headerConfig.showTitle ?? true);
+    setSubtitle(headerConfig.subtitle ?? '');
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setHeaderAlign(headerConfig.headerAlign ?? 'left');
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
+
     setInitialSnapshot(toContactSnapshot({
       title: component.title,
       active: component.active,
@@ -70,14 +100,27 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
   }, [component, id, router]);
 
   const normalizedConfig = useMemo(() => normalizeContactConfig(config), [config]);
+  const configWithHeader = useMemo(() => normalizeContactConfig({
+    ...config,
+    hideHeader,
+    showTitle,
+    subtitle,
+    showSubtitle,
+    headerAlign,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
+  }), [badgeText, config, headerAlign, hideHeader, showBadge, showSubtitle, showTitle, subtitle, subtitleAboveTitle, titleColorPrimary, uppercaseText]);
 
   const currentSnapshot = useMemo(() => toContactSnapshot({
     title,
     active,
-    config: normalizedConfig,
-  }), [title, active, normalizedConfig]);
+    config: configWithHeader,
+  }), [title, active, configWithHeader]);
 
-  const style = normalizedConfig.style;
+  const style = configWithHeader.style;
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
   const customChanged = showCustomBlock
@@ -92,7 +135,21 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
     : false;
   const hasChanges = initialSnapshot !== null && (currentSnapshot !== initialSnapshot || customChanged || customFontChanged);
 
-  const hasValidationErrors = !validateContactConfig(normalizedConfig).isValid;
+  const validationResult = useMemo(() => validateContactConfig(configWithHeader), [configWithHeader]);
+  const hasValidationErrors = !validationResult.isValid;
+  const validationMessages = useMemo(() => {
+    const messages: string[] = [];
+    if (validationResult.errors.mapEmbed) {
+      messages.push('URL bản đồ không hợp lệ.');
+    }
+    if (validationResult.errors.contactItems && Object.keys(validationResult.errors.contactItems).length > 0) {
+      messages.push('Có link trong dữ liệu liên hệ chưa hợp lệ.');
+    }
+    if (validationResult.errors.socialLinks && Object.keys(validationResult.errors.socialLinks).length > 0) {
+      messages.push('Có URL mạng xã hội chưa hợp lệ.');
+    }
+    return messages;
+  }, [validationResult]);
 
   const validation = useMemo(() => getContactValidationResult({
     primary: effectiveColors.primary,
@@ -122,7 +179,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
 
     setIsSubmitting(true);
     try {
-      const nextConfig = normalizeContactConfig(config);
+      const nextConfig = configWithHeader;
       const payload = {
         ...toContactConfigPayload(nextConfig),
         style: nextConfig.style,
@@ -225,42 +282,51 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <form onSubmit={handleSubmit}>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Phone size={20} />
-                  Contact
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={title}
-                    onChange={(event) => { setTitle(event.target.value); }}
-                    required
-                    placeholder="Nhập tiêu đề component..."
-                  />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Label>Trạng thái</Label>
-                  <ToggleSwitch
-                    enabled={active}
-                    onChange={() => { setActive(!active); }}
-                    color="bg-emerald-500"
-                  />
-                  <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-                </div>
-              </CardContent>
-            </Card>
 
             <ConfigEditor
               value={normalizedConfig}
               onChange={(next) => { setConfig(normalizeContactConfig(next)); }}
               title="Cấu hình Contact"
+              contactDataExpanded={contactDataExpanded}
+              formExpanded={formExpanded}
+              socialExpanded={socialExpanded}
+              labelsExpanded={labelsExpanded}
+              onContactDataExpandedChange={setContactDataExpanded}
+              onFormExpandedChange={setFormExpanded}
+              onSocialExpandedChange={setSocialExpanded}
+              onLabelsExpandedChange={setLabelsExpanded}
             />
           </div>
 
@@ -320,7 +386,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
             )}
 
             <ContactPreview
-              config={{ ...normalizedConfig, style }}
+              config={configWithHeader}
               brandColor={effectiveColors.primary}
               secondary={effectiveColors.secondary}
               mode={effectiveColors.mode}
@@ -335,12 +401,26 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
+        {hasValidationErrors && (
+          <Card className="mb-4 border-amber-200 bg-amber-50/70">
+            <CardContent className="pt-4">
+              <div className="space-y-1 text-xs text-amber-800">
+                <p className="font-medium">Có dữ liệu cần kiểm tra thêm:</p>
+                {validationMessages.map((message) => (
+                  <p key={message}>• {message}</p>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          disableSave={!hasChanges || hasValidationErrors || isSubmitting}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

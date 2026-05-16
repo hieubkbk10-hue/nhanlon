@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { useMutation, useQuery } from 'convex/react';
 import { Heart, Package, Search, ShoppingCart } from 'lucide-react';
 import { api } from '@/convex/_generated/api';
@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import type { Id } from '@/convex/_generated/dataModel';
 import { getWishlistColors } from '@/components/site/wishlist/colors';
 import { getPublicPriceLabel } from '@/lib/products/public-price';
+import { buildDetailPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 
 export default function WishlistPage() {
   const brandColors = useBrandColors();
@@ -27,6 +28,8 @@ export default function WishlistPage() {
   const itemsPerPageSetting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'wishlist', settingKey: 'itemsPerPage' });
   const saleModeSetting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'saleMode' });
   const stockFeature = useQuery(api.admin.modules.getModuleFeature, { featureKey: 'enableStock', moduleKey: 'products' });
+  const routeModeSetting = useQuery(api.settings.getValue, { key: 'ia_route_mode', defaultValue: 'unified' });
+  const categories = useQuery(api.productCategories.listActive);
   const toggleWishlist = useMutation(api.wishlist.toggle);
 
   const itemsPerPage = useMemo(() => {
@@ -57,6 +60,19 @@ export default function WishlistPage() {
     return 'cart';
   }, [saleModeSetting?.value]);
   const showStock = stockFeature?.enabled ?? true;
+  const routeMode = useMemo(() => normalizeRouteMode(routeModeSetting), [routeModeSetting]);
+  const categorySlugMap = useMemo(() => {
+    if (!categories) {return new Map<string, string>();}
+    return new Map(categories.map((category) => [category._id, category.slug]));
+  }, [categories]);
+  const getProductDetailHref = useMemo(() => (
+    (product: { slug: string; categoryId: string }) => buildDetailPath({
+      categorySlug: categorySlugMap.get(product.categoryId),
+      mode: routeMode,
+      moduleKey: 'products',
+      recordSlug: product.slug,
+    })
+  ), [categorySlugMap, routeMode]);
   const getPriceDisplay = (price?: number, salePrice?: number, isRangeFromVariant?: boolean) =>
     getPublicPriceLabel({ saleMode, price, salePrice, isRangeFromVariant });
   const formatComparePrice = (price?: number) =>
@@ -261,7 +277,7 @@ export default function WishlistPage() {
                         <div className="flex items-center gap-4">
                           <div className="relative h-12 w-12 rounded-xl overflow-hidden" style={{ backgroundColor: tokens.surfaceSoft }}>
                             {product.image ? (
-                              <Image src={product.image} alt={product.name} fill sizes="48px" className="object-cover" />
+                              <Image src={product.image} alt={product.name} fill sizes="48px" className="object-cover" mode="thumb" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <Package className="w-6 h-6" style={{ color: tokens.emptyStateIcon }} />
@@ -270,7 +286,7 @@ export default function WishlistPage() {
                           </div>
                           <div className="min-w-0">
                             <Link
-                              href={`/products/${product.slug}`}
+                              href={getProductDetailHref(product)}
                               className="font-medium line-clamp-2 hover:underline"
                               style={{ color: tokens.bodyText }}
                             >
@@ -344,12 +360,12 @@ export default function WishlistPage() {
                   style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}
                 >
                   <Link
-                    href={`/products/${product.slug}`}
+                    href={getProductDetailHref(product)}
                     className="relative h-20 w-20 rounded-xl overflow-hidden flex-shrink-0"
                     style={{ backgroundColor: tokens.surfaceSoft }}
                   >
                     {product.image ? (
-                      <Image src={product.image} alt={product.name} fill sizes="80px" className="object-cover" />
+                      <Image src={product.image} alt={product.name} fill sizes="80px" className="object-cover" mode="thumb" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="w-6 h-6" style={{ color: tokens.emptyStateIcon }} />
@@ -358,7 +374,7 @@ export default function WishlistPage() {
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link
-                      href={`/products/${product.slug}`}
+                      href={getProductDetailHref(product)}
                       className="font-semibold line-clamp-2 text-sm"
                       style={{ color: tokens.bodyText }}
                     >
@@ -405,13 +421,13 @@ export default function WishlistPage() {
               return (
                 <Link
                   key={item._id}
-                  href={`/products/${product.slug}`}
+                  href={getProductDetailHref(product)}
                   className="rounded-2xl border overflow-hidden"
                   style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}
                 >
                   <div className="aspect-square relative" style={{ backgroundColor: tokens.surfaceSoft }}>
                     {product.image ? (
-                      <Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" />
+                      <Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" mode="thumb" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="w-8 h-8" style={{ color: tokens.emptyStateIcon }} />
@@ -455,12 +471,12 @@ export default function WishlistPage() {
                 style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}
               >
                 <Link
-                  href={`/products/${product.slug}`}
+                  href={getProductDetailHref(product)}
                   className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0"
                   style={{ backgroundColor: tokens.surfaceSoft }}
                 >
                   {product.image ? (
-                    <Image src={product.image} alt={product.name} fill sizes="96px" className="object-cover" />
+                    <Image src={product.image} alt={product.name} fill sizes="96px" className="object-cover" mode="thumb" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Package className="w-6 h-6" style={{ color: tokens.emptyStateIcon }} />
@@ -469,7 +485,7 @@ export default function WishlistPage() {
                 </Link>
                 <div className="flex-1">
                   <Link
-                    href={`/products/${product.slug}`}
+                    href={getProductDetailHref(product)}
                     className="font-semibold hover:underline"
                     style={{ color: tokens.bodyText }}
                   >

@@ -8,9 +8,10 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -29,6 +30,7 @@ import type {
   TeamConfig,
   TeamEditorMember,
   TeamStyle,
+  TeamHeaderAlign,
 } from '../../_types';
 
 const COMPONENT_TYPE = 'Team';
@@ -39,18 +41,48 @@ const serializeEditState = ({
   style,
   members,
   texts,
+  hideHeader,
+  showTitle,
+  subtitle,
+  showSubtitle,
+  headerAlign,
+  titleColorPrimary,
+  subtitleAboveTitle,
+  uppercaseText,
+  showBadge,
+  badgeText,
 }: {
   title: string;
   active: boolean;
   style: TeamStyle;
   members: TeamEditorMember[];
   texts: Record<string, string>;
+  hideHeader: boolean;
+  showTitle: boolean;
+  subtitle: string;
+  showSubtitle: boolean;
+  headerAlign: TeamHeaderAlign;
+  titleColorPrimary: boolean;
+  subtitleAboveTitle: boolean;
+  uppercaseText: boolean;
+  showBadge: boolean;
+  badgeText: string;
 }) => JSON.stringify({
   title,
   active,
   style,
   members: toTeamPersistMembers(members),
   texts,
+  hideHeader,
+  showTitle,
+  subtitle,
+  showSubtitle,
+  headerAlign,
+  titleColorPrimary,
+  subtitleAboveTitle,
+  uppercaseText,
+  showBadge,
+  badgeText,
 });
 
 export default function TeamEditPage({ params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +103,19 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
   const [texts, setTexts] = React.useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [initialSnapshot, setInitialSnapshot] = React.useState('');
+
+  // Header config state
+  const [expandedSections, setExpandedSections] = React.useState({ header: false });
+  const [hideHeader, setHideHeader] = React.useState(false);
+  const [showTitle, setShowTitle] = React.useState(true);
+  const [subtitle, setSubtitle] = React.useState('');
+  const [showSubtitle, setShowSubtitle] = React.useState(true);
+  const [headerAlign, setHeaderAlign] = React.useState<TeamHeaderAlign>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = React.useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = React.useState(false);
+  const [uppercaseText, setUppercaseText] = React.useState(false);
+  const [showBadge, setShowBadge] = React.useState(true);
+  const [badgeText, setBadgeText] = React.useState('');
 
   const brandMode: TeamBrandMode = effectiveColors.mode === 'single' ? 'single' : 'dual';
 
@@ -94,12 +139,37 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
     setMembers(editorMembers);
     setTexts(nextTexts);
 
+    // Load header config with fallback to texts.subtitle for backward compatibility
+    const headerConfig = extractSectionHeaderConfig(component.config ?? {});
+    const legacySubtitle = typeof nextTexts.subtitle === 'string' ? nextTexts.subtitle : '';
+    
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitle(headerConfig.showTitle ?? true);
+    setSubtitle(headerConfig.subtitle || legacySubtitle);
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setHeaderAlign((headerConfig.headerAlign ?? 'left') as TeamHeaderAlign);
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
+
     setInitialSnapshot(serializeEditState({
       title: component.title,
       active: component.active,
       style: nextStyle,
       members: editorMembers,
       texts: nextTexts,
+      hideHeader: headerConfig.hideHeader ?? false,
+      showTitle: headerConfig.showTitle ?? true,
+      subtitle: headerConfig.subtitle || legacySubtitle,
+      showSubtitle: headerConfig.showSubtitle ?? true,
+      headerAlign: (headerConfig.headerAlign ?? 'left') as TeamHeaderAlign,
+      titleColorPrimary: headerConfig.titleColorPrimary ?? false,
+      subtitleAboveTitle: headerConfig.subtitleAboveTitle ?? false,
+      uppercaseText: headerConfig.uppercaseText ?? false,
+      showBadge: headerConfig.showBadge ?? true,
+      badgeText: headerConfig.badgeText ?? '',
     }));
   }, [component, id, router]);
 
@@ -129,7 +199,17 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
     style,
     members,
     texts,
-  }), [title, active, style, members, texts]);
+    hideHeader,
+    showTitle,
+    subtitle,
+    showSubtitle,
+    headerAlign,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
+  }), [title, active, style, members, texts, hideHeader, showTitle, subtitle, showSubtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText]);
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
   const customChanged = showCustomBlock
@@ -148,7 +228,17 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
     members: toTeamPersistMembers(members),
     style,
     texts,
-  }), [members, style, texts]);
+    hideHeader,
+    showTitle,
+    subtitle,
+    showSubtitle,
+    headerAlign,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
+  }), [members, style, texts, hideHeader, showTitle, subtitle, showSubtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -188,6 +278,16 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
         style,
         members,
         texts,
+        hideHeader,
+        showTitle,
+        subtitle,
+        showSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
       });
 
       setInitialSnapshot(nextSnapshot);
@@ -236,72 +336,41 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">Team</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(event) => {
-                  setTitle(event.target.value);
-                }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Phụ đề</Label>
-              <Input
-                value={texts.subtitle || ''}
-                onChange={(event) => {
-                  setTexts((prev) => ({ ...prev, subtitle: event.target.value }));
-                }}
-                placeholder="Đội ngũ chuyên nghiệp"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Thông báo khi trống</Label>
-              <Input
-                value={texts.emptyMessage || ''}
-                onChange={(event) => {
-                  setTexts((prev) => ({ ...prev, emptyMessage: event.target.value }));
-                }}
-                placeholder="Chưa có thành viên nào."
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'inline-flex h-6 w-12 cursor-pointer items-center justify-center rounded-full transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => {
-                  setActive((prev) => !prev);
-                }}
-              >
-                <div
-                  className={cn(
-                    'h-5 w-5 rounded-full bg-white shadow transition-transform',
-                    active ? 'translate-x-2.5' : '-translate-x-2.5',
-                  )}
-                />
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={expandedSections.header}
+          onExpandedChange={(value) => setExpandedSections({ header: value })}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
 
         <TeamForm
           members={members}
           onChange={setMembers}
           secondary={validation.resolvedSecondary}
+          defaultExpanded={false}
         />
 
         {brandMode === 'dual' && warningMessages.length > 0 ? (
@@ -369,6 +438,16 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
             texts={texts}
             fontStyle={fontStyle}
             fontClassName="font-active"
+            hideHeader={hideHeader}
+            showTitle={showTitle}
+            showSubtitle={showSubtitle}
+            subtitle={subtitle}
+            headerAlign={headerAlign}
+            titleColorPrimary={titleColorPrimary}
+            subtitleAboveTitle={subtitleAboveTitle}
+            uppercaseText={uppercaseText}
+            showBadge={showBadge}
+            badgeText={badgeText}
           />
         </div>
 
@@ -379,6 +458,8 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
             router.push('/admin/home-components');
           }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

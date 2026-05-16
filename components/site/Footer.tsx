@@ -2,21 +2,24 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useBrandColor, useContactSettings, useSiteSettings } from './hooks';
 import { Facebook, Instagram, Mail, MapPin, Phone, Youtube } from 'lucide-react';
+import { useSnapshotDemoContext } from '@/components/modules/homepage/SnapshotDemoProvider';
 
 export function Footer() {
+  const snapshotDemo = useSnapshotDemoContext();
   const brandColor = useBrandColor();
   const { siteName, siteDescription, logo } = useSiteSettings();
   const contact = useContactSettings();
   const menuData = useQuery(api.menus.getFullMenu, { location: 'footer' });
+  const resolvedMenuData = snapshotDemo?.getMenu('footer') ?? menuData;
 
   // Group menu items by depth 0 (columns)
-  const footerColumns = menuData?.items ? (() => {
-    const items = [...menuData.items].sort((a, b) => a.order - b.order);
+  const footerColumns = resolvedMenuData?.items ? (() => {
+    const items = [...resolvedMenuData.items].sort((a, b) => a.order - b.order);
     const columns: { title: string; links: { label: string; url: string }[] }[] = [];
 
     let currentColumn: { title: string; links: { label: string; url: string }[] } | null = null;
@@ -45,7 +48,7 @@ export function Footer() {
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
               {logo ? (
-                <Image src={logo} alt={siteName} width={140} height={32} className="h-8 w-auto" />
+                <Image src={logo} alt={siteName} width={140} height={32} className="h-8 w-auto" mode="logo" />
               ) : (
                 <div 
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold"

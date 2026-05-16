@@ -1,5 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
+import { MENU_MAX_DEPTH, clampMenuDepth } from "../lib/utils/menu-tree";
 
 const menuDoc = v.object({
   _creationTime: v.number(),
@@ -21,6 +23,15 @@ const menuItemDoc = v.object({
   parentId: v.optional(v.id("menuItems")),
   url: v.string(),
 });
+
+const normalizeMenuDepth = (depth: number | undefined) => clampMenuDepth(depth ?? 0);
+const MENU_ITEMS_LIMIT = 500;
+
+const ensureMenuItemsWithinLimit = (count: number) => {
+  if (count >= MENU_ITEMS_LIMIT) {
+    throw new Error(`Tối đa ${MENU_ITEMS_LIMIT} menu items`);
+  }
+};
 
 // ============ MENUS ============
 
@@ -155,7 +166,7 @@ export const listMenuItems = query({
   handler: async (ctx, args) => ctx.db
       .query("menuItems")
       .withIndex("by_menu_order", (q) => q.eq("menuId", args.menuId))
-      .take(200),
+      .take(MENU_ITEMS_LIMIT),
   returns: v.array(menuItemDoc),
 });
 
@@ -199,6 +210,12 @@ export const createMenuItem = mutation({
     url: v.string(),
   },
   handler: async (ctx, args) => {
+    const existingCount = (await ctx.db
+      .query("menuItems")
+      .withIndex("by_menu_order", (q) => q.eq("menuId", args.menuId))
+      .take(MENU_ITEMS_LIMIT)).length;
+    ensureMenuItemsWithinLimit(existingCount);
+
     // MED-005: Basic URL validation
     const url = args.url.trim();
     if (!url) {
@@ -221,7 +238,7 @@ export const createMenuItem = mutation({
       ...args,
       url,
       order: newOrder,
-      depth: args.depth ?? 0,
+      depth: normalizeMenuDepth(args.depth),
       active: args.active ?? true,
     });
   },
@@ -256,6 +273,10 @@ export const updateMenuItem = mutation({
         throw new Error("URL phải bắt đầu bằng /, # hoặc http");
       }
       updates.url = url;
+    }
+
+    if (updates.depth !== undefined) {
+      updates.depth = normalizeMenuDepth(updates.depth);
     }
     
     await ctx.db.patch(id, updates);
@@ -292,7 +313,7 @@ export const reorderMenuItems = mutation({
   handler: async (ctx, args) => {
     await Promise.all(args.items.map( async item => {
       const updates: Record<string, number> = { order: item.order };
-      if (item.depth !== undefined) {updates.depth = item.depth;}
+      if (item.depth !== undefined) {updates.depth = normalizeMenuDepth(item.depth);}
       return ctx.db.patch(item.id, updates);
     }));
     return null;
@@ -315,6 +336,10 @@ export const saveMenuItemsBulk = mutation({
     })),
   },
   handler: async (ctx, args) => {
+    if (args.items.length > MENU_ITEMS_LIMIT) {
+      throw new Error(`Tối đa ${MENU_ITEMS_LIMIT} menu items`);
+    }
+
     const existingItems = await ctx.db
       .query("menuItems")
       .withIndex("by_menu_order", (q) => q.eq("menuId", args.menuId))
@@ -332,12 +357,14 @@ export const saveMenuItemsBulk = mutation({
         throw new Error("URL phải bắt đầu bằng /, # hoặc http");
       }
 
+      const normalizedDepth = normalizeMenuDepth(item.depth);
+
       if (item.id && existingById.has(item.id)) {
         keepIds.add(item.id);
         await ctx.db.patch(item.id, {
           label: item.label,
           url,
-          depth: item.depth,
+          depth: normalizedDepth,
           active: item.active,
           icon: item.icon,
           openInNewTab: item.openInNewTab,
@@ -349,7 +376,7 @@ export const saveMenuItemsBulk = mutation({
           menuId: args.menuId,
           label: item.label,
           url,
-          depth: item.depth,
+          depth: normalizedDepth,
           active: item.active,
           icon: item.icon,
           openInNewTab: item.openInNewTab,
@@ -377,10 +404,13 @@ export const getFullMenu = query({
       .withIndex("by_location", (q) => q.eq("location", args.location))
       .unique();
     if (!menu) {return null;}
-    const items = await ctx.db
+    const items = (await ctx.db
       .query("menuItems")
       .withIndex("by_menu_active", (q) => q.eq("menuId", menu._id).eq("active", true))
-      .collect();
+      .collect()).map((item) => ({
+        ...item,
+        depth: normalizeMenuDepth(item.depth),
+      }));
     return { items, menu };
   },
   returns: v.union(
@@ -390,6 +420,27 @@ export const getFullMenu = query({
     }),
     v.null()
   ),
+});
+
+export const normalizeMenuDepths = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const items = await ctx.db.query("menuItems").collect();
+    let updated = 0;
+
+    await Promise.all(items.map(async (item) => {
+      const normalizedDepth = normalizeMenuDepth(item.depth);
+      if (normalizedDepth === item.depth) {return;}
+      updated += 1;
+      await ctx.db.patch(item._id, { depth: normalizedDepth });
+    }));
+
+    return { maxDepth: MENU_MAX_DEPTH, updated };
+  },
+  returns: v.object({
+    maxDepth: v.number(),
+    updated: v.number(),
+  }),
 });
 
 // ============ MENU PICKER ============
@@ -407,19 +458,30 @@ export const listPostsForPicker = query({
       .order("desc")
       .take(limit);
 
+    const categories = await Promise.all(posts.map((post) => ctx.db.get(post.categoryId)));
+    const categoryMap = new Map(categories.filter(Boolean).map((cat) => [cat!._id, cat!]));
+
+    const formatPost = (post: Doc<"posts">) => ({
+      _id: post._id,
+      title: post.title,
+      slug: post.slug,
+      categorySlug: categoryMap.get(post.categoryId)?.slug ?? "",
+    });
+
     if (args.search?.trim()) {
       const searchLower = args.search.toLowerCase();
       return posts
         .filter((post) => post.title.toLowerCase().includes(searchLower))
-        .map((post) => ({ _id: post._id, title: post.title, slug: post.slug }));
+        .map(formatPost);
     }
 
-    return posts.map((post) => ({ _id: post._id, title: post.title, slug: post.slug }));
+    return posts.map(formatPost);
   },
   returns: v.array(v.object({
     _id: v.id("posts"),
     title: v.string(),
     slug: v.string(),
+    categorySlug: v.string(),
   })),
 });
 
@@ -436,19 +498,30 @@ export const listProductsForPicker = query({
       .order("desc")
       .take(limit);
 
+    const categories = await Promise.all(products.map((product) => ctx.db.get(product.categoryId)));
+    const categoryMap = new Map(categories.filter(Boolean).map((cat) => [cat!._id, cat!]));
+
+    const formatProduct = (product: Doc<"products">) => ({
+      _id: product._id,
+      name: product.name,
+      slug: product.slug,
+      categorySlug: categoryMap.get(product.categoryId)?.slug ?? "",
+    });
+
     if (args.search?.trim()) {
       const searchLower = args.search.toLowerCase();
       return products
         .filter((product) => product.name.toLowerCase().includes(searchLower))
-        .map((product) => ({ _id: product._id, name: product.name, slug: product.slug }));
+        .map(formatProduct);
     }
 
-    return products.map((product) => ({ _id: product._id, name: product.name, slug: product.slug }));
+    return products.map(formatProduct);
   },
   returns: v.array(v.object({
     _id: v.id("products"),
     name: v.string(),
     slug: v.string(),
+    categorySlug: v.string(),
   })),
 });
 
@@ -465,18 +538,29 @@ export const listServicesForPicker = query({
       .order("desc")
       .take(limit);
 
+    const categories = await Promise.all(services.map((service) => ctx.db.get(service.categoryId)));
+    const categoryMap = new Map(categories.filter(Boolean).map((cat) => [cat!._id, cat!]));
+
+    const formatService = (service: Doc<"services">) => ({
+      _id: service._id,
+      title: service.title,
+      slug: service.slug,
+      categorySlug: categoryMap.get(service.categoryId)?.slug ?? "",
+    });
+
     if (args.search?.trim()) {
       const searchLower = args.search.toLowerCase();
       return services
         .filter((service) => service.title.toLowerCase().includes(searchLower))
-        .map((service) => ({ _id: service._id, title: service.title, slug: service.slug }));
+        .map(formatService);
     }
 
-    return services.map((service) => ({ _id: service._id, title: service.title, slug: service.slug }));
+    return services.map(formatService);
   },
   returns: v.array(v.object({
     _id: v.id("services"),
     title: v.string(),
     slug: v.string(),
+    categorySlug: v.string(),
   })),
 });

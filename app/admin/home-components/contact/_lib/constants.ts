@@ -32,6 +32,16 @@ export const DEFAULT_CONTACT_CONFIG: ContactConfigState = {
   workingHours: '',
   style: 'modern',
   texts: {},
+  hideHeader: false,
+  showTitle: true,
+  subtitle: '',
+  showSubtitle: true,
+  headerAlign: 'left',
+  titleColorPrimary: false,
+  subtitleAboveTitle: false,
+  uppercaseText: false,
+  showBadge: true,
+  badgeText: '',
 };
 
 export const DEFAULT_CONTACT_TEXTS: Record<ContactStyle, Record<string, string>> = {

@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
+import { resolveUniqueSlug } from "./lib/iaSlugs";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const categoryDoc = v.object({
@@ -262,6 +263,107 @@ export const listActiveWithStatsForHero = query({
   }),
 });
 
+export const listActiveAutoFillCandidates = query({
+  args: {
+    limit: v.optional(v.number()),
+    productLimit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const categories = await ctx.db
+      .query("productCategories")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    if (categories.length === 0) {
+      return { categories: [] };
+    }
+
+    const limit = Math.min(Math.max(args.limit ?? 4, 1), 12);
+    const productLimit = Math.min(args.productLimit ?? 5000, 10000);
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_status_order", (q) => q.eq("status", "Active"))
+      .take(productLimit);
+
+    const candidateMap = new Map<Id<"productCategories">, {
+      productCount: number;
+      representativeImage?: string;
+      representativeProductId?: Id<"products">;
+      firstProductTime: number;
+    }>();
+
+    products.forEach((product) => {
+      const current = candidateMap.get(product.categoryId);
+      if (!current) {
+        candidateMap.set(product.categoryId, {
+          productCount: 1,
+          representativeImage: product.image,
+          representativeProductId: product.image ? product._id : undefined,
+          firstProductTime: product._creationTime ?? 0,
+        });
+        return;
+      }
+
+      const shouldSetRepresentative = !current.representativeImage && !!product.image;
+      candidateMap.set(product.categoryId, {
+        productCount: current.productCount + 1,
+        representativeImage: shouldSetRepresentative ? product.image : current.representativeImage,
+        representativeProductId: shouldSetRepresentative ? product._id : current.representativeProductId,
+        firstProductTime: shouldSetRepresentative ? (product._creationTime ?? current.firstProductTime) : current.firstProductTime,
+      });
+    });
+
+    const categoryMap = new Map(categories.map((category) => [category._id, category]));
+    const candidates: Array<{
+      categoryId: Id<"productCategories">;
+      name: string;
+      image?: string;
+      productCount: number;
+      representativeImage?: string;
+      representativeProductId: Id<"products">;
+      firstProductTime: number;
+    }> = [];
+
+    Array.from(candidateMap.entries()).forEach(([categoryId, value]) => {
+      const category = categoryMap.get(categoryId);
+      if (!category || value.productCount <= 0 || !value.representativeProductId || !value.representativeImage) {
+        return;
+      }
+
+      candidates.push({
+        categoryId,
+        name: category.name,
+        image: category.image,
+        productCount: value.productCount,
+        representativeImage: value.representativeImage,
+        representativeProductId: value.representativeProductId,
+        firstProductTime: value.firstProductTime,
+      });
+    });
+
+    const sortedCandidates = candidates
+      .sort((a, b) => {
+        if (b.productCount !== a.productCount) {
+          return b.productCount - a.productCount;
+        }
+        return a.firstProductTime - b.firstProductTime;
+      });
+
+    return { categories: args.limit ? sortedCandidates.slice(0, limit) : sortedCandidates };
+  },
+  returns: v.object({
+    categories: v.array(v.object({
+      categoryId: v.id("productCategories"),
+      name: v.string(),
+      image: v.optional(v.string()),
+      productCount: v.number(),
+      representativeImage: v.optional(v.string()),
+      representativeProductId: v.id("products"),
+      firstProductTime: v.number(),
+    })),
+  }),
+});
+
 export const listNonEmptyCategoryIds = query({
   args: {},
   handler: async (ctx) => {
@@ -349,16 +451,10 @@ export const create = mutation({
       .unique();
     const hierarchyEnabled = hierarchyFeature?.enabled === true;
 
-    const existing = await ctx.db
-      .query("productCategories")
-      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
-      .unique();
-    if (existing) {
-      throw new ConvexError({
-        code: "DUPLICATE_SLUG",
-        message: "Slug đã tồn tại, vui lòng chọn slug khác",
-      });
-    }
+    const resolvedSlug = await resolveUniqueSlug(ctx, {
+      scope: "category",
+      slug: args.slug,
+    });
     
     // FIX: Get last order instead of fetching ALL
     let nextOrder = args.order;
@@ -372,6 +468,7 @@ export const create = mutation({
     
     return  ctx.db.insert("productCategories", {
       ...args,
+      slug: resolvedSlug.slug,
       order: nextOrder,
       active: args.active ?? true,
       parentId: hierarchyEnabled ? args.parentId : undefined,
@@ -407,16 +504,13 @@ export const update = mutation({
       delete updates.parentId;
     }
     if (args.slug && args.slug !== category.slug) {
-      const newSlug = args.slug;
-      const existing = await ctx.db
-        .query("productCategories")
-        .withIndex("by_slug", (q) => q.eq("slug", newSlug))
-        .unique();
-      if (existing) {
-        throw new ConvexError({
-          code: "DUPLICATE_SLUG",
-          message: "Slug đã tồn tại, vui lòng chọn slug khác",
-        });
+      const resolvedSlug = await resolveUniqueSlug(ctx, {
+        scope: "category",
+        slug: args.slug,
+        exclude: { id: args.id, table: "productCategories" },
+      });
+      if (resolvedSlug.slug !== args.slug) {
+        updates.slug = resolvedSlug.slug;
       }
     }
     await ctx.db.patch(id, updates);

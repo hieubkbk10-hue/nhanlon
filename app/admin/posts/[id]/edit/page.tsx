@@ -13,6 +13,8 @@ import { ImageUploader } from '../../../components/ImageUploader';
 import { QuickCreateCategoryModal } from '../../../components/QuickCreateCategoryModal';
 import { stripHtml, truncateText } from '@/lib/seo';
 import { normalizeRichText } from '@/app/admin/lib/normalize-rich-text';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
+import { AiEntityImportDialog, type AiEntityImportPayload } from '@/app/admin/components/AiEntityImportDialog';
 
 const MODULE_KEY = 'posts';
 
@@ -57,8 +59,9 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('saved');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [editorResetKey] = useState(0);
+  const [editorResetKey, setEditorResetKey] = useState(0);
   const [snapshotVersion, setSnapshotVersion] = useState(0);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const initialSnapshotRef = useRef<{
     title: string;
     slug: string;
@@ -111,14 +114,12 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
     publishedAt: resolvedPublishedAt,
     thumbnail: thumbnail ?? '',
     title: title.trim(),
-    thumbnailStorageId,
-  }), [authorName, categoryId, normalizedContent, renderType, markdownRender, htmlRender, excerpt, metaDescription, metaTitle, slug, status, resolvedPublishedAt, thumbnail, title]);
+    thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
+  }), [authorName, categoryId, normalizedContent, renderType, markdownRender, htmlRender, excerpt, metaDescription, metaTitle, slug, status, resolvedPublishedAt, thumbnail, title, thumbnailStorageId]);
 
   const hasChanges = useMemo(() => {
     if (!initialSnapshotRef.current) {return false;}
-    const initialSnapshot = initialSnapshotRef.current;
-    return (Object.keys(initialSnapshot) as Array<keyof typeof initialSnapshot>)
-      .some((key) => initialSnapshot[key] !== currentSnapshot[key]);
+    return JSON.stringify(initialSnapshotRef.current) !== JSON.stringify(currentSnapshot);
   }, [currentSnapshot, snapshotVersion]);
 
   useEffect(() => {
@@ -139,8 +140,50 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
     }
   }, [status]);
 
+  const generateSlugFromTitle = (value: string) => {
+    return value.toLowerCase()
+      .normalize("NFD").replaceAll(/[\u0300-\u036F]/g, "")
+      .replaceAll(/[đĐ]/g, "d")
+      .replaceAll(/[^a-z0-9\s]/g, '')
+      .replaceAll(/\s+/g, '-');
+  };
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setTitle(val);
+    setSlug(generateSlugFromTitle(val));
+  };
+
+  const handleApplyAiPost = (item: AiEntityImportPayload) => {
+    const nextTitle = item.title?.trim() || item.name?.trim() || '';
+    if (!nextTitle) {return;}
+
+    setTitle(nextTitle);
+    setSlug(item.slug?.trim() || generateSlugFromTitle(nextTitle));
+    const nextContent = item.content || item.description || '';
+    setContent(nextContent);
+    if (item.htmlRender) {
+      setRenderType('html');
+      setHtmlRender(item.htmlRender);
+      setMarkdownRender('');
+    } else if (item.markdownRender) {
+      setRenderType('markdown');
+      setMarkdownRender(item.markdownRender);
+      setHtmlRender('');
+    }
+    setExcerpt(item.excerpt || item.description || truncateText(stripHtml(nextContent), 180));
+    setMetaTitle(item.metaTitle || truncateText(nextTitle, 60));
+    setMetaDescription(item.metaDescription || truncateText(stripHtml(item.excerpt || nextContent), 160));
+    if (item.thumbnail) {
+      setThumbnail(item.thumbnail);
+      setThumbnailStorageId(undefined);
+    }
+    if (item.authorName) {setAuthorName(item.authorName);}
+    setEditorResetKey((prev) => prev + 1);
+  };
+
   useEffect(() => {
-    if (postData) {
+    if (postData && !isDataLoaded) {
       setTitle(postData.title);
       setSlug(postData.slug);
       setContent(postData.content);
@@ -181,8 +224,9 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         thumbnailStorageId: (postData as { thumbnailStorageId?: Id<'_storage'> }).thumbnailStorageId,
       };
       setSnapshotVersion((prev) => prev + 1);
+      setIsDataLoaded(true);
     }
-  }, [postData, hasMarkdownRender, hasHtmlRender]);
+  }, [postData, hasMarkdownRender, hasHtmlRender, isDataLoaded]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,7 +269,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         publishedAt: status === 'Published' ? resolvedPublishedAt : undefined,
         slug: slug.trim(),
         status,
-        thumbnail,
+        thumbnail: thumbnail ?? '',
         thumbnailStorageId: thumbnail ? (thumbnailStorageId ?? null) : null,
         title: title.trim(),
       });
@@ -280,22 +324,9 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
       onCreated={(id) =>{  setCategoryId(id); }}
     />
     <form onSubmit={handleSubmit} className="space-y-6 pb-20">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa bài viết</h1>
-          <div className="text-sm text-slate-500 mt-1">Cập nhật nội dung bài viết hiện có</div>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => window.open(`/posts/${slug}`, '_blank')}
-            className="gap-2"
-          >
-            <ExternalLink size={16} />
-            Xem trên web
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa bài viết</h1>
+        <div className="text-sm text-slate-500 mt-1">Cập nhật nội dung bài viết hiện có</div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -305,7 +336,7 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
               {/* Title - always shown (system field) */}
               <div className="space-y-2">
                 <Label>Tiêu đề <span className="text-red-500">*</span></Label>
-                <Input value={title} onChange={(e) =>{  setTitle(e.target.value); }} required />
+                <Input value={title} onChange={handleTitleChange} required />
               </div>
               {/* Slug - always shown (system field) */}
               <div className="space-y-2">
@@ -516,21 +547,38 @@ export default function PostEditPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 lg:left-[280px] right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-end items-center z-10">
-        <Button
-          type="submit"
-          variant="accent"
-          disabled={isSubmitting || !hasChanges}
-          className={!hasChanges && !isSubmitting
-            ? 'bg-slate-300 hover:bg-slate-300 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-800 dark:text-slate-400'
-            : undefined}
-        >
-          {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
-          {isSubmitting || saveStatus === 'saving'
-            ? 'Đang lưu...'
-            : (saveStatus === 'saved' && !hasChanges ? 'Đã lưu' : 'Lưu thay đổi')}
-        </Button>
-      </div>
+      <HomeComponentStickyFooter
+        isSubmitting={isSubmitting || saveStatus === 'saving'}
+        hasChanges={hasChanges}
+        submitLabel="Lưu thay đổi"
+        align="end"
+      >
+        <>
+          <AiEntityImportDialog kind="post" enabledFields={enabledFields} onApply={handleApplyAiPost} />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => window.open(`/posts/${slug}`, '_blank')}
+            className="gap-2"
+            disabled={!slug.trim()}
+          >
+            <ExternalLink size={16} />
+            Xem trên web
+          </Button>
+          <Button
+            type="submit"
+            variant="accent"
+            disabled={isSubmitting || !hasChanges}
+            className={!hasChanges && !isSubmitting
+              ? 'bg-slate-300 hover:bg-slate-300 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-800 dark:text-slate-400'
+              : undefined}
+          >
+            {isSubmitting || saveStatus === 'saving'
+              ? 'Đang lưu...'
+              : (saveStatus === 'saved' && !hasChanges ? 'Đã lưu' : 'Lưu thay đổi')}
+          </Button>
+        </>
+      </HomeComponentStickyFooter>
     </form>
     </>
   );

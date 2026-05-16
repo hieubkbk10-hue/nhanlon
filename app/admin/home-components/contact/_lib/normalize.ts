@@ -146,6 +146,19 @@ export const normalizeContactConfig = (rawConfig: unknown): ContactConfigState =
     style: normalizeStyle(config.style),
     showForm: typeof config.showForm === 'boolean' ? config.showForm : defaultConfig.showForm,
     texts: normalizeTexts(config.texts),
+    // Shared header config
+    hideHeader: typeof config.hideHeader === 'boolean' ? config.hideHeader : defaultConfig.hideHeader,
+    showTitle: typeof config.showTitle === 'boolean' ? config.showTitle : defaultConfig.showTitle,
+    subtitle: coerceText(config.subtitle) || defaultConfig.subtitle,
+    showSubtitle: typeof config.showSubtitle === 'boolean' ? config.showSubtitle : defaultConfig.showSubtitle,
+    headerAlign: (config.headerAlign === 'left' || config.headerAlign === 'center' || config.headerAlign === 'right')
+      ? config.headerAlign
+      : defaultConfig.headerAlign,
+    titleColorPrimary: typeof config.titleColorPrimary === 'boolean' ? config.titleColorPrimary : defaultConfig.titleColorPrimary,
+    subtitleAboveTitle: typeof config.subtitleAboveTitle === 'boolean' ? config.subtitleAboveTitle : defaultConfig.subtitleAboveTitle,
+    uppercaseText: typeof config.uppercaseText === 'boolean' ? config.uppercaseText : defaultConfig.uppercaseText,
+    showBadge: typeof config.showBadge === 'boolean' ? config.showBadge : defaultConfig.showBadge,
+    badgeText: coerceText(config.badgeText) || defaultConfig.badgeText,
   };
 };
 
@@ -168,6 +181,17 @@ export const toContactConfigPayload = (config: ContactConfigState): ContactConfi
     workingHours: normalized.workingHours,
     showForm: normalized.showForm,
     texts: normalized.texts,
+    // Shared header config
+    hideHeader: normalized.hideHeader,
+    showTitle: normalized.showTitle,
+    subtitle: normalized.subtitle,
+    showSubtitle: normalized.showSubtitle,
+    headerAlign: normalized.headerAlign,
+    titleColorPrimary: normalized.titleColorPrimary,
+    subtitleAboveTitle: normalized.subtitleAboveTitle,
+    uppercaseText: normalized.uppercaseText,
+    showBadge: normalized.showBadge,
+    badgeText: normalized.badgeText,
   };
 };
 
@@ -204,6 +228,17 @@ export const toContactSnapshot = (payload: {
       style: normalized.style,
       showForm: normalized.showForm,
       texts: normalized.texts,
+      // Shared header config
+      hideHeader: normalized.hideHeader,
+      showTitle: normalized.showTitle,
+      subtitle: normalized.subtitle,
+      showSubtitle: normalized.showSubtitle,
+      headerAlign: normalized.headerAlign,
+      titleColorPrimary: normalized.titleColorPrimary,
+      subtitleAboveTitle: normalized.subtitleAboveTitle,
+      uppercaseText: normalized.uppercaseText,
+      showBadge: normalized.showBadge,
+      badgeText: normalized.badgeText,
     },
   });
 };

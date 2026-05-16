@@ -18,6 +18,7 @@ const PROCESS_STYLE_SET = new Set<ProcessStyle>([
   'accordion',
   'minimal',
   'grid',
+  'alternating',
 ]);
 
 const coerceText = (value: unknown) => {
@@ -121,8 +122,12 @@ export const normalizeProcessConfig = (rawConfig: unknown): ProcessConfig => {
     ? rawConfig as Record<string, unknown>
     : {};
 
+  const rawCols = config.desktopColumns;
+  const desktopColumns: 3 | 4 = rawCols === 3 ? 3 : 4;
+
   return {
     steps: serializeProcessFormSteps(normalizeProcessFormSteps(config.steps)),
     style: normalizeProcessStyle(config.style),
+    desktopColumns,
   };
 };

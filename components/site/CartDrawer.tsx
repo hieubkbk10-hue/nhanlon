@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import Link from 'next/link';
 import { Clock, Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useCart, useCartExpiry } from '@/lib/cart';
@@ -106,7 +106,7 @@ export function CartDrawer() {
                 <div key={item._id} className="flex gap-3 py-3 border-b last:border-0" style={{ borderColor: tokens.itemDivider }}>
                   <div className="w-16 h-16 rounded-lg flex-shrink-0 overflow-hidden" style={{ backgroundColor: tokens.thumbBg }}>
                     {item.productImage ? (
-                      <Image src={item.productImage} alt={item.productName} width={64} height={64} className="w-full h-full object-cover" />
+                      <Image src={item.productImage} alt={item.productName} width={64} height={64} className="w-full h-full object-cover" mode="thumb" />
                     ) : (
                       <div className="w-full h-full" style={{ backgroundColor: tokens.surfaceSoft }} />
                     )}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
@@ -521,6 +521,7 @@ export default function AccountOrdersPage() {
                                           width={48}
                                           height={48}
                                           className="h-full w-full object-cover"
+                                          mode="thumb"
                                         />
                                       ) : (
                                         <Package size={18} style={{ color: tokens.orderItemThumbIcon }} />
@@ -779,6 +780,7 @@ export default function AccountOrdersPage() {
                                     width={64}
                                     height={64}
                                     className="h-full w-full object-cover"
+                                    mode="thumb"
                                   />
                                 ) : (
                                   <Package size={20} style={{ color: tokens.orderItemThumbIcon }} />

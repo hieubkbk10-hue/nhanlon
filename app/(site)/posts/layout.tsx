@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { JsonLd, generateBreadcrumbSchema, generateItemListSchema } from '@/components/seo/JsonLd';
+import { JsonLd, generateItemListSchema } from '@/components/seo/JsonLd';
 import { api } from '@/convex/_generated/api';
 import { getConvexClient } from '@/lib/convex';
 import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
@@ -8,12 +8,12 @@ import { buildSeoMetadata } from '@/lib/seo/metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
   const client = getConvexClient();
-  const [site, seo, contact, social, postsModule] = await Promise.all([
+  const [site, seo, contact, postsModule, social] = await Promise.all([
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
-    getSocialSettings(),
     client.query(api.admin.modules.getModuleByKey, { key: 'posts' }),
+    getSocialSettings(),
   ]);
   const moduleEnabled = Boolean(postsModule?.enabled);
 
@@ -26,9 +26,9 @@ export async function generateMetadata(): Promise<Metadata> {
       routeType: 'list',
       seo,
       site,
+      social,
       titleOverride: 'Không tìm thấy bài viết',
       useTitleTemplate: true,
-      social,
     });
   }
 
@@ -40,9 +40,9 @@ export async function generateMetadata(): Promise<Metadata> {
     routeType: 'list',
     seo,
     site,
+    social,
     titleOverride: 'Bài viết',
     useTitleTemplate: true,
-    social,
   });
 }
 
@@ -69,14 +69,9 @@ export default async function PostsListLayout({ children }: { children: React.Re
     name: 'Bài viết mới nhất',
     url: `${baseUrl}/posts`,
   });
-  const breadcrumbSchema = generateBreadcrumbSchema([
-    { name: 'Trang chủ', url: baseUrl },
-    { name: 'Bài viết', url: `${baseUrl}/posts` },
-  ]);
 
   return (
     <>
-      <JsonLd data={breadcrumbSchema} />
       {posts.length > 0 && <JsonLd data={itemListSchema} />}
       {children}
     </>

@@ -6,26 +6,29 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Eye, Loader2, User } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { AboutForm } from '../../_components/AboutForm';
 import { AboutPreview } from '../../_components/AboutPreview';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
-  createAboutEditorStat,
+  createAboutEditorFeature,
   DEFAULT_ABOUT_EDITOR_STATE,
+  normalizeAboutEditorFeatures,
   normalizeAboutEditorStats,
+  normalizeAboutImages,
   normalizeAboutStyle,
+  toAboutPersistFeatures,
   toAboutPersistStats,
 } from '../../_lib/constants';
 import {
-  buildAboutWarningMessages,
   getAboutValidationResult,
 } from '../../_lib/colors';
 import type { AboutEditorState, AboutStyle } from '../../_types';
@@ -36,37 +39,79 @@ const buildAboutSnapshot = (payload: {
   title: string;
   active: boolean;
   state: AboutEditorState;
+  hideHeader: boolean;
+  showTitle: boolean;
+  subtitle: string;
+  showSubtitle: boolean;
+  headerAlign: 'left' | 'center' | 'right';
+  titleColorPrimary: boolean;
+  subtitleAboveTitle: boolean;
+  uppercaseText: boolean;
+  showBadge: boolean;
+  badgeText: string;
 }) => JSON.stringify({
   title: payload.title,
   active: payload.active,
   subHeading: payload.state.subHeading,
   heading: payload.state.heading,
+  highlightText: payload.state.highlightText,
   description: payload.state.description,
+  phone: payload.state.phone,
   image: payload.state.image,
+  images: payload.state.images,
   imageCaption: payload.state.imageCaption,
   buttonText: payload.state.buttonText,
   buttonLink: payload.state.buttonLink,
-  style: payload.state.style,
+  features: toAboutPersistFeatures(payload.state.features),
   stats: toAboutPersistStats(payload.state.stats),
+  style: payload.state.style,
+  hideHeader: payload.hideHeader,
+  showTitle: payload.showTitle,
+  subtitle: payload.subtitle,
+  showSubtitle: payload.showSubtitle,
+  headerAlign: payload.headerAlign,
+  titleColorPrimary: payload.titleColorPrimary,
+  subtitleAboveTitle: payload.subtitleAboveTitle,
+  uppercaseText: payload.uppercaseText,
+  showBadge: payload.showBadge,
+  badgeText: payload.badgeText,
 });
 
 const normalizeEditorState = (rawConfig: Record<string, unknown>): AboutEditorState => {
+  const fallbackImage = typeof rawConfig.image === 'string' ? rawConfig.image : '';
+  const normalizedImages = normalizeAboutImages(rawConfig.images, fallbackImage);
+  const normalizedFeatures = normalizeAboutEditorFeatures(rawConfig.features);
   const normalizedStats = normalizeAboutEditorStats(rawConfig.stats);
 
   return {
     subHeading: typeof rawConfig.subHeading === 'string' ? rawConfig.subHeading : DEFAULT_ABOUT_EDITOR_STATE.subHeading,
     heading: typeof rawConfig.heading === 'string' ? rawConfig.heading : DEFAULT_ABOUT_EDITOR_STATE.heading,
+    highlightText: typeof rawConfig.highlightText === 'string' ? rawConfig.highlightText : DEFAULT_ABOUT_EDITOR_STATE.highlightText,
     description: typeof rawConfig.description === 'string' ? rawConfig.description : DEFAULT_ABOUT_EDITOR_STATE.description,
-    image: typeof rawConfig.image === 'string' ? rawConfig.image : '',
+    phone: typeof rawConfig.phone === 'string' ? rawConfig.phone : DEFAULT_ABOUT_EDITOR_STATE.phone,
+    image: normalizedImages[0] ?? fallbackImage,
+    images: normalizedImages,
     imageCaption: typeof rawConfig.imageCaption === 'string' ? rawConfig.imageCaption : '',
     buttonText: typeof rawConfig.buttonText === 'string' ? rawConfig.buttonText : DEFAULT_ABOUT_EDITOR_STATE.buttonText,
     buttonLink: typeof rawConfig.buttonLink === 'string' ? rawConfig.buttonLink : DEFAULT_ABOUT_EDITOR_STATE.buttonLink,
+    features: normalizedFeatures.length > 0
+      ? normalizedFeatures
+      : DEFAULT_ABOUT_EDITOR_STATE.features.map((feature) => createAboutEditorFeature(feature)),
+    stats: normalizedStats.length > 0 ? normalizedStats : DEFAULT_ABOUT_EDITOR_STATE.stats,
     style: normalizeAboutStyle(rawConfig.style),
-    stats: normalizedStats.length > 0
-      ? normalizedStats
-      : [
-        createAboutEditorStat({ value: '10+', label: 'Năm kinh nghiệm' }),
-      ],
+    // Shared header config
+    hideHeader: typeof rawConfig.hideHeader === 'boolean' ? rawConfig.hideHeader : DEFAULT_ABOUT_EDITOR_STATE.hideHeader,
+    showTitle: typeof rawConfig.showTitle === 'boolean' ? rawConfig.showTitle : DEFAULT_ABOUT_EDITOR_STATE.showTitle,
+    subtitle: typeof rawConfig.subtitle === 'string' ? rawConfig.subtitle : DEFAULT_ABOUT_EDITOR_STATE.subtitle,
+    showSubtitle: typeof rawConfig.showSubtitle === 'boolean' ? rawConfig.showSubtitle : DEFAULT_ABOUT_EDITOR_STATE.showSubtitle,
+    headerAlign: (rawConfig.headerAlign === 'left' || rawConfig.headerAlign === 'center' || rawConfig.headerAlign === 'right')
+      ? rawConfig.headerAlign
+      : DEFAULT_ABOUT_EDITOR_STATE.headerAlign,
+    titleColorPrimary: typeof rawConfig.titleColorPrimary === 'boolean' ? rawConfig.titleColorPrimary : DEFAULT_ABOUT_EDITOR_STATE.titleColorPrimary,
+    subtitleAboveTitle: typeof rawConfig.subtitleAboveTitle === 'boolean' ? rawConfig.subtitleAboveTitle : DEFAULT_ABOUT_EDITOR_STATE.subtitleAboveTitle,
+    uppercaseText: typeof rawConfig.uppercaseText === 'boolean' ? rawConfig.uppercaseText : DEFAULT_ABOUT_EDITOR_STATE.uppercaseText,
+    showBadge: typeof rawConfig.showBadge === 'boolean' ? rawConfig.showBadge : DEFAULT_ABOUT_EDITOR_STATE.showBadge,
+    badgeText: typeof rawConfig.badgeText === 'string' ? rawConfig.badgeText : DEFAULT_ABOUT_EDITOR_STATE.badgeText,
   };
 };
 
@@ -86,6 +131,18 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [subtitle, setSubtitle] = useState('');
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+
   useEffect(() => {
     if (!component) {return;}
 
@@ -96,19 +153,55 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
 
     const rawConfig = (component.config ?? {}) as Record<string, unknown>;
     const nextState = normalizeEditorState(rawConfig);
+    const headerConfig = extractSectionHeaderConfig(rawConfig);
 
     setTitle(component.title);
     setActive(component.active);
     setState(nextState);
 
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitle(headerConfig.showTitle ?? true);
+    setSubtitle(headerConfig.subtitle ?? '');
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setHeaderAlign(headerConfig.headerAlign ?? 'left');
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
+
     setInitialSnapshot(buildAboutSnapshot({
       title: component.title,
       active: component.active,
       state: nextState,
+      hideHeader: headerConfig.hideHeader ?? false,
+      showTitle: headerConfig.showTitle ?? true,
+      subtitle: headerConfig.subtitle ?? '',
+      showSubtitle: headerConfig.showSubtitle ?? true,
+      headerAlign: headerConfig.headerAlign ?? 'left',
+      titleColorPrimary: headerConfig.titleColorPrimary ?? false,
+      subtitleAboveTitle: headerConfig.subtitleAboveTitle ?? false,
+      uppercaseText: headerConfig.uppercaseText ?? false,
+      showBadge: headerConfig.showBadge ?? true,
+      badgeText: headerConfig.badgeText ?? '',
     }));
   }, [component, id, router]);
 
-  const currentSnapshot = buildAboutSnapshot({ title, active, state });
+  const currentSnapshot = buildAboutSnapshot({ 
+    title, 
+    active, 
+    state,
+    hideHeader,
+    showTitle,
+    subtitle,
+    showSubtitle,
+    headerAlign,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
+  });
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
   const customChanged = showCustomBlock
     ? customState.enabled !== initialCustom.enabled
@@ -132,11 +225,6 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
     [effectiveColors.primary, effectiveColors.secondary, effectiveColors.mode, state.style],
   );
 
-  const warningMessages = useMemo(
-    () => buildAboutWarningMessages({ mode: effectiveColors.mode, validation }),
-    [effectiveColors.mode, validation],
-  );
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isSubmitting || !hasChanges) {return;}
@@ -152,13 +240,27 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
         config: {
           subHeading: state.subHeading,
           heading: state.heading,
+          highlightText: state.highlightText,
           description: state.description,
+          phone: state.phone,
           image: state.image,
+          images: state.images,
           imageCaption: state.imageCaption,
           buttonText: state.buttonText,
           buttonLink: state.buttonLink,
+          features: toAboutPersistFeatures(state.features),
           stats: toAboutPersistStats(state.stats),
           style: normalizedStyle,
+          hideHeader,
+          showTitle,
+          subtitle,
+          showSubtitle,
+          headerAlign,
+          titleColorPrimary,
+          subtitleAboveTitle,
+          uppercaseText,
+          showBadge,
+          badgeText,
         },
       });
       if (showCustomBlock) {
@@ -179,7 +281,21 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
         });
       }
 
-      setInitialSnapshot(buildAboutSnapshot({ title, active, state: { ...state, style: normalizedStyle } }));
+      setInitialSnapshot(buildAboutSnapshot({ 
+        title, 
+        active, 
+        state: { ...state, style: normalizedStyle },
+        hideHeader,
+        showTitle,
+        subtitle,
+        showSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
+      }));
       if (showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
@@ -225,57 +341,38 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <User size={20} />
-              About
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(event) => { setTitle(event.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
 
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5',
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
 
-        <AboutForm state={state} onChange={setState} />
-
-        {effectiveColors.mode === 'dual' && warningMessages.length > 0 ? (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <div className="space-y-2">
-              {warningMessages.map((message, idx) => (
-                <div key={`${idx}-${message}`} className="flex items-start gap-2">
-                  <Eye size={14} className="mt-0.5 flex-shrink-0" />
-                  <p>{message}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        <AboutForm state={state} previewStyle={state.style} onChange={setState} defaultExpanded={false} />
 
         <div className="space-y-4">
           {showCustomBlock && (
@@ -322,11 +419,15 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
             config={{
               subHeading: state.subHeading,
               heading: state.heading,
+              highlightText: state.highlightText,
               description: state.description,
+              phone: state.phone,
               image: state.image,
+              images: state.images,
               imageCaption: state.imageCaption,
               buttonText: state.buttonText,
               buttonLink: state.buttonLink,
+              features: toAboutPersistFeatures(state.features),
               stats: toAboutPersistStats(state.stats),
               style: state.style,
             }}
@@ -339,6 +440,17 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
             }}
             fontStyle={fontStyle}
             fontClassName="font-active"
+            title={title}
+            hideHeader={hideHeader}
+            showTitle={showTitle}
+            subtitle={subtitle}
+            showSubtitle={showSubtitle}
+            headerAlign={headerAlign}
+            titleColorPrimary={titleColorPrimary}
+            subtitleAboveTitle={subtitleAboveTitle}
+            uppercaseText={uppercaseText}
+            showBadge={showBadge}
+            badgeText={badgeText}
           />
         </div>
 
@@ -347,6 +459,8 @@ export default function AboutEditPage({ params }: { params: Promise<{ id: string
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

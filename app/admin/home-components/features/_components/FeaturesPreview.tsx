@@ -18,6 +18,7 @@ const styles: Array<{ id: FeaturesStyle; label: string }> = [
   { id: 'compact', label: 'Compact' },
   { id: 'cards', label: 'Cards' },
   { id: 'carousel', label: 'Carousel' },
+  { id: 'carousel6', label: 'Carousel 6' },
   { id: 'timeline', label: 'Timeline' },
 ];
 
@@ -29,8 +30,20 @@ interface FeaturesPreviewProps {
   sectionTitle?: string;
   selectedStyle?: FeaturesStyle;
   onStyleChange?: (style: FeaturesStyle) => void;
+  showIcons?: boolean;
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
+  // Shared header config
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  subtitle?: string;
+  showSubtitle?: boolean;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }
 
 export function FeaturesPreview({
@@ -41,8 +54,19 @@ export function FeaturesPreview({
   sectionTitle,
   selectedStyle,
   onStyleChange,
+  showIcons = true,
   fontStyle,
   fontClassName,
+  hideHeader,
+  showTitle,
+  subtitle,
+  showSubtitle,
+  headerAlign,
+  titleColorPrimary,
+  subtitleAboveTitle,
+  uppercaseText,
+  showBadge,
+  badgeText,
 }: FeaturesPreviewProps) {
   const { device, setDevice } = usePreviewDevice();
 
@@ -52,9 +76,11 @@ export function FeaturesPreview({
     if (items.length === 0) {return `Chưa có tính năng • ${modeLabel}`;}
     const sizeLabel = previewStyle === 'carousel'
       ? 'Icon: 56×56px • Card rộng'
-      : previewStyle === 'timeline'
-        ? 'Icon: 24×24px • Timeline'
-        : 'Icon: 40-56px';
+      : previewStyle === 'carousel6'
+        ? 'Icon: 48×48px • Carousel 6'
+        : previewStyle === 'timeline'
+          ? 'Icon: 24×24px • Timeline'
+          : 'Icon: 40-56px';
     return `${items.length} tính năng • ${sizeLabel} • ${modeLabel}`;
   })();
 
@@ -78,10 +104,21 @@ export function FeaturesPreview({
             device={device}
             items={items}
             style={previewStyle}
+            showIcons={showIcons}
             title={sectionTitle}
             brandColor={brandColor}
             secondary={secondary}
             mode={mode}
+            hideHeader={hideHeader}
+            showTitle={showTitle}
+            subtitle={subtitle}
+            showSubtitle={showSubtitle}
+            headerAlign={headerAlign}
+            titleColorPrimary={titleColorPrimary}
+            subtitleAboveTitle={subtitleAboveTitle}
+            uppercaseText={uppercaseText}
+            showBadge={showBadge}
+            badgeText={badgeText}
           />
         </BrowserFrame>
       </PreviewWrapper>

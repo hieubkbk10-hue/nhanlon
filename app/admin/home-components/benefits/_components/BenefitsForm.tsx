@@ -12,18 +12,13 @@ import {
   Label,
   cn,
 } from '../../../components/ui';
-import { IconPickerDialog } from '../../contact/_components/IconPickerDialog';
+import { SettingsImageUploader } from '@/app/admin/components/SettingsImageUploader';
+import { IconPopoverPicker } from '../../_shared/components/IconPopoverPicker';
 import {
   CONTACT_ICON_OPTIONS,
-  resolveContactIcon,
-} from '../../contact/_lib/iconOptions';
-import {
-  BENEFITS_GRID_COLUMNS_DESKTOP,
-  BENEFITS_GRID_COLUMNS_MOBILE,
-  BENEFITS_HEADER_ALIGN_OPTIONS,
-  BENEFITS_STYLES,
-} from '../_lib/constants';
-import type { BenefitItem, BenefitsEditorState, BenefitsHeaderAlign, BenefitsStyle } from '../_types';
+  } from '../../contact/_lib/iconOptions';
+import type { BenefitItem, BenefitsEditorState } from '../_types';
+import { AiDemoBenefitsImport } from '../../product-list/_components/AiDemoProductsImport';
 
 interface BenefitsFormProps {
   state: BenefitsEditorState;
@@ -32,7 +27,7 @@ interface BenefitsFormProps {
 }
 
 const MIN_ITEMS = 1;
-const MAX_ITEMS = 8;
+const MAX_ITEMS = 5;
 
 const createItem = (seed: number): BenefitItem => ({
   description: '',
@@ -70,7 +65,7 @@ const normalizeBenefitsIconValue = (value?: string) => {
 export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps) {
   const [draggedId, setDraggedId] = React.useState<string | null>(null);
   const [dragOverId, setDragOverId] = React.useState<string | null>(null);
-  const [iconPickerId, setIconPickerId] = React.useState<string | null>(null);
+
 
   const addItem = () => {
     onChange((prev) => {
@@ -138,13 +133,6 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
     setDragOverId(null);
   };
 
-  const updateStyle = (value: string) => {
-    onChange((prev) => ({
-      ...prev,
-      style: value as BenefitsStyle,
-    }));
-  };
-
   return (
     <>
       <Card className="mb-6">
@@ -154,96 +142,105 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Badge text</Label>
-              <Input
-                placeholder="Vì sao chọn chúng tôi?"
-                value={state.subHeading}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  onChange((prev) => ({ ...prev, subHeading: next }));
+              <Label>Ảnh minh họa (tùy chọn)</Label>
+              <SettingsImageUploader
+                value={state.visualImage}
+                onChange={(url) => {
+                  onChange((prev) => ({ ...prev, visualImage: url ?? '' }));
                 }}
+                folder="home-components"
+                label="Ảnh dùng cho layout 3, 4, 5"
+                previewSize="sm"
               />
             </div>
 
-            <div>
-              <Label>Tiêu đề chính</Label>
-              <Input
-                placeholder="Giá trị cốt lõi"
-                value={state.heading}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  onChange((prev) => ({ ...prev, heading: next }));
-                }}
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Item nổi bật</Label>
+                <div className="grid grid-cols-5 gap-2">
+                  {Array.from({ length: MAX_ITEMS }, (_, idx) => {
+                    const selected = state.highlightIndex === idx;
+                    const disabled = idx >= state.items.length;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          onChange((prev) => ({ ...prev, highlightIndex: idx }));
+                        }}
+                        className={cn(
+                          'h-9 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                          disabled && 'cursor-not-allowed opacity-40',
+                        )}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                  <div>
+                    <p className="text-sm font-medium">Hiện số thứ tự</p>
+                    <p className="text-xs text-slate-500">Dùng cho layout 1, 3, 6</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={state.showItemNumbers}
+                    onClick={() => {
+                      onChange((prev) => ({ ...prev, showItemNumbers: !prev.showItemNumbers }));
+                    }}
+                    className={cn(
+                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                      state.showItemNumbers ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'inline-block h-5 w-5 transform rounded-full bg-white transition-transform',
+                        state.showItemNumbers ? 'translate-x-5' : 'translate-x-1',
+                      )}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                  <div>
+                    <p className="text-sm font-medium">Hiện trang trí nền</p>
+                    <p className="text-xs text-slate-500">Arrow, line, shape minh họa</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={state.showDecorativeVisuals}
+                    onClick={() => {
+                      onChange((prev) => ({ ...prev, showDecorativeVisuals: !prev.showDecorativeVisuals }));
+                    }}
+                    className={cn(
+                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                      state.showDecorativeVisuals ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'inline-block h-5 w-5 transform rounded-full bg-white transition-transform',
+                        state.showDecorativeVisuals ? 'translate-x-5' : 'translate-x-1',
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Style</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
-                value={state.style}
-                onChange={(event) => { updateStyle(event.target.value); }}
-              >
-                {BENEFITS_STYLES.map((style) => (
-                  <option key={style.id} value={style.id}>{style.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <Label>Căn badge + tiêu đề</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
-                value={state.headerAlign}
-                onChange={(event) => {
-                  const next = event.target.value as BenefitsHeaderAlign;
-                  onChange((prev) => ({ ...prev, headerAlign: next }));
-                }}
-              >
-                {BENEFITS_HEADER_ALIGN_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <Label>Grid desktop</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
-                value={state.gridColumnsDesktop}
-                onChange={(event) => {
-                  const next = Number(event.target.value) as 3 | 4;
-                  onChange((prev) => ({ ...prev, gridColumnsDesktop: next }));
-                }}
-              >
-                {BENEFITS_GRID_COLUMNS_DESKTOP.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Grid mobile</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800"
-                value={state.gridColumnsMobile}
-                onChange={(event) => {
-                  const next = Number(event.target.value) as 1 | 2;
-                  onChange((prev) => ({ ...prev, gridColumnsMobile: next }));
-                }}
-              >
-                {BENEFITS_GRID_COLUMNS_MOBILE.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {state.style === 'timeline' ? (
+          {state.style === '5' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
               <div>
                 <Label>Nút CTA (tùy chọn)</Label>
@@ -288,6 +285,11 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
           >
             <Plus size={14} /> Thêm
           </Button>
+          <div onClick={(e) => e.stopPropagation()}>
+            <AiDemoBenefitsImport onApply={(items) => {
+              onChange((prev) => ({ ...prev, items: items as BenefitItem[] }));
+            }} />
+          </div>
         </CardHeader>
 
         <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
@@ -324,39 +326,12 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-1">
-                  <Label className="text-xs text-slate-500">Icon</Label>
-                  {(() => {
-                    const normalizedValue = normalizeBenefitsIconValue(item.icon);
-                    const iconOption = CONTACT_ICON_OPTIONS.find((option) => option.value === normalizedValue);
-                    const Icon = resolveContactIcon(normalizedValue);
-
-                    return (
-                      <>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-between gap-2 px-3"
-                          onClick={() => { setIconPickerId(item.id); }}
-                        >
-                          <span className="flex items-center gap-2 min-w-0">
-                            <Icon size={16} className="text-slate-600 dark:text-slate-200" />
-                            <span className="text-xs text-slate-700 dark:text-slate-200 truncate">
-                              {iconOption?.label ?? 'Chọn icon'}
-                            </span>
-                          </span>
-                          <span className="text-xs text-slate-400">▼</span>
-                        </Button>
-
-                        <IconPickerDialog
-                          open={iconPickerId === item.id}
-                          onOpenChange={(open) => { setIconPickerId(open ? item.id : null); }}
-                          value={normalizedValue}
-                          options={CONTACT_ICON_OPTIONS}
-                          onSelect={(value) => { updateItem(item.id, { icon: value }); }}
-                        />
-                      </>
-                    );
-                  })()}
+                  <Label className="text-xs text-slate-500">Icon Lucide</Label>
+                  <IconPopoverPicker
+                    value={normalizeBenefitsIconValue(item.icon)}
+                    onChange={(nextValue) => updateItem(item.id, { icon: nextValue })}
+                    options={CONTACT_ICON_OPTIONS}
+                  />
                 </div>
 
                 <div className="md:col-span-2">
@@ -370,9 +345,9 @@ export function BenefitsForm({ state, onChange, mode: _mode }: BenefitsFormProps
               </div>
 
               <div>
-                <Label className="text-xs text-slate-500">Mô tả ngắn</Label>
+                <Label className="text-xs text-slate-500">Nội dung benefit</Label>
                 <Input
-                  placeholder="Mô tả ngắn (max 150 ký tự)"
+                  placeholder="Nội dung benefit (max 150 ký tự)"
                   value={item.description}
                   maxLength={150}
                   onChange={(event) => { updateItem(item.id, { description: event.target.value }); }}

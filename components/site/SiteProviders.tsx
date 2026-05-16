@@ -1,9 +1,14 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Toaster } from 'sonner';
+import dynamic from 'next/dynamic';
 import { CustomerAuthProvider } from '@/app/(site)/auth/context';
 import { CartProvider } from '@/lib/cart';
+
+const Toaster = dynamic(
+  () => import('sonner').then((mod) => ({ default: mod.Toaster })),
+  { ssr: false, loading: () => null }
+);
 
 export function SiteProviders({ children }: { children: React.ReactNode }) {
   const previousThemeRef = useRef<{

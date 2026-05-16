@@ -1,5 +1,6 @@
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 const homeComponentDoc = v.object({
@@ -169,6 +170,19 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const component = await ctx.db.get(args.id);
     if (!component) {throw new Error("Component not found");}
+    
+    // Cleanup demo product storage images if any
+    const config = component.config as Record<string, unknown> | undefined;
+    if (config?.demoProducts && Array.isArray(config.demoProducts)) {
+      const storageDeletes = (config.demoProducts as Array<{ storageId?: string }>)
+        .filter((item) => item.storageId)
+        .map(async (item) => {
+          try {
+            await ctx.storage.delete(item.storageId as Id<"_storage">);
+          } catch { /* storage may already be deleted */ }
+        });
+      await Promise.all(storageDeletes);
+    }
     
     await ctx.db.delete(args.id);
     

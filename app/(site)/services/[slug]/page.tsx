@@ -8,6 +8,7 @@ import { useBrandColors } from '@/components/site/hooks';
 import { getServiceDetailColors } from '@/components/site/services/detail/_lib/colors';
 import { ClassicStyle, MinimalStyle, ModernStyle } from '@/components/site/services/detail/ServiceDetailStyles';
 import { ArrowLeft, Briefcase } from 'lucide-react';
+import { normalizeRouteMode } from '@/lib/ia/route-mode';
 
 type ServiceDetailStyle = 'classic' | 'modern' | 'minimal';
 
@@ -100,6 +101,13 @@ export default function ServiceDetailPage({ params }: PageProps) {
     api.serviceCategories.getById,
     service?.categoryId ? { id: service.categoryId } : 'skip'
   );
+  const categories = useQuery(api.serviceCategories.listActive, { limit: 100 });
+  const routeModeSetting = useQuery(api.settings.getValue, { key: 'ia_route_mode', defaultValue: 'unified' });
+  const routeMode = useMemo(() => normalizeRouteMode(routeModeSetting), [routeModeSetting]);
+  const categorySlugMap = useMemo(() => {
+    if (!categories) {return new Map<string, string>();}
+    return new Map(categories.map((item) => [item._id, item.slug]));
+  }, [categories]);
   const incrementViews = useMutation(api.services.incrementViews);
   
   const relatedServices = useQuery(
@@ -153,6 +161,8 @@ export default function ServiceDetailPage({ params }: PageProps) {
     enabledFields,
     showShare: experienceConfig.showShare,
     tokens,
+    routeMode,
+    categorySlugMap,
   };
 
   const quickContactConfig = {

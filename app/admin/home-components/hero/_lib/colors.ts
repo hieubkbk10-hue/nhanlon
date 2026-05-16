@@ -67,6 +67,9 @@ export interface FullscreenColorScheme {
 }
 
 export interface SplitColorScheme {
+  contentBg: string;
+  headingText: string;
+  descriptionText: string;
   badgeBg: string;
   badgeText: string;
   primaryCTA: string;
@@ -80,6 +83,10 @@ export interface SplitColorScheme {
 }
 
 export interface ParallaxColorScheme {
+  cardBg: string;
+  headingText: string;
+  descriptionText: string;
+  countdownText: string;
   cardBadgeBg: string;
   cardBadgeText: string;
   cardBadgeDot: string;
@@ -186,6 +193,11 @@ const getNavIndicatorColors = (baseColor: string) => {
   };
 };
 
+const getAdaptiveContentSurface = (baseColor: string) => {
+  const color = oklch(baseColor);
+  return color.l < 0.55 ? '#0f172a' : '#f8fafc';
+};
+
 export function getSliderColors(
   primary: string,
   secondary: string,
@@ -199,7 +211,7 @@ export function getSliderColors(
   const navBase = mode === 'dual' ? secondaryPalette.solid : primaryPalette.solid;
   const navIndicator = getNavIndicatorColors(navBase);
   const dotActive = mode === 'dual' ? secondaryPalette.solid : primaryPalette.solid;
-  const navIconColor = mode === 'dual' ? primaryPalette.solid : navIndicator.icon;
+  const navIconColor = getAPCATextColor(navIndicator.bg, 16, 700);
 
   return {
     navButtonBg: navIndicator.bg,
@@ -295,8 +307,12 @@ export function getSplitColors(
   const navBase = mode === 'dual' ? secondaryPalette.solid : primaryPalette.solid;
   const navIndicator = getNavIndicatorColors(navBase);
   const progressDotActive = mode === 'dual' ? secondaryPalette.solid : primaryPalette.solid;
+  const contentBg = getAdaptiveContentSurface(primary);
 
   return {
+    contentBg,
+    headingText: getAPCATextColor(contentBg, 28, 700),
+    descriptionText: getAPCATextColor(contentBg, 16, 500),
     badgeBg: getSecondaryTint(0.4),
     badgeText: getAPCATextColor(getSecondaryTint(0.4), 12, 600),
     primaryCTA: primary,
@@ -322,8 +338,13 @@ export function getParallaxColors(
   const getSecondaryTint = (lightness: number) => formatHex(oklch({ ...secondaryColorValue, l: Math.min(secondaryColorValue.l + lightness, 0.98) }));
   const navBase = mode === 'dual' ? secondaryPalette.solid : primaryPalette.solid;
   const navIndicator = getNavIndicatorColors(navBase);
+  const cardBg = getAdaptiveContentSurface(primary);
 
   return {
+    cardBg,
+    headingText: getAPCATextColor(cardBg, 20, 700),
+    descriptionText: getAPCATextColor(cardBg, 14, 500),
+    countdownText: getAPCATextColor(cardBg, 14, 500),
     cardBadgeBg: getSecondaryTint(0.4),
     cardBadgeText: getAPCATextColor(getSecondaryTint(0.4), 12, 600),
     cardBadgeDot: primary,

@@ -50,6 +50,17 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   yearlyLabel: 'Hàng năm',
   yearlySavingText: 'Tiết kiệm 17%',
   texts: DEFAULT_PRICING_TEXTS,
+  // Shared header config
+  hideHeader: false,
+  showTitle: true,
+  showSubtitle: true,
+  headerAlign: 'left',
+  titleColorPrimary: false,
+  subtitleAboveTitle: false,
+  uppercaseText: false,
+  showBadge: true,
+  badgeText: '',
+  gridCols: 3,
 };
 
 const isPricingStyle = (value: unknown): value is PricingStyle => (
@@ -109,5 +120,16 @@ export const normalizePricingConfig = (value: unknown): PricingConfig => {
     plans: Array.isArray(raw.plans)
       ? raw.plans.map((plan, index) => normalizePricingPlan(plan, index))
       : DEFAULT_PRICING_CONFIG.plans.map((plan, index) => normalizePricingPlan(plan, index)),
+    // Shared header config
+    hideHeader: typeof raw.hideHeader === 'boolean' ? raw.hideHeader : (DEFAULT_PRICING_CONFIG.hideHeader ?? false),
+    showTitle: typeof raw.showTitle === 'boolean' ? raw.showTitle : (DEFAULT_PRICING_CONFIG.showTitle ?? true),
+    showSubtitle: typeof raw.showSubtitle === 'boolean' ? raw.showSubtitle : (DEFAULT_PRICING_CONFIG.showSubtitle ?? true),
+    headerAlign: raw.headerAlign === 'center' || raw.headerAlign === 'right' ? raw.headerAlign : (DEFAULT_PRICING_CONFIG.headerAlign ?? 'left'),
+    titleColorPrimary: typeof raw.titleColorPrimary === 'boolean' ? raw.titleColorPrimary : (DEFAULT_PRICING_CONFIG.titleColorPrimary ?? false),
+    subtitleAboveTitle: typeof raw.subtitleAboveTitle === 'boolean' ? raw.subtitleAboveTitle : (DEFAULT_PRICING_CONFIG.subtitleAboveTitle ?? false),
+    uppercaseText: typeof raw.uppercaseText === 'boolean' ? raw.uppercaseText : (DEFAULT_PRICING_CONFIG.uppercaseText ?? false),
+    showBadge: typeof raw.showBadge === 'boolean' ? raw.showBadge : (DEFAULT_PRICING_CONFIG.showBadge ?? true),
+    badgeText: typeof raw.badgeText === 'string' ? raw.badgeText : (DEFAULT_PRICING_CONFIG.badgeText ?? ''),
+    gridCols: raw.gridCols === 4 ? 4 : 3,
   };
 };

@@ -4,6 +4,8 @@ import React from 'react';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
+import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
+import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
 import { ProcessForm } from '../../process/_components/ProcessForm';
 import { ProcessPreview } from '../../process/_components/ProcessPreview';
 import {
@@ -45,8 +47,24 @@ export default function ProcessCreatePage() {
   const { primary, secondary, mode } = effectiveColors;
   const fontStyle = { '--font-active': `var(${effectiveFont.fontVariable})` } as React.CSSProperties;
 
+  const headerState = useSectionHeaderState({
+    hideHeader: false,
+    showTitle: true,
+    showSubtitle: true,
+    subtitle: '',
+    headerAlign: 'center',
+    titleColorPrimary: false,
+    subtitleAboveTitle: false,
+    uppercaseText: false,
+    showBadge: true,
+    badgeText: '',
+  });
+
+  const [headerExpanded, setHeaderExpanded] = React.useState(true);
+
   const [steps, setSteps] = React.useState<ProcessFormStep[]>(DEFAULT_CREATE_STEPS);
   const [style, setStyle] = React.useState<ProcessStyle>('horizontal');
+  const [desktopColumns, setDesktopColumns] = React.useState<3 | 4>(4);
 
   const normalizedPreviewSteps = React.useMemo(
     () => normalizeProcessRenderSteps(serializeProcessFormSteps(steps)),
@@ -57,6 +75,17 @@ export default function ProcessCreatePage() {
     void handleSubmit(event, {
       steps: serializeProcessFormSteps(steps),
       style,
+      desktopColumns,
+      hideHeader: headerState.hideHeader,
+      showTitle: headerState.showTitle,
+      subtitle: headerState.subtitle,
+      showSubtitle: headerState.showSubtitle,
+      headerAlign: headerState.headerAlign,
+      titleColorPrimary: headerState.titleColorPrimary,
+      subtitleAboveTitle: headerState.subtitleAboveTitle,
+      uppercaseText: headerState.uppercaseText,
+      showBadge: headerState.showBadge,
+      badgeText: headerState.badgeText,
     });
   };
 
@@ -76,8 +105,39 @@ export default function ProcessCreatePage() {
       customFontState={customFontState}
       showFontCustomBlock={showFontCustomBlock}
       setCustomFontState={setCustomFontState}
+      skipTitleInput={true}
     >
-      <ProcessForm steps={steps} onChange={setSteps} secondary={secondary} />
+      <HeaderConfigSection
+        hideHeader={headerState.hideHeader}
+        title={title}
+        showTitle={headerState.showTitle}
+        subtitle={headerState.subtitle}
+        showSubtitle={headerState.showSubtitle}
+        headerAlign={headerState.headerAlign}
+        titleColorPrimary={headerState.titleColorPrimary}
+        subtitleAboveTitle={headerState.subtitleAboveTitle}
+        uppercaseText={headerState.uppercaseText}
+        showBadge={headerState.showBadge}
+        badgeText={headerState.badgeText}
+        onHideHeaderChange={headerState.setHideHeader}
+        onTitleChange={setTitle}
+        onShowTitleChange={headerState.setShowTitle}
+        onSubtitleChange={headerState.setSubtitle}
+        onShowSubtitleChange={headerState.setShowSubtitle}
+        onHeaderAlignChange={headerState.setHeaderAlign}
+        onTitleColorPrimaryChange={headerState.setTitleColorPrimary}
+        onSubtitleAboveTitleChange={headerState.setSubtitleAboveTitle}
+        onUppercaseTextChange={headerState.setUppercaseText}
+        onShowBadgeChange={headerState.setShowBadge}
+        onBadgeTextChange={headerState.setBadgeText}
+        expanded={headerExpanded}
+        onExpandedChange={setHeaderExpanded}
+        titleRequired={true}
+        titleLabel="Tiêu đề hiển thị"
+        titlePlaceholder="Nhập tiêu đề component..."
+      />
+
+      <ProcessForm steps={steps} onChange={setSteps} secondary={secondary} desktopColumns={desktopColumns} onDesktopColumnsChange={setDesktopColumns} />
 
       <ProcessPreview
         steps={normalizedPreviewSteps}
@@ -86,8 +146,20 @@ export default function ProcessCreatePage() {
         mode={mode as ProcessBrandMode}
         selectedStyle={style}
         onStyleChange={setStyle}
+        title={title}
+        hideHeader={headerState.hideHeader}
+        showTitle={headerState.showTitle}
+        showSubtitle={headerState.showSubtitle}
+        subtitle={headerState.subtitle}
+        headerAlign={headerState.headerAlign}
+        titleColorPrimary={headerState.titleColorPrimary}
+        subtitleAboveTitle={headerState.subtitleAboveTitle}
+        uppercaseText={headerState.uppercaseText}
+        showBadge={headerState.showBadge}
+        badgeText={headerState.badgeText}
         fontStyle={fontStyle}
         fontClassName="font-active"
+        desktopColumns={desktopColumns}
       />
     </ComponentFormWrapper>
   );

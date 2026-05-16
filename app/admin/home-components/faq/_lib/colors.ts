@@ -258,6 +258,7 @@ const FAQ_ACCENT_BALANCE_BY_STYLE: Record<FaqStyle, { primary: number; secondary
   minimal: { primary: 25, secondary: 12, neutral: 63 },
   timeline: { primary: 25, secondary: 13, neutral: 62 },
   tabbed: { primary: 26, secondary: 14, neutral: 60 },
+  'wine-list': { primary: 24, secondary: 14, neutral: 62 },
 };
 
 export const calculateFaqAccentBalance = (style: FaqStyle): FaqAccentBalance => {
@@ -420,6 +421,27 @@ export const getFaqColors = ({
       badgeBorder: '#e2e8f0',
       badgeText: ensureAPCATextColor(secondaryPalette.textInteractive, secondaryPalette.surface, 12, 700),
       panelBorderStrong: secondaryPalette.solid,
+    };
+  }
+
+  if (style === 'wine-list') {
+    return {
+      ...base,
+      sectionBg: '#ffffff',
+      heading: '#9b2c3b',
+      body: ensureAPCATextColor('#5f5f5f', '#faf8f4', 16, 500),
+      questionText: ensureAPCATextColor('#2c2c2c', '#faf8f4', 18, 500),
+      panelTitleText: ensureAPCATextColor('#2c2c2c', '#faf8f4', 18, 500),
+      panelBg: '#faf8f4',
+      panelBgMuted: '#faf8f4',
+      panelBorder: '#efe7dd',
+      panelBorderStrong: '#d8c7b4',
+      chevron: ensureAPCATextColor('#7b7b7b', '#faf8f4', 14, 600),
+      badgeBg: '#ffffff',
+      badgeBorder: '#d8c7b4',
+      badgeText: '#9b2c3b',
+      iconBg: '#faf8f4',
+      iconText: '#7b7b7b',
     };
   }
 

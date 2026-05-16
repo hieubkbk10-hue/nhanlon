@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import {
   Building2,
   Facebook,
@@ -13,11 +14,13 @@ import {
   Youtube,
 } from 'lucide-react';
 import { cn } from '../../../components/ui';
+import { SectionHeader } from '../../_shared/components/SectionHeader';
 import { ContactInquiryForm } from '@/components/contact/ContactInquiryForm';
 import OpenStreetMapDisplay from '@/components/maps/OpenStreetMapDisplay';
 import { sanitizeGoogleMapIframe, type ContactMapData } from '@/lib/contact/getContactMapData';
 import { renderContactIcon } from '../_lib/iconOptions';
 import type { PreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import { isValidUrl, normalizeZaloPhone } from '../_lib/validation';
 import type {
   ContactBrandMode,
   ContactConfigState,
@@ -72,6 +75,22 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
 };
 
 const getSocialIconComponent = (platform: string) => iconMap[platform.toLowerCase()] ?? Globe;
+
+const resolveSocialHref = (social: ContactSocialLink) => {
+  const trimmed = social.url.trim();
+  if (!trimmed) {return '#';}
+
+  if (social.platform.trim().toLowerCase() !== 'zalo') {
+    return trimmed;
+  }
+
+  if (isValidUrl(trimmed)) {
+    return trimmed;
+  }
+
+  const normalizedPhone = normalizeZaloPhone(trimmed);
+  return normalizedPhone ? `https://zalo.me/${normalizedPhone}` : '#';
+};
 
 const SOCIAL_ORIGINAL_COLORS: Record<string, { bg: string; icon: string }> = {
   facebook: { bg: '#1877f2', icon: '#ffffff' },
@@ -180,13 +199,13 @@ const renderMapOrPlaceholder = ({
       <MapPin size={32} />
       <span className="text-xs">Chưa có bản đồ</span>
       {isPreview && (
-        <a
+        <Link
           href="/admin/settings"
           className="text-xs font-medium underline"
           style={{ color: tokens.primary }}
         >
           Cấu hình trong Settings
-        </a>
+        </Link>
       )}
     </div>
   );
@@ -336,7 +355,7 @@ const ContactSocialLinks = ({
         return (
           <a
             key={`${social.id}-${social.platform}-${idx}`}
-            href={social.url || '#'}
+            href={resolveSocialHref(social)}
             target="_blank"
             rel="noopener noreferrer"
             className="w-10 h-10 rounded-full border flex items-center justify-center transition-colors"
@@ -909,7 +928,21 @@ export function ContactSectionShared({
 
   return (
     <section className={getSectionPadding(context, currentDevice)}>
-      <div className={containerClass}>
+      <div className={cn(containerClass, 'space-y-6')}>
+        <SectionHeader
+          title={title}
+          subtitle={config.subtitle}
+          badgeText={config.badgeText}
+          hideHeader={config.hideHeader}
+          showTitle={config.showTitle}
+          showSubtitle={config.showSubtitle}
+          showBadge={config.showBadge}
+          headerAlign={config.headerAlign}
+          titleColorPrimary={config.titleColorPrimary}
+          subtitleAboveTitle={config.subtitleAboveTitle}
+          uppercaseText={config.uppercaseText}
+          brandColor={tokens.primary}
+        />
         {content}
         {mode === 'dual' && (
           <div className="mt-4 text-[11px]" style={{ color: tokens.labelText }}>

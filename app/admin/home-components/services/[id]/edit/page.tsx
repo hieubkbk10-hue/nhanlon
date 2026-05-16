@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { AlertTriangle, Briefcase, Eye, Loader2 } from 'lucide-react';
+import { Briefcase, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -19,13 +21,15 @@ import { ServicesPreview } from '../../_components/ServicesPreview';
 import { DEFAULT_SERVICES_CONFIG } from '../../_lib/constants';
 import { getServicesValidationResult } from '../../_lib/colors';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
-import { normalizeServicesItemsForEditor, toServicesPersistItems } from '../../_lib/items';
-import type { ServiceEditorItem, ServicesStyle } from '../../_types';
+import { getServicesDesktopColumns, getServicesMediaAlign, getServicesMediaPlacement, normalizeServicesItemsForEditor, toServicesPersistItems } from '../../_lib/items';
+import type { ServiceEditorItem, ServiceItemMediaAlign, ServiceItemMediaPlacement, ServicesStyle } from '../../_types';
 
 const getDefaultEditorItems = (): ServiceEditorItem[] => {
   return DEFAULT_SERVICES_CONFIG.items.map((item, index) => ({
     id: 1_000_000 + index,
+    mediaType: item.mediaType ?? 'icon',
     icon: item.icon,
+    image: item.image ?? '',
     title: item.title,
     description: item.description,
   }));
@@ -47,9 +51,25 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
   const [active, setActive] = useState(true);
   const [servicesItems, setServicesItems] = useState<ServiceEditorItem[]>(getDefaultEditorItems);
   const [style, setStyle] = useState<ServicesStyle>('elegantGrid');
+  const [mediaPlacement, setMediaPlacement] = useState<ServiceItemMediaPlacement>(DEFAULT_SERVICES_CONFIG.mediaPlacement ?? 'top');
+  const [mediaAlign, setMediaAlign] = useState<ServiceItemMediaAlign>(DEFAULT_SERVICES_CONFIG.mediaAlign ?? 'center');
+  const [desktopColumns, setDesktopColumns] = useState<3 | 4>(DEFAULT_SERVICES_CONFIG.desktopColumns ?? 3);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState('');
+
+  // Header config state
+  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const [hideHeader, setHideHeader] = useState(DEFAULT_SERVICES_CONFIG.hideHeader ?? false);
+  const [showTitle, setShowTitle] = useState(DEFAULT_SERVICES_CONFIG.showTitle !== false);
+  const [subtitle, setSubtitle] = useState(DEFAULT_SERVICES_CONFIG.subtitle ?? '');
+  const [showSubtitle, setShowSubtitle] = useState(DEFAULT_SERVICES_CONFIG.showSubtitle !== false);
+  const [headerAlign, setHeaderAlign] = useState<ServiceItemMediaAlign>(DEFAULT_SERVICES_CONFIG.headerAlign ?? 'left');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(DEFAULT_SERVICES_CONFIG.titleColorPrimary ?? false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(DEFAULT_SERVICES_CONFIG.subtitleAboveTitle ?? false);
+  const [uppercaseText, setUppercaseText] = useState(DEFAULT_SERVICES_CONFIG.uppercaseText ?? false);
+  const [showBadge, setShowBadge] = useState(DEFAULT_SERVICES_CONFIG.showBadge ?? true);
+  const [badgeText, setBadgeText] = useState(DEFAULT_SERVICES_CONFIG.badgeText ?? '');
 
   useEffect(() => {
     if (!component) {return;}
@@ -58,19 +78,47 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
       return;
     }
 
-    const rawConfig = (component.config ?? {}) as { items?: unknown; style?: ServicesStyle };
+    const rawConfig = (component.config ?? {}) as { items?: unknown; style?: ServicesStyle; showTitle?: unknown; subtitle?: unknown; showSubtitle?: unknown; headerAlign?: unknown; mediaPlacement?: unknown; mediaAlign?: unknown; desktopColumns?: unknown };
     const normalizedItems = normalizeServicesItemsForEditor(rawConfig.items);
-
     setTitle(component.title);
     setActive(component.active);
     setServicesItems(normalizedItems.length > 0 ? normalizedItems : getDefaultEditorItems());
     setStyle(rawConfig.style || DEFAULT_SERVICES_CONFIG.style);
+    setMediaPlacement(getServicesMediaPlacement(rawConfig.mediaPlacement));
+    setMediaAlign(getServicesMediaAlign(rawConfig.mediaAlign));
+    setDesktopColumns(getServicesDesktopColumns(rawConfig.desktopColumns));
+
+    // Load header config
+    const headerConfig = extractSectionHeaderConfig(component.config ?? {});
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitle(headerConfig.showTitle ?? true);
+    setSubtitle(headerConfig.subtitle ?? '');
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setHeaderAlign((headerConfig.headerAlign ?? 'left') as ServiceItemMediaAlign);
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
 
     const snapshot = JSON.stringify({
       title: component.title,
       active: component.active,
       items: toServicesPersistItems(normalizedItems.length > 0 ? normalizedItems : getDefaultEditorItems()),
       style: rawConfig.style || DEFAULT_SERVICES_CONFIG.style,
+      mediaPlacement: getServicesMediaPlacement(rawConfig.mediaPlacement),
+      mediaAlign: getServicesMediaAlign(rawConfig.mediaAlign),
+      desktopColumns: getServicesDesktopColumns(rawConfig.desktopColumns),
+      hideHeader: headerConfig.hideHeader ?? false,
+      showTitle: headerConfig.showTitle ?? true,
+      subtitle: headerConfig.subtitle ?? '',
+      showSubtitle: headerConfig.showSubtitle ?? true,
+      headerAlign: (headerConfig.headerAlign ?? 'left') as ServiceItemMediaAlign,
+      titleColorPrimary: headerConfig.titleColorPrimary ?? false,
+      subtitleAboveTitle: headerConfig.subtitleAboveTitle ?? false,
+      uppercaseText: headerConfig.uppercaseText ?? false,
+      showBadge: headerConfig.showBadge ?? true,
+      badgeText: headerConfig.badgeText ?? '',
       type: component.type,
     });
 
@@ -98,11 +146,24 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
       active,
       items: toServicesPersistItems(servicesItems),
       style,
+      mediaPlacement,
+      mediaAlign,
+      desktopColumns,
+      hideHeader,
+      showTitle,
+      subtitle,
+      showSubtitle,
+      headerAlign,
+      titleColorPrimary,
+      subtitleAboveTitle,
+      uppercaseText,
+      showBadge,
+      badgeText,
       type: component.type,
     });
 
     setHasChanges(snapshot !== initialSnapshot || customChanged || customFontChanged);
-  }, [title, active, servicesItems, style, component, initialSnapshot, customChanged, customFontChanged]);
+  }, [title, active, servicesItems, style, mediaPlacement, mediaAlign, desktopColumns, hideHeader, showTitle, subtitle, showSubtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, component, initialSnapshot, customChanged, customFontChanged]);
 
   const validation = useMemo(() => getServicesValidationResult({
     primary: effectiveColors.primary,
@@ -110,7 +171,7 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
     mode: effectiveColors.mode,
   }), [effectiveColors]);
 
-  const warningMessages = useMemo(() => {
+  const _warningMessages = useMemo(() => {
     const messages: string[] = [];
 
     if (effectiveColors.mode === 'dual' && validation.harmonyStatus.isTooSimilar) {
@@ -135,7 +196,20 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
         active,
         config: {
           items: persistItems,
+          showTitle,
+          subtitle,
+          showSubtitle,
+          headerAlign,
+          desktopColumns,
+          mediaPlacement,
+          mediaAlign,
           style,
+          hideHeader,
+          titleColorPrimary,
+          subtitleAboveTitle,
+          uppercaseText,
+          showBadge,
+          badgeText,
         },
         id: id as Id<'homeComponents'>,
         title,
@@ -166,6 +240,19 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
         active,
         items: persistItems,
         style,
+        mediaPlacement,
+        mediaAlign,
+        desktopColumns,
+        hideHeader,
+        showTitle,
+        subtitle,
+        showSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
         type: component?.type,
       });
       setInitialSnapshot(snapshot);
@@ -214,6 +301,36 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
       </div>
 
       <form onSubmit={handleSubmit}>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={expandedSections.header}
+          onExpandedChange={(value) => setExpandedSections({ header: value })}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -223,48 +340,44 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) => { setTitle(e.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5'
-                )}></div>
+              <Label>Số cột desktop</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[3, 4].map((option) => {
+                  const selected = desktopColumns === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setDesktopColumns(option as 3 | 4)}
+                      className={cn(
+                        'h-9 rounded-md border text-xs transition-colors',
+                        selected
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      )}
+                    >
+                      {option} cột
+                    </button>
+                  );
+                })}
               </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
             </div>
-          </CardContent>
+</CardContent>
         </Card>
 
-        <ServicesForm items={servicesItems} onChange={setServicesItems} brandColor={validation.colors.primary} />
+        <ServicesForm
+          items={servicesItems}
+          onChange={setServicesItems}
+          mediaPlacement={mediaPlacement}
+          mediaAlign={mediaAlign}
+          onMediaPlacementChange={setMediaPlacement}
+          onMediaAlignChange={setMediaAlign}
+          brandColor={validation.colors.primary}
+          defaultExpanded={false}
+          onAiImport={setServicesItems}
+        />
 
-        {warningMessages.length > 0 && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <div className="space-y-2">
-              {warningMessages.map((message, idx) => (
-                <div key={`${idx}-${message}`} className="flex items-start gap-2">
-                  {message.includes('deltaE') ? <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" /> : <Eye size={14} className="mt-0.5 flex-shrink-0" />}
-                  <p>{message}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
@@ -277,24 +390,24 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
                 primary={customState.primary}
                 secondary={customState.secondary}
                 onEnabledChange={(next) => setCustomState((prev) => ({ ...prev, enabled: next }))}
-              onModeChange={(next) => setCustomState((prev) => {
-                if (next === 'single') {
-                  return { ...prev, mode: next, secondary: prev.primary };
-                }
-                if (prev.mode === 'single') {
-                  return { ...prev, mode: next, secondary: getSuggestedSecondary(prev.primary) };
-                }
-                return { ...prev, mode: next };
-              })}
-              onPrimaryChange={(value) => setCustomState((prev) => ({
-                ...prev,
-                primary: value,
-                secondary: prev.mode === 'single' ? value : prev.secondary,
-              }))}
-              onSecondaryChange={(value) => setCustomState((prev) => ({
-                ...prev,
-                secondary: prev.mode === 'single' ? prev.primary : value,
-              }))}
+                onModeChange={(next) => setCustomState((prev) => {
+                  if (next === 'single') {
+                    return { ...prev, mode: next, secondary: prev.primary };
+                  }
+                  if (prev.mode === 'single') {
+                    return { ...prev, mode: next, secondary: getSuggestedSecondary(prev.primary) };
+                  }
+                  return { ...prev, mode: next };
+                })}
+                onPrimaryChange={(value) => setCustomState((prev) => ({
+                  ...prev,
+                  primary: value,
+                  secondary: prev.mode === 'single' ? value : prev.secondary,
+                }))}
+                onSecondaryChange={(value) => setCustomState((prev) => ({
+                  ...prev,
+                  secondary: prev.mode === 'single' ? prev.primary : value,
+                }))}
               />
             )}
             {showFontCustomBlock && (
@@ -311,6 +424,19 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
             )}
             <ServicesPreview
               items={toServicesPersistItems(servicesItems)}
+              mediaPlacement={mediaPlacement}
+              mediaAlign={mediaAlign}
+              headerAlign={headerAlign}
+              desktopColumns={desktopColumns}
+              subtitle={subtitle}
+              showTitle={showTitle}
+              showSubtitle={showSubtitle}
+              showBadge={showBadge}
+              badgeText={badgeText}
+              hideHeader={hideHeader}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
               brandColor={validation.colors.primary}
               secondary={validation.colors.secondary}
               mode={effectiveColors.mode}
@@ -328,6 +454,8 @@ export default function ServicesEditPage({ params }: { params: Promise<{ id: str
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

@@ -5,6 +5,7 @@ import { Image as ImageIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui';
 import { MultiImageUploader } from '../../../components/MultiImageUploader';
 import type { GalleryItem } from '../_types';
+import { AiTrustBadgesImport } from './AiTrustBadgesImport';
 
 export const GalleryForm = ({
   galleryItems,
@@ -13,6 +14,7 @@ export const GalleryForm = ({
   style,
   headerPrimary: _headerPrimary,
   headerSecondary: _headerSecondary,
+  onAiImport,
 }: {
   galleryItems: GalleryItem[];
   setGalleryItems: (items: GalleryItem[]) => void;
@@ -20,6 +22,7 @@ export const GalleryForm = ({
   style?: string;
   headerPrimary?: string;
   headerSecondary?: string;
+  onAiImport?: (items: GalleryItem[]) => void;
 }) => {
   const folders: Record<'Gallery' | 'Partners' | 'TrustBadges', string> = {
     Gallery: 'gallery',
@@ -31,8 +34,11 @@ export const GalleryForm = ({
     <>
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-base">
-            {componentType === 'Partners' ? 'Logo đối tác' : (componentType === 'TrustBadges' ? 'Chứng nhận' : 'Thư viện ảnh')}
+          <CardTitle className="text-base flex items-center justify-between gap-3">
+            <span>{componentType === 'Partners' ? 'Logo đối tác' : (componentType === 'TrustBadges' ? 'Chứng nhận' : 'Thư viện ảnh')}</span>
+            {componentType === 'TrustBadges' && onAiImport ? (
+              <AiTrustBadgesImport onApply={onAiImport} />
+            ) : null}
           </CardTitle>
         </CardHeader>
         <CardContent>

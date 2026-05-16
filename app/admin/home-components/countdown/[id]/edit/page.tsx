@@ -165,18 +165,6 @@ export default function EditCountdownPage() {
                 placeholder="Nhập tiêu đề component..."
               />
             </div>
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <button
-                type="button"
-                className={`inline-flex h-5 w-10 rounded-full p-0.5 transition-colors ${active ? 'bg-green-500' : 'bg-slate-300'}`}
-                onClick={() => { setActive((prev) => !prev); }}
-                aria-label="Toggle active"
-              >
-                <span className={`h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
           </CardContent>
         </Card>
 
@@ -254,6 +242,8 @@ export default function EditCountdownPage() {
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

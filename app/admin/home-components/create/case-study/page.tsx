@@ -15,6 +15,7 @@ import type {
 } from '../../case-study/_types';
 import { CaseStudyPreview } from '../../case-study/_components/CaseStudyPreview';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
+import { AiDemoCaseStudyImport } from '../../product-list/_components/AiDemoProductsImport';
 
 interface Project {
   id: string | number;
@@ -115,15 +116,18 @@ export default function CaseStudyCreatePage() {
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Dự án tiêu biểu</CardTitle>
-          <Button 
-            type="button" 
-            variant="outline" 
-            size="sm" 
-            onClick={handleAddProject} 
-            className="gap-2"
-          >
-            <Plus size={14} /> Thêm dự án
-          </Button>
+          <div className="flex items-center gap-2">
+            <AiDemoCaseStudyImport onApply={(items) => setProjects(items as Project[])} />
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={handleAddProject} 
+              className="gap-2"
+            >
+              <Plus size={14} /> Thêm dự án
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {projects.map((project, idx) => (

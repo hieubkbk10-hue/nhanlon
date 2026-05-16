@@ -9,12 +9,12 @@ import type {
 export const DEFAULT_BENEFITS_HARMONY: BenefitsHarmony = 'analogous';
 
 export const BENEFITS_STYLES: BenefitsStyleOption[] = [
-  { id: 'cards', label: 'Cards' },
-  { id: 'list', label: 'List' },
-  { id: 'bento', label: 'Bento' },
-  { id: 'row', label: 'Row' },
-  { id: 'carousel', label: 'Carousel' },
-  { id: 'timeline', label: 'Timeline' },
+  { id: '1', label: 'Layout 1' },
+  { id: '2', label: 'Layout 2' },
+  { id: '3', label: 'Layout 3' },
+  { id: '4', label: 'Layout 4' },
+  { id: '5', label: 'Layout 5' },
+  { id: '6', label: 'Layout 6' },
 ];
 
 export const BENEFITS_HARMONY_OPTIONS: Array<{ value: BenefitsHarmony; label: string }> = [
@@ -34,17 +34,13 @@ export const BENEFITS_GRID_COLUMNS_DESKTOP: Array<{ value: 3 | 4; label: string 
   { value: 4, label: '4 cột' },
 ];
 
-export const BENEFITS_GRID_COLUMNS_MOBILE: Array<{ value: 1 | 2; label: string }> = [
-  { value: 1, label: '1 cột' },
-  { value: 2, label: '2 cột' },
-];
-
 export const DEFAULT_BENEFITS_CONFIG: BenefitsConfig = {
   buttonLink: '',
   buttonText: '',
   gridColumnsDesktop: 4,
   gridColumnsMobile: 2,
   headerAlign: 'left',
+  highlightIndex: 2,
   harmony: DEFAULT_BENEFITS_HARMONY,
   heading: 'Giá trị cốt lõi',
   items: [
@@ -54,8 +50,21 @@ export const DEFAULT_BENEFITS_CONFIG: BenefitsConfig = {
       title: '',
     },
   ],
-  style: 'cards',
+  showDecorativeVisuals: true,
+  showItemNumbers: true,
+  style: '1',
   subHeading: 'Vì sao chọn chúng tôi?',
+  visualImage: '',
+  // Shared header config
+  hideHeader: false,
+  showTitle: true,
+  showSubtitle: true,
+  subtitle: '',
+  titleColorPrimary: false,
+  subtitleAboveTitle: false,
+  uppercaseText: false,
+  showBadge: true,
+  badgeText: '',
 };
 
 export const DEFAULT_BENEFITS_EDITOR_STATE: BenefitsEditorState = {
@@ -64,6 +73,7 @@ export const DEFAULT_BENEFITS_EDITOR_STATE: BenefitsEditorState = {
   gridColumnsDesktop: DEFAULT_BENEFITS_CONFIG.gridColumnsDesktop ?? 4,
   gridColumnsMobile: DEFAULT_BENEFITS_CONFIG.gridColumnsMobile ?? 2,
   headerAlign: DEFAULT_BENEFITS_CONFIG.headerAlign ?? 'left',
+  highlightIndex: DEFAULT_BENEFITS_CONFIG.highlightIndex ?? 2,
   harmony: DEFAULT_BENEFITS_HARMONY,
   heading: DEFAULT_BENEFITS_CONFIG.heading ?? '',
   items: [
@@ -74,6 +84,19 @@ export const DEFAULT_BENEFITS_EDITOR_STATE: BenefitsEditorState = {
       title: '',
     },
   ],
+  showDecorativeVisuals: DEFAULT_BENEFITS_CONFIG.showDecorativeVisuals ?? true,
+  showItemNumbers: DEFAULT_BENEFITS_CONFIG.showItemNumbers ?? true,
   style: DEFAULT_BENEFITS_CONFIG.style,
   subHeading: DEFAULT_BENEFITS_CONFIG.subHeading ?? '',
+  visualImage: DEFAULT_BENEFITS_CONFIG.visualImage ?? '',
+  // Shared header config
+  hideHeader: DEFAULT_BENEFITS_CONFIG.hideHeader ?? false,
+  showTitle: DEFAULT_BENEFITS_CONFIG.showTitle ?? true,
+  showSubtitle: DEFAULT_BENEFITS_CONFIG.showSubtitle ?? true,
+  subtitle: DEFAULT_BENEFITS_CONFIG.subtitle ?? '',
+  titleColorPrimary: DEFAULT_BENEFITS_CONFIG.titleColorPrimary ?? false,
+  subtitleAboveTitle: DEFAULT_BENEFITS_CONFIG.subtitleAboveTitle ?? false,
+  uppercaseText: DEFAULT_BENEFITS_CONFIG.uppercaseText ?? false,
+  showBadge: DEFAULT_BENEFITS_CONFIG.showBadge ?? true,
+  badgeText: DEFAULT_BENEFITS_CONFIG.badgeText ?? '',
 };

@@ -6,20 +6,26 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Package, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { ProductCategoriesForm } from '../../_components/ProductCategoriesForm';
 import { ProductCategoriesPreview } from '../../_components/ProductCategoriesPreview';
+import { sanitizeDemoCategories } from '../../_lib/imageSrc';
+import { useProductCategoriesAutoGenerate } from '../../_lib/useProductCategoriesAutoGenerate';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import type {
   CategoryConfigItem,
+  DemoProductCategoryItem,
+  ProductCategoriesAlign,
   ProductCategoriesBrandMode,
+  ProductCategoriesSelectionMode,
   ProductCategoriesStyle,
 } from '../../_types';
 
@@ -36,6 +42,11 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
   const component = useQuery(api.homeComponents.getById, { id: id as Id<"homeComponents"> });
   const updateMutation = useMutation(api.homeComponents.update);
   const productCategoriesData = useQuery(api.productCategories.listActive);
+  const {
+    isAutoGenerateLoading,
+    isAutoGenerateReady,
+    generateFromRealData,
+  } = useProductCategoriesAutoGenerate();
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
@@ -47,15 +58,36 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     categories: CategoryConfigItem[];
     style: ProductCategoriesStyle;
     showProductCount: boolean;
-    columnsDesktop: number;
-    columnsMobile: number;
+    subheading: string;
+    align: ProductCategoriesAlign;
+    hideHeader: boolean;
+    showTitle: boolean;
+    showSubtitle: boolean;
+    titleColorPrimary: boolean;
+    subtitleAboveTitle: boolean;
+    uppercaseText: boolean;
+    showBadge: boolean;
+    badgeText: string;
+    selectionMode: ProductCategoriesSelectionMode;
+    demoCategories: DemoProductCategoryItem[];
   } | null>(null);
 
   const [productCategoriesItems, setProductCategoriesItems] = useState<CategoryConfigItem[]>([]);
   const [productCategoriesStyle, setProductCategoriesStyle] = useState<ProductCategoriesStyle>('grid');
   const [productCategoriesShowCount, setProductCategoriesShowCount] = useState(true);
-  const [productCategoriesColsDesktop, setProductCategoriesColsDesktop] = useState(4);
-  const [productCategoriesColsMobile, setProductCategoriesColsMobile] = useState(2);
+  const [productCategoriesSubheading, setProductCategoriesSubheading] = useState('');
+  const [productCategoriesAlign, setProductCategoriesAlign] = useState<ProductCategoriesAlign>('center');
+  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+  const [selectionMode, setSelectionMode] = useState<ProductCategoriesSelectionMode>('real');
+  const [demoCategories, setDemoCategories] = useState<DemoProductCategoryItem[]>([]);
 
   useEffect(() => {
     if (component) {
@@ -76,22 +108,49 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       })) ?? [];
       const style = (config.style as ProductCategoriesStyle) || 'grid';
       const showProductCount = config.showProductCount ?? true;
-      const columnsDesktop = config.columnsDesktop ?? 4;
-      const columnsMobile = config.columnsMobile ?? 2;
+      const headerConfig = extractSectionHeaderConfig({
+        ...config,
+        subtitle: typeof config.subtitle === 'string' ? config.subtitle : typeof config.subheading === 'string' ? config.subheading : '',
+        headerAlign: config.headerAlign ?? config.align,
+      });
+      const subheading = headerConfig.subtitle ?? '';
+      const align = (headerConfig.headerAlign as ProductCategoriesAlign) ?? 'center';
+      const loadedSelectionMode = (config.selectionMode as ProductCategoriesSelectionMode) || 'real';
+      const loadedDemoCategories = Array.isArray(config.demoCategories) ? sanitizeDemoCategories(config.demoCategories as DemoProductCategoryItem[]) : [];
 
       setProductCategoriesItems(categories);
       setProductCategoriesStyle(style);
       setProductCategoriesShowCount(showProductCount);
-      setProductCategoriesColsDesktop(columnsDesktop);
-      setProductCategoriesColsMobile(columnsMobile);
+      setProductCategoriesSubheading(subheading);
+      setProductCategoriesAlign(align);
+      setHideHeader(headerConfig.hideHeader ?? false);
+      setShowTitle(headerConfig.showTitle ?? true);
+      setShowSubtitle(headerConfig.showSubtitle ?? true);
+      setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+      setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+      setUppercaseText(headerConfig.uppercaseText ?? false);
+      setShowBadge(headerConfig.showBadge ?? true);
+      setBadgeText(headerConfig.badgeText ?? '');
+      setSelectionMode(loadedSelectionMode);
+      setDemoCategories(loadedDemoCategories);
       setInitialData({
         title: component.title,
         active: component.active,
         categories,
         style,
         showProductCount,
-        columnsDesktop,
-        columnsMobile,
+        subheading,
+        align,
+        hideHeader: headerConfig.hideHeader ?? false,
+        showTitle: headerConfig.showTitle ?? true,
+        showSubtitle: headerConfig.showSubtitle ?? true,
+        titleColorPrimary: headerConfig.titleColorPrimary ?? false,
+        subtitleAboveTitle: headerConfig.subtitleAboveTitle ?? false,
+        uppercaseText: headerConfig.uppercaseText ?? false,
+        showBadge: headerConfig.showBadge ?? true,
+        badgeText: headerConfig.badgeText ?? '',
+        selectionMode: loadedSelectionMode,
+        demoCategories: loadedDemoCategories,
       });
       setHasChanges(false);
     }
@@ -118,8 +177,18 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       || currentCategories !== initialCategories
       || productCategoriesStyle !== initialData.style
       || productCategoriesShowCount !== initialData.showProductCount
-      || productCategoriesColsDesktop !== initialData.columnsDesktop
-      || productCategoriesColsMobile !== initialData.columnsMobile
+      || productCategoriesSubheading !== initialData.subheading
+      || productCategoriesAlign !== initialData.align
+      || hideHeader !== initialData.hideHeader
+      || showTitle !== initialData.showTitle
+      || showSubtitle !== initialData.showSubtitle
+      || titleColorPrimary !== initialData.titleColorPrimary
+      || subtitleAboveTitle !== initialData.subtitleAboveTitle
+      || uppercaseText !== initialData.uppercaseText
+      || showBadge !== initialData.showBadge
+      || badgeText !== initialData.badgeText
+      || selectionMode !== initialData.selectionMode
+      || JSON.stringify(demoCategories) !== JSON.stringify(initialData.demoCategories)
       || customChanged
       || customFontChanged;
 
@@ -130,8 +199,18 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     productCategoriesItems,
     productCategoriesStyle,
     productCategoriesShowCount,
-    productCategoriesColsDesktop,
-    productCategoriesColsMobile,
+    productCategoriesSubheading,
+    productCategoriesAlign,
+    hideHeader,
+    showTitle,
+    showSubtitle,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
+    selectionMode,
+    demoCategories,
     initialData,
     customState,
     initialCustom,
@@ -147,18 +226,34 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
 
     setIsSubmitting(true);
     try {
+      const sanitizedDemoCategories = sanitizeDemoCategories(demoCategories);
+      const sanitizedSubtitle = productCategoriesSubheading.trim();
+      const sanitizedBadgeText = badgeText.trim();
+
       await updateMutation({
         active,
         config: {
-          categories: productCategoriesItems.map(c => ({
+          selectionMode,
+          categories: selectionMode === 'real' ? productCategoriesItems.map(c => ({
             categoryId: c.categoryId,
             customImage: c.customImage || undefined,
             imageMode: c.imageMode ?? 'default',
-          })),
-          columnsDesktop: productCategoriesColsDesktop,
-          columnsMobile: productCategoriesColsMobile,
+          })) : [],
+          demoCategories: selectionMode === 'demo' ? sanitizedDemoCategories : [],
           showProductCount: productCategoriesShowCount,
           style: productCategoriesStyle,
+          hideHeader,
+          showTitle,
+          subtitle: sanitizedSubtitle,
+          showSubtitle,
+          headerAlign: productCategoriesAlign,
+          titleColorPrimary,
+          subtitleAboveTitle,
+          uppercaseText,
+          showBadge,
+          badgeText: sanitizedBadgeText,
+          subheading: sanitizedSubtitle,
+          align: productCategoriesAlign,
         },
         id: id as Id<"homeComponents">,
         title,
@@ -187,9 +282,22 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
         categories: productCategoriesItems,
         style: productCategoriesStyle,
         showProductCount: productCategoriesShowCount,
-        columnsDesktop: productCategoriesColsDesktop,
-        columnsMobile: productCategoriesColsMobile,
+        subheading: sanitizedSubtitle,
+        align: productCategoriesAlign,
+        hideHeader,
+        showTitle,
+        showSubtitle,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText: sanitizedBadgeText,
+        selectionMode,
+        demoCategories: sanitizedDemoCategories,
       });
+      setDemoCategories(sanitizedDemoCategories);
+      setProductCategoriesSubheading(sanitizedSubtitle);
+      setBadgeText(sanitizedBadgeText);
       if (showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
@@ -210,6 +318,13 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       console.error(error);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAutoGenerate = () => {
+    const result = generateFromRealData();
+    if (result.status === 'success') {
+      setProductCategoriesItems(result.items);
     }
   };
 
@@ -235,54 +350,51 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package size={20} />
-              Danh mục sản phẩm
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input 
-                value={title} 
-                onChange={(e) =>{  setTitle(e.target.value); }} 
-                required 
-                placeholder="Nhập tiêu đề component..." 
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div 
-                className={cn(
-                  "cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors",
-                  active ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600"
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  "w-5 h-5 bg-white rounded-full transition-transform shadow",
-                  active ? "translate-x-2.5" : "-translate-x-2.5"
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={productCategoriesSubheading}
+          showSubtitle={showSubtitle}
+          headerAlign={productCategoriesAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setProductCategoriesSubheading}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setProductCategoriesAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={expandedSections.header}
+          onExpandedChange={(value) => setExpandedSections({ header: value })}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
 
         <ProductCategoriesForm
           productCategoriesItems={productCategoriesItems}
           setProductCategoriesItems={setProductCategoriesItems}
-          productCategoriesColsDesktop={productCategoriesColsDesktop}
-          setProductCategoriesColsDesktop={setProductCategoriesColsDesktop}
-          productCategoriesColsMobile={productCategoriesColsMobile}
-          setProductCategoriesColsMobile={setProductCategoriesColsMobile}
           productCategoriesShowCount={productCategoriesShowCount}
           setProductCategoriesShowCount={setProductCategoriesShowCount}
+          onAutoGenerate={handleAutoGenerate}
+          autoGenerateReady={isAutoGenerateReady}
+          autoGenerateLoading={isAutoGenerateLoading}
           productCategoriesData={productCategoriesData ?? []}
           brandColor={effectiveColors.primary}
+          selectionMode={selectionMode}
+          onSelectionModeChange={setSelectionMode}
+          demoCategories={demoCategories}
+          setDemoCategories={setDemoCategories}
+          defaultExpanded={false}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
@@ -328,11 +440,22 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
             <ProductCategoriesPreview
               config={{
               categories: productCategoriesItems,
-              columnsDesktop: productCategoriesColsDesktop,
-              columnsMobile: productCategoriesColsMobile,
               showProductCount: productCategoriesShowCount,
               style: productCategoriesStyle,
+              hideHeader,
+              showTitle,
+              subtitle: productCategoriesSubheading,
+              showSubtitle,
+              headerAlign: productCategoriesAlign,
+              titleColorPrimary,
+              subtitleAboveTitle,
+              uppercaseText,
+              showBadge,
+              badgeText,
+              subheading: productCategoriesSubheading,
+              align: productCategoriesAlign,
               }}
+            title={title}
               brandColor={effectiveColors.primary}
               secondary={effectiveColors.secondary}
               mode={brandMode}
@@ -341,6 +464,8 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
               categoriesData={productCategoriesData ?? []}
               fontStyle={fontStyle}
               fontClassName="font-active"
+              selectionMode={selectionMode}
+              demoCategories={demoCategories}
             />
           </div>
         </div>
@@ -350,6 +475,8 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
           hasChanges={hasChanges}
           onCancel={() =>{  router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

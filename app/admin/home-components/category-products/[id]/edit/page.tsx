@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Package, Loader2, AlertTriangle, Eye } from 'lucide-react';
+import { Package, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -16,7 +16,7 @@ import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOver
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { CategoryProductsForm } from '../../_components/CategoryProductsForm';
 import { CategoryProductsPreview } from '../../_components/CategoryProductsPreview';
-import { DEFAULT_CATEGORY_PRODUCTS_CONFIG } from '../../_lib/constants';
+import { DEFAULT_CATEGORY_PRODUCTS_CONFIG, DEFAULT_DEMO_CATEGORY_PRODUCTS_SECTIONS } from '../../_lib/constants';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import {
   getCategoryProductsValidationResult,
@@ -25,7 +25,9 @@ import {
 import type {
   CategoryProductsBrandMode,
   CategoryProductsSection,
+  CategoryProductsSelectionMode,
   CategoryProductsStyle,
+  DemoCategoryProductsSection,
 } from '../../_types';
 
 const COMPONENT_TYPE = 'CategoryProducts';
@@ -46,6 +48,8 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
   const [sections, setSections] = useState<CategoryProductsSection[]>([]);
+  const [selectionMode, setSelectionMode] = useState<CategoryProductsSelectionMode>('real');
+  const [demoSections, setDemoSections] = useState<DemoCategoryProductsSection[]>(DEFAULT_DEMO_CATEGORY_PRODUCTS_SECTIONS);
   const [style, setStyle] = useState<CategoryProductsStyle>('grid');
   const [showViewAll, setShowViewAll] = useState(true);
   const [columnsDesktop, setColumnsDesktop] = useState(4);
@@ -53,7 +57,6 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
-  const [warningMessages, setWarningMessages] = useState<string[]>([]);
 
   useEffect(() => {
     if (component) {
@@ -75,8 +78,12 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
       const loadedShowViewAll = config.showViewAll ?? true;
       const loadedColumnsDesktop = config.columnsDesktop ?? 4;
       const loadedColumnsMobile = config.columnsMobile ?? 2;
+      const loadedSelectionMode = (config.selectionMode as CategoryProductsSelectionMode | undefined) ?? 'real';
+      const loadedDemoSections = (config.demoSections as DemoCategoryProductsSection[] | undefined) ?? DEFAULT_DEMO_CATEGORY_PRODUCTS_SECTIONS;
 
       setSections(loadedSections);
+      setSelectionMode(loadedSelectionMode);
+      setDemoSections(loadedDemoSections);
       setStyle(loadedStyle);
       setShowViewAll(loadedShowViewAll);
       setColumnsDesktop(loadedColumnsDesktop);
@@ -85,7 +92,9 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
       setInitialSnapshot(JSON.stringify({
         title: component.title,
         active: component.active,
+        demoSections: loadedDemoSections,
         sections: loadedSections,
+        selectionMode: loadedSelectionMode,
         style: loadedStyle,
         showViewAll: loadedShowViewAll,
         columnsDesktop: loadedColumnsDesktop,
@@ -102,7 +111,9 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
     const snapshot = JSON.stringify({
       title,
       active,
+      demoSections,
       sections,
+      selectionMode,
       style,
       showViewAll,
       columnsDesktop,
@@ -124,7 +135,9 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
   }, [
     title,
     active,
+    demoSections,
     sections,
+    selectionMode,
     style,
     showViewAll,
     columnsDesktop,
@@ -139,30 +152,15 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
     showFontCustomBlock,
   ]);
 
-  const buildWarningMessages = (validation: ReturnType<typeof getCategoryProductsValidationResult>) => {
-    const messages: string[] = [];
-
-    if (brandMode === 'dual' && validation.harmonyStatus.isTooSimilar) {
-      messages.push(`Màu phụ đang khá gần màu chính (deltaE = ${validation.harmonyStatus.deltaE}). Nên tăng độ tách biệt.`);
-    }
-
-    if (validation.accessibility.failing.length > 0) {
-      messages.push(`Một số cặp màu chữ/nền chưa đủ tương phản (minLc = ${validation.accessibility.minLc.toFixed(1)}).`);
-    }
-
-    return messages;
-  };
-
   useEffect(() => {
     if (!component || component.type !== 'CategoryProducts') {return;}
     const harmony = normalizeCategoryProductsHarmony((component.config as { harmony?: string } | undefined)?.harmony);
-    const validation = getCategoryProductsValidationResult({
+    getCategoryProductsValidationResult({
       primary: effectiveColors.primary,
       secondary: effectiveColors.secondary,
       mode: brandMode,
       harmony,
     });
-    setWarningMessages(buildWarningMessages(validation));
   }, [component, effectiveColors.primary, effectiveColors.secondary, brandMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,14 +168,12 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
     if (isSubmitting || !hasChanges) {return;}
 
     const harmony = normalizeCategoryProductsHarmony((component?.config as { harmony?: string } | undefined)?.harmony);
-    const validation = getCategoryProductsValidationResult({
+    getCategoryProductsValidationResult({
       primary: effectiveColors.primary,
       secondary: effectiveColors.secondary,
       mode: brandMode,
       harmony,
     });
-
-    setWarningMessages(buildWarningMessages(validation));
     setIsSubmitting(true);
     try {
       await updateMutation({
@@ -185,7 +181,9 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
         config: {
           columnsDesktop,
           columnsMobile,
+          demoSections: selectionMode === 'demo' ? demoSections : undefined,
           sections: sections.map(s => ({ categoryId: s.categoryId, itemCount: s.itemCount })),
+          selectionMode,
           showViewAll,
           style,
         },
@@ -223,7 +221,9 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
       setInitialSnapshot(JSON.stringify({
         title,
         active,
+        demoSections,
         sections,
+        selectionMode,
         style,
         showViewAll,
         columnsDesktop,
@@ -278,24 +278,7 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
                 placeholder="Nhập tiêu đề component..."
               />
             </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5'
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
+</CardContent>
         </Card>
 
         <CategoryProductsForm
@@ -308,20 +291,11 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
           showViewAll={showViewAll}
           setShowViewAll={setShowViewAll}
           categoriesData={categoriesData ?? []}
+          selectionMode={selectionMode}
+          setSelectionMode={setSelectionMode}
+          demoSections={demoSections}
+          setDemoSections={setDemoSections}
         />
-
-        {warningMessages.length > 0 && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <div className="space-y-2">
-              {warningMessages.map((message, idx) => (
-                <div key={idx} className="flex items-start gap-2">
-                  {message.includes('deltaE') ? <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" /> : <Eye size={14} className="mt-0.5 flex-shrink-0" />}
-                  <p>{message}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
@@ -373,7 +347,9 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
               config={{
               columnsDesktop,
               columnsMobile,
+              demoSections,
               sections,
+              selectionMode,
               showViewAll,
               style,
               }}
@@ -395,6 +371,8 @@ export default function CategoryProductsEditPage({ params }: { params: Promise<{
           hasChanges={hasChanges}
           onCancel={() =>{  router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

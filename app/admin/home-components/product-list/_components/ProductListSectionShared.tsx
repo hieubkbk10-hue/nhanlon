@@ -2,10 +2,12 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { ArrowRight, ChevronLeft, ChevronRight, Package } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import { PreviewImage } from '../../_shared/components/PreviewImage';
+import { getPreviewAwareClass } from '../../_shared/lib/previewResponsive';
+import { ProductImageFrameOverlay, useProductFrameConfig } from '@/components/shared/ProductImageFrameBox';
 import { withAlpha, type ProductListColorTokens } from '../_lib/colors';
 import type { ProductListPreviewItem, ProductListStyle } from '../_types';
 
@@ -93,24 +95,32 @@ const ProductImage = ({
   className: string;
   sizes: string;
 }) => {
+  const { frame } = useProductFrameConfig();
+
   if (context === 'site') {
     return (
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        sizes={sizes}
-        className={className}
-      />
+      <>
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes={sizes}
+          className={className}
+        />
+        <ProductImageFrameOverlay frame={frame} />
+      </>
     );
   }
 
   return (
-    <PreviewImage
-      src={src}
-      alt={alt}
-      className={className}
-    />
+    <>
+      <PreviewImage
+        src={src}
+        alt={alt}
+        className={className}
+      />
+      <ProductImageFrameOverlay frame={frame} />
+    </>
   );
 };
 
@@ -131,6 +141,106 @@ export function ProductListSectionShared({
   const isPreview = context === 'preview';
   const isMobilePreview = isPreview && device === 'mobile';
   const isTabletPreview = isPreview && device === 'tablet';
+  const headerLayoutClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'flex flex-col gap-4',
+      tablet: 'flex flex-row items-end justify-between gap-4',
+      desktop: 'flex flex-row items-end justify-between gap-4',
+    },
+    site: 'flex flex-col gap-4 md:flex-row md:items-end md:justify-between',
+  });
+  const headerTitleWrapClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'space-y-1',
+      tablet: 'space-y-2',
+      desktop: 'space-y-2',
+    },
+    site: 'space-y-1 md:space-y-2',
+  });
+  const mobileOnlyActionClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'p-0 h-auto font-semibold mb-1 gap-1 flex items-center',
+      tablet: 'hidden',
+      desktop: 'hidden',
+    },
+    site: 'md:hidden p-0 h-auto font-semibold mb-1 gap-1 flex items-center',
+  });
+  const desktopOnlyActionClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'hidden',
+      tablet: 'flex gap-2 pl-6 border-l transition-colors items-center',
+      desktop: 'flex gap-2 pl-6 border-l transition-colors items-center',
+    },
+    site: 'hidden md:flex gap-2 pl-6 border-l transition-colors items-center',
+  });
+  const headerRowClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'flex items-end justify-between w-full',
+      tablet: 'flex items-end justify-between w-auto',
+      desktop: 'flex items-end justify-between w-auto',
+    },
+    site: 'flex items-end justify-between w-full md:w-auto',
+  });
+  const subtitleRowClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'flex items-center gap-2 font-bold text-xs uppercase tracking-widest',
+      tablet: 'flex items-center gap-2 font-bold text-sm uppercase tracking-widest',
+      desktop: 'flex items-center gap-2 font-bold text-sm uppercase tracking-widest',
+    },
+    site: 'flex items-center gap-2 font-bold text-xs md:text-sm uppercase tracking-widest',
+  });
+  const subtitleLineClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'w-6 h-[2px]',
+      tablet: 'w-8 h-[2px]',
+      desktop: 'w-8 h-[2px]',
+    },
+    site: 'w-6 h-[2px] md:w-8',
+  });
+  const headingClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'font-bold tracking-tight leading-tight text-balance text-2xl',
+      tablet: 'font-bold tracking-tight leading-tight text-balance text-4xl',
+      desktop: 'font-bold tracking-tight leading-tight text-balance text-4xl',
+    },
+    site: 'font-bold tracking-tight leading-tight text-balance text-2xl md:text-4xl',
+  });
+  const commerceGridClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'grid gap-4 grid-cols-1',
+      tablet: 'grid gap-6 grid-cols-2',
+      desktop: 'grid gap-6 grid-cols-4',
+    },
+    site: 'grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6',
+  });
+  const showcasePreviewDesktopClassName = getPreviewAwareClass({
+    isPreview,
+    device,
+    preview: {
+      mobile: 'grid gap-4 grid-cols-1',
+      tablet: 'grid gap-4 grid-cols-2',
+      desktop: 'grid gap-4 grid-cols-3',
+    },
+    site: 'grid gap-4 hidden md:grid grid-cols-3',
+  });
 
   const sectionPadding = isPreview
     ? cn('py-8 md:py-10', isMobilePreview ? 'px-3' : 'px-4 md:px-6')
@@ -140,7 +250,7 @@ export function ProductListSectionShared({
     context === 'site' ? (
       <Link
         href={viewAllHref}
-        className="md:hidden p-0 h-auto font-semibold mb-1 gap-1 flex items-center"
+        className={mobileOnlyActionClassName}
         style={{ color: tokens.ctaSecondaryText }}
       >
         Xem tất cả <ArrowRight size={16} />
@@ -148,7 +258,7 @@ export function ProductListSectionShared({
     ) : (
       <button
         type="button"
-        className="md:hidden p-0 h-auto font-semibold mb-1 gap-1 flex items-center"
+        className={mobileOnlyActionClassName}
         style={{ color: tokens.ctaSecondaryText }}
       >
         Xem tất cả <ArrowRight size={16} />
@@ -160,7 +270,7 @@ export function ProductListSectionShared({
     context === 'site' ? (
       <Link
         href={viewAllHref}
-        className="hidden md:flex gap-2 pl-6 border-l transition-colors items-center"
+        className={desktopOnlyActionClassName}
         style={{ color: tokens.ctaSecondaryText, borderColor: tokens.neutralBorder }}
       >
         Xem tất cả <ArrowRight size={16} />
@@ -168,7 +278,7 @@ export function ProductListSectionShared({
     ) : (
       <button
         type="button"
-        className="hidden md:flex gap-2 pl-6 border-l transition-colors items-center"
+        className={desktopOnlyActionClassName}
         style={{ color: tokens.ctaSecondaryText, borderColor: tokens.neutralBorder }}
       >
         Xem tất cả <ArrowRight size={16} />
@@ -177,15 +287,15 @@ export function ProductListSectionShared({
   ) : null;
 
   const renderHeader = (bottomClass = 'mb-6 md:mb-10') => (
-    <div className={cn('flex flex-col gap-4 md:flex-row md:items-end md:justify-between', bottomClass)}>
-      <div className="flex items-end justify-between w-full md:w-auto">
-        <div className="space-y-1 md:space-y-2">
-          <div className="flex items-center gap-2 font-bold text-xs md:text-sm uppercase tracking-widest" style={{ color: tokens.subtitleSecondary }}>
-            <span className="w-6 h-[2px] md:w-8" style={{ backgroundColor: tokens.accentSecondary }}></span>
+    <div className={cn(headerLayoutClassName, bottomClass)}>
+      <div className={headerRowClassName}>
+        <div className={headerTitleWrapClassName}>
+          <div className={subtitleRowClassName} style={{ color: tokens.subtitleSecondary }}>
+            <span className={subtitleLineClassName} style={{ backgroundColor: tokens.accentSecondary }}></span>
             {subTitle}
           </div>
           <h2
-            className={cn('font-bold tracking-tight', isMobilePreview ? 'text-2xl' : 'text-2xl md:text-4xl')}
+            className={headingClassName}
             style={{ color: tokens.headingPrimary }}
           >
             {sectionTitle}
@@ -230,82 +340,90 @@ export function ProductListSectionShared({
       {renderHeader('mb-6 md:mb-10')}
       <div
         className={cn(
-          'grid gap-x-6 gap-y-10',
+          'grid',
           isPreview
-            ? (isMobilePreview ? 'grid-cols-2 gap-x-3 gap-y-6' : (isTabletPreview ? 'grid-cols-3' : 'grid-cols-4'))
-            : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-6 md:gap-x-6 md:gap-y-10',
+            ? (isMobilePreview ? 'grid-cols-2 gap-3' : (isTabletPreview ? 'grid-cols-3 gap-4' : 'grid-cols-5 gap-5'))
+            : 'grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-5 lg:gap-5',
         )}
       >
-        {items.slice(0, 4).map((item) => {
+        {items.slice(0, isMobilePreview ? 4 : 8).map((item) => {
           const discount = getDiscount(item.price, item.originalPrice);
           return wrapItem({
             item,
-            className: 'group cursor-pointer',
+            className: 'group bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col cursor-pointer',
             children: (
               <>
-                <div
-                  className="relative aspect-square overflow-hidden rounded-2xl mb-4 border border-transparent transition-all"
-                  style={{ backgroundColor: tokens.neutralBackground }}
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.borderColor = tokens.cardBorderHover;
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.borderColor = 'transparent';
-                  }}
-                >
+                <div className="relative bg-slate-100 overflow-hidden">
                   {item.image ? (
                     <ProductImage
                       context={context}
                       src={item.image}
                       alt={item.name}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      sizes="(max-width: 768px) 100vw, 25vw"
+                      className="h-full w-full object-cover"
+                      sizes="(max-width: 768px) 50vw, 20vw"
                     />
-                  ) : renderFallback(48)}
-
-                  <div className="absolute top-3 left-3 flex flex-col gap-1">
-                    {discount && <ProductBadge text={discount} tokens={tokens} className="text-[10px] px-2 py-1" />}
-                    {item.tag === 'new' && !discount && <ProductBadge text="NEW" variant="outline" tokens={tokens} className="text-[10px] px-2 py-1" />}
-                    {item.tag === 'hot' && !discount && <ProductBadge text="HOT" tokens={tokens} className="text-[10px] px-2 py-1" />}
-                  </div>
-
-                  <div className="absolute inset-x-4 bottom-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 opacity-0 group-hover:opacity-100">
-                    <span
-                      className="block w-full bg-white/95 hover:bg-white backdrop-blur-md shadow-lg font-bold py-2 px-4 rounded-lg text-sm text-center"
-                      style={{ color: tokens.ctaSecondaryText }}
-                    >
-                      Xem chi tiết
-                    </span>
-                  </div>
+                  ) : renderFallback(32)}
+                  {discount && (
+                    <div className="absolute top-2 right-2">
+                      <ProductBadge text={discount} tokens={tokens} className="text-[10px] px-2 py-0.5" />
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-1">
-                  <h3 className="font-medium text-slate-900 text-base truncate group-hover:opacity-80 transition-colors">
+                <div className="p-3 flex flex-col flex-1">
+                  <h3 className="font-bold text-slate-900 text-sm line-clamp-2 mb-1 group-hover:opacity-80 transition-colors">
                     {item.name}
                   </h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="font-bold" style={{ color: tokens.pricePrimary }}>{item.price}</span>
-                    {item.originalPrice && <span className="text-xs text-slate-400 line-through">{item.originalPrice}</span>}
+
+                  <div className="flex items-baseline gap-2 mb-3 mt-auto pt-1">
+                    <span className="text-sm font-bold" style={{ color: tokens.pricePrimary }}>{item.price}</span>
+                    {item.originalPrice && (
+                      <span className="text-[10px] text-slate-400 line-through">{item.originalPrice}</span>
+                    )}
                   </div>
+
+                  <span
+                    className="w-full gap-1 border-2 py-1.5 px-2 rounded-lg font-medium flex items-center justify-center transition-colors whitespace-nowrap text-xs"
+                    style={{ borderColor: `${tokens.ctaPrimary}20`, color: tokens.ctaPrimary }}
+                  >
+                    Xem chi tiết
+                  </span>
                 </div>
               </>
             ),
           });
         })}
       </div>
+
+      {/* "Xem thêm" button */}
+      {showViewAll && (
+        <div className="flex justify-center mt-8">
+          {context === 'site' ? (
+            <Link
+              href={viewAllHref}
+              className="px-8 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-colors"
+            >
+              Xem thêm
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="px-8 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-colors"
+            >
+              Xem thêm
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
+
 
   const renderCommerce = () => (
     <section className={sectionPadding}>
       {renderHeader('mb-6 md:mb-10')}
       <div
-        className={cn(
-          'grid gap-6',
-          isPreview
-            ? (isMobilePreview ? 'grid-cols-1 sm:grid-cols-2 gap-4' : (isTabletPreview ? 'grid-cols-2' : 'grid-cols-4'))
-            : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6',
-        )}
+        className={commerceGridClassName}
       >
         {items.slice(0, 4).map((item) => {
           const discount = getDiscount(item.price, item.originalPrice);
@@ -332,7 +450,7 @@ export function ProductListSectionShared({
                 </div>
 
                 <div className="p-4 flex flex-col flex-1">
-                  <h3 className="font-bold text-slate-900 line-clamp-1 mb-1 group-hover:opacity-80 transition-colors">
+                  <h3 className="font-bold text-slate-900 line-clamp-2 mb-1 group-hover:opacity-80 transition-colors">
                     {item.name}
                   </h3>
 
@@ -397,7 +515,7 @@ export function ProductListSectionShared({
                         </div>
                       )}
                     </div>
-                    <h4 className="font-medium text-sm text-slate-900 truncate group-hover:opacity-80 transition-colors">{item.name}</h4>
+                    <h4 className="font-medium text-sm text-slate-900 line-clamp-2 group-hover:opacity-80 transition-colors">{item.name}</h4>
                     <span className="text-sm font-bold mt-1" style={{ color: tokens.pricePrimary }}>{item.price}</span>
                   </>
                 ),
@@ -483,7 +601,7 @@ export function ProductListSectionShared({
                     </div>
 
                     <div className="mt-auto px-1">
-                      <h4 className="font-medium text-sm text-slate-900 truncate group-hover:opacity-80 transition-colors">
+                      <h4 className="font-medium text-sm text-slate-900 line-clamp-2 group-hover:opacity-80 transition-colors">
                         {item.name}
                       </h4>
                       <div className="flex items-center gap-2 mt-1">
@@ -506,21 +624,21 @@ export function ProductListSectionShared({
 
     return (
       <section className={sectionPadding}>
-        <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-end md:justify-between md:mb-8">
-          <div className="flex items-end justify-between w-full md:w-auto">
-            <div className="space-y-1 md:space-y-2">
-              <div className="flex items-center gap-2 font-bold text-xs md:text-sm uppercase tracking-widest" style={{ color: tokens.subtitleSecondary }}>
-                <span className="w-6 h-[2px] md:w-8" style={{ backgroundColor: tokens.accentSecondary }}></span>
+        <div className={cn(headerLayoutClassName, 'mb-6 md:mb-8')}>
+          <div className={headerRowClassName}>
+            <div className={headerTitleWrapClassName}>
+              <div className={subtitleRowClassName} style={{ color: tokens.subtitleSecondary }}>
+                <span className={subtitleLineClassName} style={{ backgroundColor: tokens.accentSecondary }}></span>
                 {subTitle}
               </div>
               <h2
-                className={cn('font-bold tracking-tight', isMobilePreview ? 'text-2xl' : 'text-2xl md:text-4xl')}
+                className={headingClassName}
                 style={{ color: tokens.headingPrimary }}
               >
                 {sectionTitle}
               </h2>
             </div>
-            <div className="flex gap-2 md:hidden">
+            <div className={mobileOnlyActionClassName}>
               <button
                 type="button"
                 className="w-8 h-8 rounded-full border flex items-center justify-center"
@@ -546,7 +664,7 @@ export function ProductListSectionShared({
             </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className={desktopOnlyActionClassName}>
             <button
               type="button"
               className="w-10 h-10 rounded-full border flex items-center justify-center"
@@ -615,7 +733,7 @@ export function ProductListSectionShared({
                         </div>
                       )}
                     </div>
-                    <h3 className="font-medium text-slate-900 text-sm truncate group-hover:opacity-80 transition-colors">{item.name}</h3>
+                    <h3 className="font-medium text-slate-900 text-sm line-clamp-2 group-hover:opacity-80 transition-colors">{item.name}</h3>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="font-bold text-sm" style={{ color: tokens.pricePrimary }}>{item.price}</span>
                       {item.originalPrice && <span className="text-xs text-slate-400 line-through">{item.originalPrice}</span>}
@@ -675,7 +793,7 @@ export function ProductListSectionShared({
                     </div>
                   )}
                 </div>
-                <h3 className="font-medium text-xs text-slate-900 truncate group-hover:opacity-80 transition-colors">{item.name}</h3>
+                <h3 className="font-medium text-xs text-slate-900 line-clamp-2 group-hover:opacity-80 transition-colors">{item.name}</h3>
                 <span className="font-bold text-xs mt-0.5 block" style={{ color: tokens.pricePrimary }}>{item.price}</span>
               </>
             ),
@@ -689,7 +807,7 @@ export function ProductListSectionShared({
     const featuredDiscount = getDiscount(featured?.price, featured?.originalPrice);
 
     return (
-      <div className={cn('grid gap-4', isPreview ? (isTabletPreview ? 'grid-cols-2' : 'grid-cols-3') : 'hidden md:grid grid-cols-3')}>
+      <div className={showcasePreviewDesktopClassName}>
         {wrapItem({
           item: featured ?? { id: 'featured-missing', name: '', price: '' },
           className: 'relative group rounded-2xl overflow-hidden cursor-pointer h-[400px] border transition-colors',
@@ -763,7 +881,7 @@ export function ProductListSectionShared({
                       </div>
                     )}
                   </div>
-                  <h4 className="font-medium text-sm text-slate-900 truncate group-hover:opacity-80 transition-colors">{item.name}</h4>
+                  <h4 className="font-medium text-sm text-slate-900 line-clamp-2 group-hover:opacity-80 transition-colors">{item.name}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-sm font-bold" style={{ color: tokens.pricePrimary }}>{item.price}</span>
                     {item.originalPrice && <span className="text-[10px] text-slate-400 line-through">{item.originalPrice}</span>}
@@ -810,7 +928,7 @@ export function ProductListSectionShared({
                         </div>
                       )}
                     </div>
-                    <h4 className="font-medium text-sm text-slate-900 truncate">{item.name}</h4>
+                    <h4 className="font-medium text-sm text-slate-900 line-clamp-2">{item.name}</h4>
                     <span className="text-sm font-bold mt-1" style={{ color: tokens.pricePrimary }}>{item.price}</span>
                   </>
                 ),
@@ -831,3 +949,4 @@ export function ProductListSectionShared({
   if (style === 'showcase') {return renderShowcase();}
   return renderBento();
 }
+

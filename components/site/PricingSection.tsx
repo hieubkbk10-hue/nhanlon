@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { SectionHeader } from '@/app/admin/home-components/_shared/components/SectionHeader';
+import { extractSectionHeaderConfig } from '@/app/admin/home-components/_shared/hooks/useSectionHeaderState';
 import {
   normalizePricingConfig,
 } from '@/app/admin/home-components/pricing/_lib/constants';
@@ -41,23 +43,47 @@ export function PricingSection({
   });
 
   const [isYearly, setIsYearly] = React.useState(false);
+  
+  // Extract header config
+  const headerConfig = extractSectionHeaderConfig(config);
 
   return (
-    <PricingSectionShared
-      context="site"
-      title={title}
-      subtitle={subtitle}
-      plans={safeConfig.plans}
-      style={style}
-      mode={mode}
-      tokens={tokens}
-      texts={safeConfig.texts ?? {}}
-      isYearly={isYearly}
-      showBillingToggle={safeConfig.showBillingToggle !== false}
-      monthlyLabel={String(safeConfig.monthlyLabel ?? 'Hàng tháng')}
-      yearlyLabel={String(safeConfig.yearlyLabel ?? 'Hàng năm')}
-      yearlySavingText={String(safeConfig.yearlySavingText ?? 'Tiết kiệm 17%')}
-      onBillingToggle={setIsYearly}
-    />
+    <section className="py-8 px-3">
+      <div className="@container max-w-7xl mx-auto">
+        <SectionHeader
+          title={title}
+          subtitle={headerConfig.subtitle || subtitle}
+          badgeText={headerConfig.badgeText}
+          hideHeader={headerConfig.hideHeader}
+          showTitle={headerConfig.showTitle}
+          showSubtitle={headerConfig.showSubtitle}
+          showBadge={headerConfig.showBadge}
+          headerAlign={headerConfig.headerAlign}
+          titleColorPrimary={headerConfig.titleColorPrimary}
+          subtitleAboveTitle={headerConfig.subtitleAboveTitle}
+          uppercaseText={headerConfig.uppercaseText}
+          brandColor={brandColor}
+        />
+        
+        <PricingSectionShared
+          context="site"
+          title={title}
+          subtitle={subtitle}
+          plans={safeConfig.plans}
+          style={style}
+          mode={mode}
+          tokens={tokens}
+          texts={safeConfig.texts ?? {}}
+          isYearly={isYearly}
+          showBillingToggle={safeConfig.showBillingToggle !== false}
+          monthlyLabel={String(safeConfig.monthlyLabel ?? 'Hàng tháng')}
+          yearlyLabel={String(safeConfig.yearlyLabel ?? 'Hàng năm')}
+          yearlySavingText={String(safeConfig.yearlySavingText ?? 'Tiết kiệm 17%')}
+          onBillingToggle={setIsYearly}
+          skipHeader={true}
+          gridCols={safeConfig.gridCols === 4 ? 4 : 3}
+        />
+      </div>
+    </section>
   );
 }

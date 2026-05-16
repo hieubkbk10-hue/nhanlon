@@ -60,12 +60,24 @@ import {
 } from '@/components/experiences/editor';
 import { useExperienceConfig, useExampleProductSlug, EXPERIENCE_GROUP, EXPERIENCE_NAMES, MESSAGES } from '@/lib/experiences';
 import { useBrandColors } from '@/components/site/hooks';
+import {
+  DEFAULT_PRODUCT_IMAGE_ASPECT_RATIO,
+  isProductImageAspectRatio,
+  PRODUCT_IMAGE_ASPECT_RATIO_OPTIONS,
+  type ProductImageAspectRatio,
+} from '@/components/site/products/detail/_lib/image-aspect-ratio';
+import { resolveProductImageAspectRatio } from '@/lib/products/image-aspect-ratio';
 
 type ProductsDetailStyle = 'classic' | 'modern' | 'minimal';
 type RelatedProductsMode = 'fixed' | 'infiniteScroll' | 'pagination';
+type ProductImageAspectRatioSource = 'module' | 'custom';
 
 type ProductDetailExperienceConfig = {
   layoutStyle: ProductsDetailStyle;
+  imageAspectRatioSource: ProductImageAspectRatioSource;
+  imageAspectRatio: ProductImageAspectRatio;
+  showAllProductImagesSection: boolean;
+  enableImageLightbox: boolean;
   layouts: {
     classic: ClassicLayoutConfig;
     modern: ModernLayoutConfig;
@@ -76,7 +88,7 @@ type ProductDetailExperienceConfig = {
   relatedProductsPerPage: number;
 };
 
-type ClassicLayoutConfig = {
+type BaseImageLayoutConfig = {
   showRating: boolean;
   showComments: boolean;
   showCommentLikes: boolean;
@@ -84,28 +96,17 @@ type ClassicLayoutConfig = {
   showWishlist: boolean;
   showShare: boolean;
   showAddToCart: boolean;
+};
+
+type ClassicLayoutConfig = BaseImageLayoutConfig & {
   showClassicHighlights: boolean;
 };
 
-type ModernLayoutConfig = {
-  showRating: boolean;
-  showComments: boolean;
-  showCommentLikes: boolean;
-  showCommentReplies: boolean;
-  showWishlist: boolean;
-  showShare: boolean;
-  showAddToCart: boolean;
+type ModernLayoutConfig = BaseImageLayoutConfig & {
   heroStyle: 'full' | 'split' | 'minimal';
 };
 
-type MinimalLayoutConfig = {
-  showRating: boolean;
-  showComments: boolean;
-  showCommentLikes: boolean;
-  showCommentReplies: boolean;
-  showWishlist: boolean;
-  showShare: boolean;
-  showAddToCart: boolean;
+type MinimalLayoutConfig = BaseImageLayoutConfig & {
   contentWidth: 'narrow' | 'medium' | 'wide';
 };
 
@@ -147,6 +148,10 @@ const LAYOUT_STYLES: LayoutOption<ProductsDetailStyle>[] = [
 
 const DEFAULT_CONFIG: ProductDetailExperienceConfig = {
   layoutStyle: 'classic',
+  imageAspectRatioSource: 'module',
+  imageAspectRatio: DEFAULT_PRODUCT_IMAGE_ASPECT_RATIO,
+  showAllProductImagesSection: false,
+  enableImageLightbox: false,
   layouts: {
     classic: { showRating: true, showComments: true, showCommentLikes: true, showCommentReplies: true, showWishlist: true, showShare: true, showAddToCart: true, showClassicHighlights: true },
     modern: { showRating: true, showComments: true, showCommentLikes: true, showCommentReplies: true, showWishlist: true, showShare: true, showAddToCart: true, heroStyle: 'full' },
@@ -283,6 +288,7 @@ export default function ProductDetailExperiencePage() {
   const legacyStyleSetting = useQuery(api.settings.getByKey, { key: LEGACY_DETAIL_STYLE_KEY });
   const legacyHighlightsSetting = useQuery(api.settings.getByKey, { key: LEGACY_HIGHLIGHTS_KEY });
   const highlightsSetting = useQuery(api.settings.getByKey, { key: CLASSIC_HIGHLIGHTS_KEY });
+  const moduleAspectRatioSetting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'defaultImageAspectRatio' });
   const commentsModule = useQuery(api.admin.modules.getModuleByKey, { key: 'comments' });
   const commentsLikesFeature = useQuery(api.admin.modules.getModuleFeature, { featureKey: 'enableLikes', moduleKey: 'comments' });
   const commentsRepliesFeature = useQuery(api.admin.modules.getModuleFeature, { featureKey: 'enableReplies', moduleKey: 'comments' });
@@ -317,17 +323,62 @@ export default function ProductDetailExperiencePage() {
     setColorMode(brandColors.mode || 'single');
   }, [brandColors.primary, brandColors.secondary, brandColors.mode]);
 
+  const moduleDefaultAspectRatio = useMemo(
+    () => resolveProductImageAspectRatio(moduleAspectRatioSetting?.value),
+    [moduleAspectRatioSetting?.value]
+  );
+
   const serverConfig = useMemo<ProductDetailExperienceConfig>(() => {
-    const raw = experienceSetting?.value as Partial<ProductDetailExperienceConfig & { showClassicHighlights?: boolean }> | undefined;
+    const raw = experienceSetting?.value as Partial<Omit<ProductDetailExperienceConfig, 'layouts'> & {
+      showClassicHighlights?: boolean;
+      imageAspectRatio?: ProductImageAspectRatio;
+      imageAspectRatioSource?: ProductImageAspectRatioSource;
+      showAllProductImagesSection?: boolean;
+      enableImageLightbox?: boolean;
+      layouts?: Partial<Record<ProductsDetailStyle, Partial<ClassicLayoutConfig & ModernLayoutConfig & MinimalLayoutConfig & {
+        imageAspectRatio?: ProductImageAspectRatio;
+      }>>>;
+    }> | undefined;
     const classicHighlightsSetting = raw?.layouts?.classic?.showClassicHighlights
       ?? raw?.showClassicHighlights
       ?? legacyHighlights;
+    const legacyAspectRatio = isProductImageAspectRatio(raw?.imageAspectRatio)
+      ? raw.imageAspectRatio
+      : isProductImageAspectRatio(raw?.layouts?.classic?.imageAspectRatio)
+        ? raw.layouts.classic.imageAspectRatio
+        : isProductImageAspectRatio(raw?.layouts?.modern?.imageAspectRatio)
+          ? raw.layouts.modern.imageAspectRatio
+          : isProductImageAspectRatio(raw?.layouts?.minimal?.imageAspectRatio)
+            ? raw.layouts.minimal.imageAspectRatio
+            : DEFAULT_PRODUCT_IMAGE_ASPECT_RATIO;
+    const imageAspectRatioSource = raw?.imageAspectRatioSource === 'custom' || raw?.imageAspectRatioSource === 'module'
+      ? raw.imageAspectRatioSource
+      : isProductImageAspectRatio(raw?.imageAspectRatio)
+        || isProductImageAspectRatio(raw?.layouts?.classic?.imageAspectRatio)
+        || isProductImageAspectRatio(raw?.layouts?.modern?.imageAspectRatio)
+        || isProductImageAspectRatio(raw?.layouts?.minimal?.imageAspectRatio)
+        ? 'custom'
+        : 'module';
     return {
       layoutStyle: raw?.layoutStyle ?? legacyStyle ?? DEFAULT_CONFIG.layoutStyle,
+      imageAspectRatioSource,
+      imageAspectRatio: legacyAspectRatio,
+      showAllProductImagesSection: raw?.showAllProductImagesSection ?? false,
+      enableImageLightbox: raw?.enableImageLightbox ?? false,
       layouts: {
-        classic: { ...DEFAULT_CONFIG.layouts.classic, showClassicHighlights: classicHighlightsSetting, ...raw?.layouts?.classic },
-        modern: { ...DEFAULT_CONFIG.layouts.modern, ...raw?.layouts?.modern },
-        minimal: { ...DEFAULT_CONFIG.layouts.minimal, ...raw?.layouts?.minimal },
+        classic: {
+          ...DEFAULT_CONFIG.layouts.classic,
+          showClassicHighlights: classicHighlightsSetting,
+          ...raw?.layouts?.classic,
+        },
+        modern: {
+          ...DEFAULT_CONFIG.layouts.modern,
+          ...raw?.layouts?.modern,
+        },
+        minimal: {
+          ...DEFAULT_CONFIG.layouts.minimal,
+          ...raw?.layouts?.minimal,
+        },
       },
       showBuyNow: raw?.showBuyNow ?? true,
       relatedProductsMode: raw?.relatedProductsMode === 'infiniteScroll' || raw?.relatedProductsMode === 'pagination'
@@ -344,13 +395,19 @@ export default function ProductDetailExperiencePage() {
   const { config, setConfig, hasChanges } = useExperienceConfig(serverConfig, DEFAULT_CONFIG, isLoading);
 
   const currentLayoutConfig = config.layouts[config.layoutStyle];
+  const resolvedImageAspectRatio = config.imageAspectRatioSource === 'module'
+    ? moduleDefaultAspectRatio
+    : config.imageAspectRatio;
+  const moduleAspectRatioLabel = useMemo(() => {
+    const match = PRODUCT_IMAGE_ASPECT_RATIO_OPTIONS.find((option) => option.value === moduleDefaultAspectRatio);
+    return match?.label ?? 'Theo module';
+  }, [moduleDefaultAspectRatio]);
   const canUseWishlist = wishlistModule?.enabled ?? false;
   const canUseComments = commentsModule?.enabled ?? false;
   const canUseCommentLikes = canUseComments && (commentsLikesFeature?.enabled ?? false);
   const canUseCommentReplies = canUseComments && (commentsRepliesFeature?.enabled ?? false);
   const canUseCart = (cartModule?.enabled ?? false) && (ordersModule?.enabled ?? false);
   const canUseOrders = ordersModule?.enabled ?? false;
-
   const updateLayoutConfig = <K extends keyof typeof currentLayoutConfig>(
     key: K,
     value: (typeof currentLayoutConfig)[K]
@@ -450,6 +507,9 @@ export default function ProductDetailExperiencePage() {
       contentWidth: config.layoutStyle === 'minimal'
         ? (currentLayoutConfig as MinimalLayoutConfig).contentWidth
         : 'medium',
+      imageAspectRatio: resolvedImageAspectRatio,
+      showAllProductImagesSection: config.showAllProductImagesSection,
+      enableImageLightbox: config.enableImageLightbox,
       showHighlights: config.layouts.classic.showClassicHighlights,
       classicHighlights,
       device: previewDevice,
@@ -641,6 +701,25 @@ export default function ProductDetailExperiencePage() {
             />
           </ControlCard>
           <ControlCard title="Khối hiển thị">
+            <SelectRow
+              label="Nguồn tỉ lệ ảnh"
+              value={config.imageAspectRatioSource}
+              options={[
+                { label: `Theo module Sản phẩm (${moduleAspectRatioLabel})`, value: 'module' },
+                { label: 'Tùy chỉnh', value: 'custom' },
+              ]}
+              onChange={(value) => setConfig(prev => ({ ...prev, imageAspectRatioSource: value as ProductImageAspectRatioSource }))}
+            />
+            {config.imageAspectRatioSource === 'custom' ? (
+              <SelectRow
+                label="Tỉ lệ ảnh sản phẩm"
+                value={config.imageAspectRatio}
+                options={PRODUCT_IMAGE_ASPECT_RATIO_OPTIONS}
+                onChange={(value) => setConfig(prev => ({ ...prev, imageAspectRatio: value as ProductImageAspectRatio }))}
+              />
+            ) : (
+              <p className="text-xs text-slate-500">Đang dùng tỉ lệ từ module Sản phẩm.</p>
+            )}
             <ToggleRow
               label="Đánh giá"
               checked={currentLayoutConfig.showRating && canUseComments}
@@ -675,36 +754,25 @@ export default function ProductDetailExperiencePage() {
               accentColor={brandColor}
               disabled={!canUseOrders}
             />
+            <ToggleRow
+              label="Section toàn bộ ảnh"
+              description="Hiển thị toàn bộ ảnh sản phẩm dưới mô tả"
+              checked={config.showAllProductImagesSection}
+              onChange={(v) => setConfig(prev => ({ ...prev, showAllProductImagesSection: v }))}
+              accentColor={brandColor}
+            />
+            <ToggleRow
+              label="Mở ảnh toàn màn hình"
+              description="Nhấn ảnh chính để mở xem ảnh lớn"
+              checked={config.enableImageLightbox}
+              onChange={(v) => setConfig(prev => ({ ...prev, enableImageLightbox: v }))}
+              accentColor={brandColor}
+            />
             <VariantFeatureStatus
               enabled={(variantsSetting?.value as boolean | undefined) ?? false}
               href="/system/modules/products"
               moduleName="module Sản phẩm"
             />
-          </ControlCard>
-
-          <ControlCard title="Sản phẩm liên quan">
-            <SelectRow
-              label="Kiểu hiển thị"
-              value={config.relatedProductsMode}
-              options={[
-                { value: 'fixed', label: '4 sản phẩm' },
-                { value: 'infiniteScroll', label: 'Tất cả + cuộn vô hạn' },
-                { value: 'pagination', label: 'Tất cả + phân trang' },
-              ]}
-              onChange={(v) => setConfig(prev => ({ ...prev, relatedProductsMode: v as RelatedProductsMode }))}
-            />
-            {config.relatedProductsMode !== 'fixed' && (
-              <SelectRow
-                label="Sản phẩm mỗi lần"
-                value={String(config.relatedProductsPerPage)}
-                options={[
-                  { value: '8', label: '8' },
-                  { value: '12', label: '12' },
-                  { value: '16', label: '16' },
-                ]}
-                onChange={(v) => setConfig(prev => ({ ...prev, relatedProductsPerPage: Number(v) }))}
-              />
-            )}
           </ControlCard>
 
           <ControlCard title="Bình luận">
@@ -754,6 +822,34 @@ export default function ProductDetailExperiencePage() {
               {renderHighlightsControls()}
               {renderLayoutSpecificControls()}
             </div>
+          </ControlCard>
+
+          <ControlCard title="Sản phẩm liên quan">
+            <SelectRow
+              label="Kiểu hiển thị"
+              value={config.relatedProductsMode}
+              options={[
+                { value: 'fixed', label: '4 sản phẩm' },
+                { value: 'infiniteScroll', label: 'Tất cả + cuộn vô hạn' },
+                { value: 'pagination', label: 'Phân trang' },
+              ]}
+              onChange={(value) => setConfig(prev => ({ ...prev, relatedProductsMode: value as RelatedProductsMode }))}
+            />
+            {config.relatedProductsMode !== 'fixed' && (
+              <div className="mt-3">
+                <label className="text-xs font-medium text-slate-600">Số lượng mỗi lần tải</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={config.relatedProductsPerPage}
+                  onChange={(event) => setConfig(prev => ({
+                    ...prev,
+                    relatedProductsPerPage: Number(event.target.value) || DEFAULT_CONFIG.relatedProductsPerPage,
+                  }))}
+                  className="mt-2 h-8 text-xs"
+                />
+              </div>
+            )}
           </ControlCard>
 
           <ControlCard title="Module liên quan">

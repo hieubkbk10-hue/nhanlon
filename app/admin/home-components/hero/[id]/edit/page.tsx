@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { LayoutTemplate, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -19,15 +19,18 @@ import { DEFAULT_HERO_CONTENT } from '../../_lib/constants';
 import type { HeroContent, HeroSlide, HeroStyle } from '../../_types';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
+import { detectMediaType } from '@/lib/utils/media';
 
 const COMPONENT_TYPE = 'Hero';
 
 export default function HeroEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const decodedId = decodeURIComponent(id);
+  const isSnapshotComponentKey = decodedId.startsWith('homeComponent:') || decodedId.startsWith('snapshot:');
   const { customState, effectiveColors, showCustomBlock, setCustomState, initialCustom, setInitialCustom } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, showCustomBlock: showFontCustomBlock, setCustomState: setCustomFontState, initialCustom: initialFontCustom, setInitialCustom: setInitialFontCustom } = useTypeFontOverrideState(COMPONENT_TYPE);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<"homeComponents"> });
+  const component = useQuery(api.homeComponents.getById, isSnapshotComponentKey ? 'skip' : { id: id as Id<"homeComponents"> });
   const updateMutation = useMutation(api.homeComponents.update);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
@@ -37,6 +40,7 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
   const [heroStyle, setHeroStyle] = useState<HeroStyle>('slider');
   const [heroContent, setHeroContent] = useState<HeroContent>(DEFAULT_HERO_CONTENT);
+  const [noBorderRadius, setNoBorderRadius] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [initialData, setInitialData] = useState<{
@@ -45,6 +49,7 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
     slides: HeroSlide[];
     style: HeroStyle;
     content: HeroContent;
+    noBorderRadius: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -65,12 +70,14 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
       setHeroSlides(slides);
       setHeroStyle(style);
       setHeroContent(content);
+      setNoBorderRadius(config.noBorderRadius === true);
       setInitialData({
         title: component.title,
         active: component.active,
         slides,
         style,
         content,
+        noBorderRadius: config.noBorderRadius === true,
       });
       setHasChanges(false);
     }
@@ -110,11 +117,12 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
       || currentSlides !== initialSlides
       || heroStyle !== initialData.style
       || currentContent !== initialContent
+      || noBorderRadius !== initialData.noBorderRadius
       || customChanged
       || customFontChanged;
 
     setHasChanges(changed);
-  }, [title, active, heroSlides, heroStyle, heroContent, initialData, showCustomBlock, customState, initialCustom, showFontCustomBlock, customFontState, initialFontCustom]);
+  }, [title, active, heroSlides, heroStyle, heroContent, noBorderRadius, initialData, showCustomBlock, customState, initialCustom, showFontCustomBlock, customFontState, initialFontCustom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +135,8 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
         active,
         config: {
           content: needsContent ? heroContent : undefined,
-          slides: heroSlides.map(s => ({ image: s.url, link: s.link })),
+          noBorderRadius,
+          slides: heroSlides.map(s => ({ image: s.url, link: s.link, mediaType: detectMediaType(s.url) })),
           style: heroStyle,
         },
         id: id as Id<"homeComponents">,
@@ -161,6 +170,7 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
         slides: heroSlides,
         style: heroStyle,
         content: heroContent,
+        noBorderRadius,
       });
       if (showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(
@@ -189,6 +199,19 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
       setIsSubmitting(false);
     }
   };
+
+  if (isSnapshotComponentKey) {
+    return (
+      <div className="text-center py-8 text-slate-500">
+        Component này thuộc snapshot. Vui lòng mở từ trang quản lý component của snapshot để chỉnh sửa.
+        <div className="mt-3">
+          <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">
+            Quay lại trang chủ
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (component === undefined) {
     return (
@@ -229,24 +252,7 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
                 placeholder="Nhập tiêu đề component..." 
               />
             </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div 
-                className={cn(
-                  "cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors",
-                  active ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600"
-                )}
-                onClick={() =>{  setActive(!active); }}
-              >
-                <div className={cn(
-                  "w-5 h-5 bg-white rounded-full transition-transform shadow",
-                  active ? "translate-x-2.5" : "-translate-x-2.5"
-                )}></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
+</CardContent>
         </Card>
 
         <HeroForm
@@ -255,6 +261,8 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
           heroStyle={heroStyle}
           heroContent={heroContent}
           setHeroContent={setHeroContent}
+          noBorderRadius={noBorderRadius}
+          setNoBorderRadius={setNoBorderRadius}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
@@ -306,7 +314,7 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
               />
             )}
             <HeroPreview
-              slides={heroSlides.map((s, idx) => ({ id: idx + 1, image: s.url, link: s.link }))}
+              slides={heroSlides.map((s, idx) => ({ id: idx + 1, image: s.url, link: s.link, mediaType: detectMediaType(s.url) }))}
               brandColor={effectiveColors.primary}
               secondary={effectiveColors.secondary}
               mode={effectiveColors.mode}
@@ -324,6 +332,8 @@ export default function HeroEditPage({ params }: { params: Promise<{ id: string 
           hasChanges={hasChanges}
           onCancel={() =>{  router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

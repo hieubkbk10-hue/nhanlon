@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
+import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Link2, Loader2, Trash2, Upload } from 'lucide-react';
+import { ClipboardPaste, Link2, Loader2, Pencil, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Input, Label, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
+import { ImageEditorDialog } from './ImageEditorDialog';
 
 type InputMode = 'upload' | 'url';
 
@@ -44,6 +45,7 @@ export function ImageFieldWithUpload({
   const [urlInput, setUrlInput] = useState(value ?? '');
   const [preview, setPreview] = useState<string | undefined>(value);
   const [currentStorageId, setCurrentStorageId] = useState<string | undefined>();
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
@@ -154,6 +156,31 @@ export function ImageFieldWithUpload({
     }
   }, [urlInput, onChange, onStorageIdChange]);
 
+  // Đọc ảnh từ clipboard
+  const handleClipboardPaste = useCallback(async () => {
+    if (isUploading) return;
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split('/')[1] || 'png';
+          const file = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: imageType });
+          void handleFileSelect(file);
+          return;
+        }
+      }
+      toast.error('Clipboard không có ảnh. Hãy copy ảnh trước.');
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        toast.error('Trình duyệt chặn quyền đọc clipboard.');
+      } else {
+        toast.error('Không đọc được clipboard. Hãy copy ảnh trước.');
+      }
+    }
+  }, [isUploading, handleFileSelect]);
+
   const handleRemove = useCallback(async () => {
     // Only delete from storage if it's an uploaded image
     if (currentStorageId) {
@@ -186,30 +213,41 @@ export function ImageFieldWithUpload({
       {/* Label + Mode Toggle */}
       <div className="flex items-center justify-between">
         <Label>{label}</Label>
-        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+        <div className="flex items-center gap-1.5">
+          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() =>{  setMode('upload'); }}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
+                mode === 'upload' 
+                  ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" 
+                  : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <Upload size={12} /> Upload
+            </button>
+            <button
+              type="button"
+              onClick={() =>{  setMode('url'); }}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
+                mode === 'url' 
+                  ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" 
+                  : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <Link2 size={12} /> URL
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() =>{  setMode('upload'); }}
-            className={cn(
-              "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
-              mode === 'upload' 
-                ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" 
-                : "text-slate-500 hover:text-slate-700"
-            )}
+            onClick={handleClipboardPaste}
+            disabled={isUploading}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 disabled:opacity-50"
+            title="Copy ảnh rồi click vào đây"
           >
-            <Upload size={12} /> Upload
-          </button>
-          <button
-            type="button"
-            onClick={() =>{  setMode('url'); }}
-            className={cn(
-              "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
-              mode === 'url' 
-                ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" 
-                : "text-slate-500 hover:text-slate-700"
-            )}
-          >
-            <Link2 size={12} /> URL
+            <ClipboardPaste size={12} /> Dán
           </button>
         </div>
       </div>
@@ -262,16 +300,28 @@ export function ImageFieldWithUpload({
                   size="icon"
                   onClick={() => inputRef.current?.click()}
                   className="h-10 w-10"
+                  title="Đổi ảnh"
                 >
                   <Upload size={18} />
                 </Button>
               )}
               <Button
                 type="button"
+                variant="secondary"
+                size="icon"
+                onClick={() => setIsEditorOpen(true)}
+                className="h-10 w-10"
+                title="Cắt / Xoá nền"
+              >
+                <Pencil size={18} />
+              </Button>
+              <Button
+                type="button"
                 variant="destructive"
                 size="icon"
                 onClick={handleRemove}
                 className="h-10 w-10"
+                title="Xóa ảnh"
               >
                 <Trash2 size={18} />
               </Button>
@@ -318,6 +368,19 @@ export function ImageFieldWithUpload({
           )}
         </div>
       ) : null)}
+
+      {/* Image Editor Dialog (Crop + Remove BG) */}
+      {isEditorOpen && preview && (
+        <ImageEditorDialog
+          imageUrl={preview}
+          onClose={() => setIsEditorOpen(false)}
+          onApply={(editedFile) => {
+            setIsEditorOpen(false);
+            void handleFileSelect(editedFile);
+          }}
+        />
+      )}
     </div>
   );
 }
+

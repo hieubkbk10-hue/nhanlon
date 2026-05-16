@@ -1,14 +1,13 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { SectionHeader } from '../../_shared/components/SectionHeader';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 import { ABOUT_STYLES } from '../_lib/constants';
 import {
-  buildAboutWarningMessages,
   getAboutSectionColors,
   getAboutValidationResult,
 } from '../_lib/colors';
@@ -24,6 +23,18 @@ interface AboutPreviewProps {
   onStyleChange?: (style: AboutStyle) => void;
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
+  // Header config
+  title?: string;
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  subtitle?: string;
+  showSubtitle?: boolean;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }
 
 export const AboutPreview = ({
@@ -35,6 +46,17 @@ export const AboutPreview = ({
   onStyleChange,
   fontStyle,
   fontClassName,
+  title,
+  hideHeader,
+  showTitle,
+  subtitle,
+  showSubtitle,
+  headerAlign,
+  titleColorPrimary,
+  subtitleAboveTitle,
+  uppercaseText,
+  showBadge,
+  badgeText,
 }: AboutPreviewProps) => {
   const { device, setDevice } = usePreviewDevice();
 
@@ -62,11 +84,6 @@ export const AboutPreview = ({
     [brandColor, secondary, mode],
   );
 
-  const warningMessages = React.useMemo(
-    () => buildAboutWarningMessages({ mode, validation }),
-    [mode, validation],
-  );
-
   return (
     <>
       <PreviewWrapper
@@ -76,43 +93,50 @@ export const AboutPreview = ({
         previewStyle={previewStyle}
         setPreviewStyle={setPreviewStyle}
         styles={ABOUT_STYLES}
-        info={`${config.stats.length} số liệu • ${mode === 'dual' ? '2 màu' : '1 màu'}`}
+        info={`${config.features?.length ?? 0} điểm nổi bật • ${mode === 'dual' ? '2 màu' : '1 màu'}`}
         deviceWidthClass={deviceWidths[device]}
         fontStyle={fontStyle}
         fontClassName={fontClassName}
       >
         <BrowserFrame url="yoursite.com/about">
-          <AboutSectionShared
-            context="preview"
-            mode={mode}
-            style={previewStyle}
-            title={config.heading || 'Về chúng tôi'}
-            subHeading={config.subHeading}
-            heading={config.heading}
-            description={config.description}
-            image={config.image}
-            imageCaption={config.imageCaption}
-            buttonText={config.buttonText}
-            buttonLink={config.buttonLink}
-            stats={config.stats}
-            tokens={tokens}
-            device={device}
-          />
+          <div className="container mx-auto px-4">
+            <SectionHeader
+              title={title}
+              subtitle={subtitle}
+              badgeText={badgeText}
+              hideHeader={hideHeader}
+              showTitle={showTitle}
+              showSubtitle={showSubtitle}
+              showBadge={showBadge}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              brandColor={tokens.primary}
+            />
+            <AboutSectionShared
+              context="preview"
+              mode={mode}
+              style={previewStyle}
+              title={title || config.heading || 'Về chúng tôi'}
+              subHeading={config.subHeading}
+              heading={config.heading}
+              highlightText={config.highlightText}
+              description={config.description}
+              phone={config.phone}
+              image={config.image}
+              images={config.images}
+              imageCaption={config.imageCaption}
+              buttonText={config.buttonText}
+              buttonLink={config.buttonLink}
+              features={config.features ?? []}
+              stats={config.stats ?? []}
+              tokens={tokens}
+              device={device}
+            />
+          </div>
         </BrowserFrame>
       </PreviewWrapper>
-
-      {mode === 'dual' && warningMessages.length > 0 ? (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-            <div className="space-y-1">
-              {warningMessages.map((message, idx) => (
-                <p key={`about-preview-warning-${idx}`}>{message}</p>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {mode === 'dual' ? (
         <ColorInfoPanel

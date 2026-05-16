@@ -16,4 +16,15 @@ export interface VideoConfig {
   muted?: boolean;
   style?: VideoStyle;
   texts?: Record<string, string>;
+  // Header config
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  subtitle?: string;
+  showSubtitle?: boolean;
+  headerAlign?: 'left' | 'center' | 'right';
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
 }

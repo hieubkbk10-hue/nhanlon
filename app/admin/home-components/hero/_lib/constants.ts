@@ -6,6 +6,8 @@ export const HERO_STYLES = [
   { id: 'slider' as const, label: 'Slider' },
   { id: 'fade' as const, label: 'Fade' },
   { id: 'bento' as const, label: 'Bento' },
+  { id: 'triple' as const, label: 'Triple' },
+  { id: 'triple2' as const, label: 'Triple 2' },
   { id: 'fullscreen' as const, label: 'Fullscreen' },
   { id: 'split' as const, label: 'Split' },
   { id: 'parallax' as const, label: 'Parallax' },

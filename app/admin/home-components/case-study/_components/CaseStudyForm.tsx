@@ -4,6 +4,7 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../components/ui';
 import { ImageFieldWithUpload } from '../../../components/ImageFieldWithUpload';
+import { AiDemoCaseStudyImport } from '../../product-list/_components/AiDemoProductsImport';
 import type { CaseStudyProject } from '../_types';
 
 export const CaseStudyForm = ({
@@ -32,9 +33,12 @@ export const CaseStudyForm = ({
     <Card className="mb-6">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Dự án tiêu biểu</CardTitle>
-        <Button type="button" variant="outline" size="sm" onClick={handleAddProject} className="gap-2">
-          <Plus size={14} /> Thêm dự án
-        </Button>
+        <div className="flex items-center gap-2">
+          <AiDemoCaseStudyImport onApply={(items) => onChange(items as CaseStudyProject[])} />
+          <Button type="button" variant="outline" size="sm" onClick={handleAddProject} className="gap-2">
+            <Plus size={14} /> Thêm dự án
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {projects.length === 0 ? (

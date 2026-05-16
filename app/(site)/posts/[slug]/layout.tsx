@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { getConvexClient } from '@/lib/convex';
 import { api } from '@/convex/_generated/api';
 import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { JsonLd, generateArticleSchema, generateBreadcrumbSchema } from '@/components/seo/JsonLd';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
+import { buildDetailPath } from '@/lib/ia/route-mode';
+import { getIASettings } from '@/lib/ia/settings';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -31,17 +33,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       routeType: 'detail',
       seo,
       site,
-      titleOverride: 'Không tìm thấy bài viết',
       social,
+      titleOverride: 'Không tìm thấy bài viết',
     });
   }
   
-  const [post, site, seo, contact, social] = await Promise.all([
+  const [post, site, seo, contact, social, iaSettings] = await Promise.all([
     client.query(api.posts.getBySlug, { slug }),
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
     getSocialSettings(),
+    getIASettings(),
   ]);
 
   if (!post) {
@@ -53,10 +56,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       routeType: 'detail',
       seo,
       site,
-      titleOverride: 'Không tìm thấy bài viết',
       social,
+      titleOverride: 'Không tìm thấy bài viết',
     });
   }
+
+  const category = await client.query(api.postCategories.getById, { id: post.categoryId });
+  const canonicalPath = buildDetailPath({
+    categorySlug: category?.slug,
+    mode: iaSettings.routeMode,
+    moduleKey: 'posts',
+    recordSlug: post.slug,
+  });
 
   return buildSeoMetadata({
     contact,
@@ -70,7 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     entityExists: true,
     openGraphType: 'article',
-    pathname: `/posts/${post.slug}`,
+    pathname: canonicalPath,
     routeType: 'detail',
     seo,
     site,
@@ -81,26 +92,41 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PostLayout({ params, children }: Props) {
   const { slug } = await params;
   const client = getConvexClient();
-  const SCHEDULE_SKEW_MS = 30_000;
 
   const postsModule = await client.query(api.admin.modules.getModuleByKey, { key: 'posts' });
   if (postsModule?.enabled === false) {
     notFound();
   }
-  
-  const [post, site, seo] = await Promise.all([
+
+  const [post, site, seo, iaSettings] = await Promise.all([
     client.query(api.posts.getBySlug, { slug }),
     getSiteSettings(),
     getSEOSettings(),
+    getIASettings(),
   ]);
 
-  if (!post) {return children;}
-  if (post.status !== 'Published' || (post.publishedAt && post.publishedAt > Date.now() + SCHEDULE_SKEW_MS)) {
+  if (!post || post.status !== 'Published') {
     notFound();
   }
 
+  const category = await client.query(api.postCategories.getById, { id: post.categoryId });
+  if (iaSettings.routeMode === 'unified' && category?.slug) {
+    permanentRedirect(buildDetailPath({
+      categorySlug: category.slug,
+      mode: iaSettings.routeMode,
+      moduleKey: 'posts',
+      recordSlug: post.slug,
+    }));
+  }
+
   const baseUrl = (site.site_url || process.env.NEXT_PUBLIC_SITE_URL) ?? '';
-  const postUrl = `${baseUrl}/posts/${post.slug}`;
+  const postPath = buildDetailPath({
+    categorySlug: category?.slug,
+    mode: iaSettings.routeMode,
+    moduleKey: 'posts',
+    recordSlug: post.slug,
+  });
+  const postUrl = `${baseUrl}${postPath}`;
   const image = post.thumbnail ?? seo.seo_og_image;
 
   const articleSchema = generateArticleSchema({
@@ -115,7 +141,12 @@ export default async function PostLayout({ params, children }: Props) {
 
   const breadcrumbSchema = generateBreadcrumbSchema([
     { name: 'Trang chủ', url: baseUrl },
-    { name: 'Bài viết', url: `${baseUrl}/posts` },
+    {
+      name: category?.name ?? 'Bài viết',
+      url: iaSettings.routeMode === 'unified' && category?.slug
+        ? `${baseUrl}/${category.slug}`
+        : `${baseUrl}/posts`,
+    },
     { name: post.title, url: postUrl },
   ]);
 

@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { GripVertical, HelpCircle, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, GripVertical, HelpCircle, Plus, Trash2 } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { AiDemoFaqImport } from '../../product-list/_components/AiDemoProductsImport';
 import type { FaqConfig, FaqItem, FaqStyle } from '../_types';
 
 export const FaqForm = ({
@@ -12,6 +13,8 @@ export const FaqForm = ({
   brandColor,
   faqConfig,
   setFaqConfig,
+  expanded = true,
+  onExpandedChange,
 }: {
   faqItems: FaqItem[];
   setFaqItems: (items: FaqItem[]) => void;
@@ -19,6 +22,8 @@ export const FaqForm = ({
   brandColor: string;
   faqConfig: FaqConfig;
   setFaqConfig: (config: FaqConfig) => void;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }) => {
   const [draggedId, setDraggedId] = useState<number | string | null>(null);
   const [dragOverId, setDragOverId] = useState<number | string | null>(null);
@@ -50,13 +55,42 @@ export const FaqForm = ({
   return (
     <>
       <Card className="mb-6">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Câu hỏi thường gặp</CardTitle>
-          <Button type="button" variant="outline" size="sm" onClick={handleAddFaq} className="gap-2">
-            <Plus size={14} /> Thêm
-          </Button>
+        <CardHeader 
+          className="flex flex-row items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+          onClick={() => onExpandedChange?.(!expanded)}
+        >
+          <CardTitle className="text-base flex items-center gap-2">
+            Câu hỏi thường gặp
+            <ChevronDown 
+              size={16} 
+              className={cn(
+                "text-slate-400 transition-transform",
+                expanded && "rotate-180"
+              )}
+            />
+          </CardTitle>
+          {expanded && (
+            <div className="flex items-center gap-2">
+              <div onClick={(e) => e.stopPropagation()}>
+                <AiDemoFaqImport onApply={(items) => setFaqItems(items as FaqItem[])} />
+              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddFaq();
+                }} 
+                className="gap-2"
+              >
+                <Plus size={14} /> Thêm
+              </Button>
+            </div>
+          )}
         </CardHeader>
-        <CardContent className="space-y-3">
+        {expanded && (
+          <CardContent className="space-y-3">
           {faqItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: `${brandColor}10` }}>
@@ -109,12 +143,13 @@ export const FaqForm = ({
             ))
           )}
         </CardContent>
+        )}
       </Card>
 
       {faqStyle === 'two-column' && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-base">Cấu hình style 2 Cột</CardTitle>
+            <CardTitle className="text-base">Cấu hình layout Showcase</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>

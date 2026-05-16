@@ -20,6 +20,8 @@ export interface PricingEditorPlan extends Omit<PricingPlan, 'id'> {
   id: number;
 }
 
+export type PricingHeaderAlign = 'left' | 'center' | 'right';
+
 export interface PricingConfig {
   plans: PricingPlan[];
   style: PricingStyle;
@@ -30,4 +32,15 @@ export interface PricingConfig {
   subtitle?: string;
   texts?: Record<string, string>;
   harmony?: PricingHarmony;
+  // Shared header config
+  hideHeader?: boolean;
+  showTitle?: boolean;
+  showSubtitle?: boolean;
+  headerAlign?: PricingHeaderAlign;
+  titleColorPrimary?: boolean;
+  subtitleAboveTitle?: boolean;
+  uppercaseText?: boolean;
+  showBadge?: boolean;
+  badgeText?: string;
+  gridCols?: 3 | 4;
 }

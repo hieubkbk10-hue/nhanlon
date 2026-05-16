@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { Briefcase, ChevronDown, Clock, Eye, Folder, Search, Star } from 'lucide-react';
 import type { Id } from '@/convex/_generated/dataModel';
 import type { ServiceSortOption } from '../ServicesFilter';
@@ -42,6 +42,7 @@ interface SidebarLayoutProps {
   enabledFields: Set<string>;
    showSearch?: boolean;
    showCategories?: boolean;
+  getDetailHref: (service: Service) => string;
 }
 
 function formatPrice(price?: number): string {
@@ -72,6 +73,7 @@ export function SidebarLayout({
   enabledFields,
    showSearch = true,
    showCategories = true,
+  getDetailHref,
 }: SidebarLayoutProps) {
   const ringStyle = (style?: React.CSSProperties) =>
     ({ ...style, ['--tw-ring-color' as string]: tokens.filterRing } as React.CSSProperties);
@@ -205,7 +207,7 @@ export function SidebarLayout({
               return (
                 <Link
                   key={service._id}
-                  href={`/services/${service.slug}`}
+                  href={getDetailHref(service)}
                   className="group block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                   style={{ '--tw-ring-color': tokens.filterRing } as React.CSSProperties}
                 >
@@ -220,8 +222,9 @@ export function SidebarLayout({
                               fill
                               sizes="96px"
                               className="object-cover group-hover:scale-105 transition-transform duration-300"
-                              ref={(img) => {
-                                if (img?.complete && img.naturalWidth === 0) {
+                              mode="thumb"
+                              onLoadingComplete={(img) => {
+                                if (img.naturalWidth === 0) {
                                   markThumbnailBroken(service._id);
                                 }
                               }}

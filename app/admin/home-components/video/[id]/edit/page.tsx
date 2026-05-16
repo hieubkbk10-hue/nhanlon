@@ -4,15 +4,16 @@ import React, { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
-import { Loader2, Video as VideoIcon } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { VideoPreview } from '../../_components/VideoPreview';
 import { VideoForm } from '../../_components/VideoForm';
@@ -53,6 +54,18 @@ export default function VideoEditPage({ params }: { params: Promise<{ id: string
   }));
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [snapshot, setSnapshot] = React.useState<string>('');
+  
+  const [headerExpanded, setHeaderExpanded] = React.useState(true);
+  const [hideHeader, setHideHeader] = React.useState(false);
+  const [showTitle, setShowTitle] = React.useState(true);
+  const [subtitle, setSubtitle] = React.useState('');
+  const [showSubtitle, setShowSubtitle] = React.useState(true);
+  const [headerAlign, setHeaderAlign] = React.useState<'left' | 'center' | 'right'>('left');
+  const [titleColorPrimary, setTitleColorPrimary] = React.useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = React.useState(false);
+  const [uppercaseText, setUppercaseText] = React.useState(false);
+  const [showBadge, setShowBadge] = React.useState(true);
+  const [badgeText, setBadgeText] = React.useState('');
 
   React.useEffect(() => {
     if (!component) {return;}
@@ -63,10 +76,22 @@ export default function VideoEditPage({ params }: { params: Promise<{ id: string
     }
 
     const normalized = normalizeVideoConfig(component.config);
+    const headerConfig = extractSectionHeaderConfig(component.config);
 
     setTitle(component.title);
     setActive(component.active);
     setConfig(normalized);
+    
+    setHideHeader(headerConfig.hideHeader ?? false);
+    setShowTitle(headerConfig.showTitle ?? true);
+    setSubtitle(headerConfig.subtitle ?? '');
+    setShowSubtitle(headerConfig.showSubtitle ?? true);
+    setHeaderAlign(headerConfig.headerAlign ?? 'left');
+    setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
+    setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
+    setUppercaseText(headerConfig.uppercaseText ?? false);
+    setShowBadge(headerConfig.showBadge ?? true);
+    setBadgeText(headerConfig.badgeText ?? '');
 
     const nextSnapshot = JSON.stringify({
       active: component.active,
@@ -108,7 +133,20 @@ export default function VideoEditPage({ params }: { params: Promise<{ id: string
     setIsSubmitting(true);
 
     try {
-      const normalized = normalizeVideoConfig({ ...config, style: selectedStyle });
+      const normalized = normalizeVideoConfig({ 
+        ...config, 
+        style: selectedStyle,
+        hideHeader,
+        showTitle,
+        subtitle,
+        showSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
+      });
 
       await updateMutation({
         id: id as Id<'homeComponents'>,
@@ -181,47 +219,41 @@ export default function VideoEditPage({ params }: { params: Promise<{ id: string
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <VideoIcon size={20} />
-              Video
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => setActive(!active)}
-              >
-                <div className={cn(
-                  'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                  active ? 'translate-x-2.5' : '-translate-x-2.5',
-                )} />
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
 
         <VideoForm
           config={config}
           onChange={setConfig}
           selectedStyle={selectedStyle}
+          defaultExpanded={false}
         />
 
         <div className="space-y-4">
@@ -274,6 +306,17 @@ export default function VideoEditPage({ params }: { params: Promise<{ id: string
             mode={effectiveColors.mode}
             fontStyle={fontStyle}
             fontClassName="font-active"
+            title={title}
+            subtitle={subtitle}
+            hideHeader={hideHeader}
+            showTitle={showTitle}
+            showSubtitle={showSubtitle}
+            headerAlign={headerAlign}
+            titleColorPrimary={titleColorPrimary}
+            subtitleAboveTitle={subtitleAboveTitle}
+            uppercaseText={uppercaseText}
+            showBadge={showBadge}
+            badgeText={badgeText}
           />
         </div>
 
@@ -282,6 +325,8 @@ export default function VideoEditPage({ params }: { params: Promise<{ id: string
           hasChanges={hasChanges}
           onCancel={() => router.push('/admin/home-components')}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

@@ -8,22 +8,40 @@ type HomeComponentStickyFooterProps = {
   isSubmitting: boolean;
   hasChanges?: boolean;
   onCancel?: () => void;
+  onClickSave?: () => void | Promise<void>;
   submitLabel: string;
   submittingLabel?: string;
   savedLabel?: string;
   disableSave?: boolean;
   align?: 'between' | 'end';
+  cancelLabel?: string;
+  submitVariant?: React.ComponentProps<typeof Button>['variant'];
+  submitType?: 'submit' | 'button';
+  submitClassName?: string;
+  children?: React.ReactNode;
+  /** Trạng thái active/inactive của component */
+  active?: boolean;
+  /** Callback khi toggle trạng thái */
+  onActiveChange?: (value: boolean) => void;
 };
 
 export function HomeComponentStickyFooter({
   isSubmitting,
   hasChanges,
   onCancel,
+  onClickSave,
   submitLabel,
   submittingLabel = 'Đang lưu...',
   savedLabel = 'Đã lưu',
   disableSave,
   align = 'between',
+  cancelLabel = 'Hủy bỏ',
+  submitVariant = 'accent',
+  submitType = 'submit',
+  submitClassName,
+  children,
+  active,
+  onActiveChange,
 }: HomeComponentStickyFooterProps) {
   const { isSidebarCollapsed } = useSidebarState();
   const isDisabled = disableSave ?? (hasChanges === false || isSubmitting);
@@ -41,21 +59,54 @@ export function HomeComponentStickyFooter({
       )}
     >
       <div className={cn('flex items-center gap-3', align === 'between' ? 'justify-between' : 'justify-end')}>
-        {onCancel && (
-          <Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
-            Hủy bỏ
-          </Button>
+        {children ?? (
+          <>
+            <div className="flex items-center gap-3">
+              {onCancel && (
+                <Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
+                  {cancelLabel}
+                </Button>
+              )}
+              {active !== undefined && onActiveChange && (
+                <div className="flex items-center gap-2 ml-2 pl-3 border-l border-slate-200 dark:border-slate-700">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Trạng thái</span>
+                  <div
+                    className={cn(
+                      'cursor-pointer inline-flex items-center justify-center rounded-full w-10 h-5 transition-colors',
+                      active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
+                    )}
+                    onClick={() => onActiveChange(!active)}
+                  >
+                    <div className={cn(
+                      'w-4 h-4 bg-white rounded-full transition-transform shadow',
+                      active ? 'translate-x-2' : '-translate-x-2',
+                    )} />
+                  </div>
+                  <span className={cn(
+                    'text-xs font-medium',
+                    active ? 'text-green-600 dark:text-green-400' : 'text-slate-400 dark:text-slate-500',
+                  )}>
+                    {active ? 'Bật' : 'Tắt'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <Button
+              type={submitType}
+              onClick={onClickSave}
+              variant={submitVariant}
+              disabled={isDisabled}
+              className={cn(
+                hasChanges === false && !isSubmitting && !disableSave
+                  ? 'bg-slate-300 hover:bg-slate-300 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-800 dark:text-slate-400'
+                  : undefined,
+                submitClassName
+              )}
+            >
+              {label}
+            </Button>
+          </>
         )}
-        <Button
-          type="submit"
-          variant="accent"
-          disabled={isDisabled}
-          className={hasChanges === false && !isSubmitting && !disableSave
-            ? 'bg-slate-300 hover:bg-slate-300 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-800 dark:text-slate-400'
-            : undefined}
-        >
-          {label}
-        </Button>
       </div>
     </div>
   );

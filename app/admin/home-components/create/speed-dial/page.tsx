@@ -13,15 +13,11 @@ import type {
   SpeedDialStyle,
 } from '../../speed-dial/_types';
 
-const createDefaultActions = (secondary: string): SpeedDialAction[] => {
-  const fallbackColor = secondary.trim().length > 0 ? secondary : '#3b82f6';
-
-  return [
-    { id: 'action-phone', bgColor: '#22c55e', icon: 'phone', label: 'Gọi ngay', url: 'tel:0123456789' },
-    { id: 'action-zalo', bgColor: fallbackColor, icon: 'message-circle', label: 'Chat Zalo', url: 'https://zalo.me/yourpage' },
-    { id: 'action-mail', bgColor: '#ef4444', icon: 'mail', label: 'Email', url: 'mailto:contact@example.com' },
-  ];
-};
+const createDefaultActions = (): SpeedDialAction[] => [
+  { id: 'action-phone', bgColor: '#ef4444', icon: 'phone', label: 'Gọi ngay', url: 'tel:0123456789' },
+  { id: 'action-zalo', bgColor: '#0084ff', icon: 'zalo', label: 'Chat Zalo', url: 'https://zalo.me/yourpage' },
+  { id: 'action-mail', bgColor: '#ea580c', icon: 'mail', label: 'Email', url: 'mailto:contact@example.com' },
+];
 
 export default function SpeedDialCreatePage() {
   const COMPONENT_TYPE = 'SpeedDial';
@@ -29,9 +25,12 @@ export default function SpeedDialCreatePage() {
   const { customState, effectiveColors, showCustomBlock, setCustomState, systemColors } = useTypeColorOverrideState(COMPONENT_TYPE, { seedCustomFromSettingsWhenTypeEmpty: true });
   const { primary, secondary, mode } = effectiveColors;
 
-  const [actions, setActions] = React.useState<SpeedDialAction[]>(createDefaultActions(secondary));
+  const [actions, setActions] = React.useState<SpeedDialAction[]>(createDefaultActions());
   const [style, setStyle] = React.useState<SpeedDialStyle>(normalizeSpeedDialStyle(DEFAULT_SPEED_DIAL_CONFIG.style));
   const [position, setPosition] = React.useState<SpeedDialPosition>(DEFAULT_SPEED_DIAL_CONFIG.position);
+  const [defaultOpen, setDefaultOpen] = React.useState<boolean>(DEFAULT_SPEED_DIAL_CONFIG.defaultOpen);
+  const [showOnAllPages, setShowOnAllPages] = React.useState<boolean>(DEFAULT_SPEED_DIAL_CONFIG.showOnAllPages);
+  const [enableShadow, setEnableShadow] = React.useState<boolean>(DEFAULT_SPEED_DIAL_CONFIG.enableShadow);
 
   const onSubmit = (event: React.FormEvent) => {
     const payload: SpeedDialConfig = {
@@ -44,6 +43,9 @@ export default function SpeedDialCreatePage() {
       })),
       style,
       position,
+      defaultOpen,
+      showOnAllPages,
+      enableShadow,
     };
 
     void handleSubmit(event, payload as unknown as Record<string, unknown>);
@@ -68,6 +70,12 @@ export default function SpeedDialCreatePage() {
         onActionsChange={setActions}
         position={position}
         onPositionChange={setPosition}
+        defaultOpen={defaultOpen}
+        onDefaultOpenChange={setDefaultOpen}
+        showOnAllPages={showOnAllPages}
+        onShowOnAllPagesChange={setShowOnAllPages}
+        enableShadow={enableShadow}
+        onEnableShadowChange={setEnableShadow}
         defaultActionColor={secondary || primary}
       />
 
@@ -81,6 +89,8 @@ export default function SpeedDialCreatePage() {
         title={title}
         selectedStyle={style}
         onStyleChange={setStyle}
+        defaultOpen={defaultOpen}
+        enableShadow={enableShadow}
       />
     </ComponentFormWrapper>
   );

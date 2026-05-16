@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { Bookmark, ChevronDown, Eye, FileText, Search } from 'lucide-react';
 import type { Id } from '@/convex/_generated/dataModel';
 import type { SortOption } from '../PostsFilter';
@@ -41,6 +41,7 @@ interface MagazineLayoutProps {
   enabledFields: Set<string>;
   showSearch?: boolean;
   showCategories?: boolean;
+  getDetailHref: (post: Post) => string;
 }
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -66,6 +67,7 @@ export function MagazineLayout({
   enabledFields,
   showSearch = true,
   showCategories = true,
+  getDetailHref,
 }: MagazineLayoutProps) {
   const showExcerpt = enabledFields.has('excerpt');
   const [brokenThumbnails, setBrokenThumbnails] = React.useState<Set<string>>(new Set());
@@ -90,7 +92,7 @@ export function MagazineLayout({
       {!selectedCategory && !searchQuery && mainFeatured && (
         <section className="grid lg:grid-cols-3 gap-4">
           {/* Main Featured - Large Card */}
-          <Link href={`/posts/${mainFeatured.slug}`} className="lg:col-span-2 group">
+          <Link href={getDetailHref(mainFeatured)} className="lg:col-span-2 group">
             <article
               className="relative h-full min-h-[280px] lg:min-h-[360px] rounded-xl overflow-hidden"
               style={{ backgroundColor: tokens.overlaySurface }}
@@ -102,8 +104,9 @@ export function MagazineLayout({
                   fill
                   sizes="(max-width: 1024px) 100vw, 66vw"
                   className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  ref={(img) => {
-                    if (img?.complete && img.naturalWidth === 0) {
+                  mode="thumb"
+                  onLoadingComplete={(img) => {
+                    if (img.naturalWidth === 0) {
                       markThumbnailBroken(mainFeatured._id);
                     }
                   }}
@@ -144,7 +147,7 @@ export function MagazineLayout({
           {/* Secondary Featured - Stacked Cards */}
           <div className="flex flex-col gap-4">
             {secondaryFeatured.map((post) => (
-              <Link key={post._id} href={`/posts/${post.slug}`} className="group flex-1">
+              <Link key={post._id} href={getDetailHref(post)} className="group flex-1">
                 <article
                   className="relative h-full min-h-[140px] lg:min-h-0 rounded-lg overflow-hidden"
                   style={{ backgroundColor: tokens.overlaySurface }}
@@ -156,8 +159,9 @@ export function MagazineLayout({
                       fill
                       sizes="(max-width: 1024px) 100vw, 33vw"
                       className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      ref={(img) => {
-                        if (img?.complete && img.naturalWidth === 0) {
+                      mode="thumb"
+                      onLoadingComplete={(img) => {
+                        if (img.naturalWidth === 0) {
                           markThumbnailBroken(post._id);
                         }
                       }}
@@ -287,7 +291,7 @@ export function MagazineLayout({
             {posts.map((post) => {
               const categoryLabel = categoryMap.get(post.categoryId);
               return (
-                <Link key={post._id} href={`/posts/${post.slug}`} className="group">
+                <Link key={post._id} href={getDetailHref(post)} className="group">
                 <article
                   className="h-full flex flex-col rounded-lg overflow-hidden border hover:shadow-md transition-shadow duration-200"
                   style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
@@ -300,8 +304,9 @@ export function MagazineLayout({
                         fill
                         sizes="(max-width: 768px) 100vw, 33vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        ref={(img) => {
-                          if (img?.complete && img.naturalWidth === 0) {
+                        mode="thumb"
+                        onLoadingComplete={(img) => {
+                          if (img.naturalWidth === 0) {
                             markThumbnailBroken(post._id);
                           }
                         }}

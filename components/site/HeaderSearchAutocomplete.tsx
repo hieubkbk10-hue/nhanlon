@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { useRouter } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { Briefcase, FileText, Package, Search } from 'lucide-react';
@@ -207,7 +207,7 @@ export function HeaderSearchAutocomplete({
                               style={{ backgroundColor: tokens.surfaceMuted }}
                             >
                               {item.thumbnail ? (
-                                <Image src={item.thumbnail} alt={item.title} width={36} height={36} className="h-full w-full object-cover" />
+                                <Image mode="thumb" src={item.thumbnail} alt={item.title} width={36} height={36} className="h-full w-full object-cover" />
                               ) : (
                                 <Icon size={16} style={{ color: tokens.textSubtle }} />
                               )}

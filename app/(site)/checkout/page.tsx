@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
@@ -991,7 +991,7 @@ function CheckoutContent() {
                   className="w-48 h-48 rounded-lg border"
                   style={{ borderColor: tokens.border, backgroundColor: tokens.surface }}
                   loading="lazy"
-                  unoptimized
+                  mode="decorative"
                 />
                 <div className="text-xs" style={{ color: tokens.metaText }}>
                   Quét mã để thanh toán {formatPrice(finalTotal)}
@@ -1021,7 +1021,7 @@ function CheckoutContent() {
               style={{ backgroundColor: tokens.surfaceSoft }}
             >
               {item.image ? (
-                <Image src={item.image} alt={item.name} width={56} height={56} className="object-cover w-full h-full" unoptimized />
+                <Image src={item.image} alt={item.name} width={56} height={56} className="object-cover w-full h-full" mode="thumb" />
               ) : (
                 <Package size={20} style={{ color: tokens.iconMuted }} />
               )}

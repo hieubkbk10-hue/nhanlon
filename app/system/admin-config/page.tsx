@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
@@ -9,12 +9,43 @@ import { AlertCircle, CheckCircle, Loader2, Lock, Mail, Save, Shield, User } fro
 
 type ManageMode = 'existing' | 'new';
 type UserId = Id<'users'>;
+type TrialDurationValue = 'permanent' | '1' | '7' | '30' | '90';
+
+const TRIAL_DURATION_OPTIONS: Array<{ label: string; value: Exclude<TrialDurationValue, 'permanent'> }> = [
+  { label: '1 ngày', value: '1' },
+  { label: '1 tuần', value: '7' },
+  { label: '1 tháng', value: '30' },
+  { label: '3 tháng', value: '90' },
+];
+
+function formatTrialLabel(expiresAt?: number) {
+  if (!expiresAt) {
+    return 'Vĩnh viễn';
+  }
+
+  const remainingMs = expiresAt - Date.now();
+  if (remainingMs <= 0) {
+    return 'Đã hết hạn';
+  }
+
+  const totalHours = Math.floor(remainingMs / (60 * 60 * 1000));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+
+  if (days > 0) {
+    return `Còn ${days} ngày ${hours} giờ`;
+  }
+
+  const minutes = Math.max(Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000)), 0);
+  return `Còn ${hours} giờ ${minutes} phút`;
+}
 
 export default function AdminConfigPage() {
   const superAdmins = useQuery(api.auth.listSuperAdmins);
   const adminUsers = useQuery(api.auth.listAdminUsersForSystem, { limit: 20 });
   const addSuperAdmin = useMutation(api.auth.addSuperAdmin);
   const demoteSuperAdmin = useMutation(api.auth.demoteSuperAdmin);
+  const cleanupExpiredTrials = useMutation(api.auth.cleanupExpiredSuperAdminTrials);
 
   const [mode, setMode] = useState<ManageMode>('existing');
   const [email, setEmail] = useState('');
@@ -23,6 +54,7 @@ export default function AdminConfigPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<UserId | ''>('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [trialDuration, setTrialDuration] = useState<TrialDurationValue>('permanent');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const hasSuperAdmin = (superAdmins?.length ?? 0) > 0;
@@ -34,6 +66,10 @@ export default function AdminConfigPage() {
   });
   const resolvedUsers = resolvedSearch ? adminUsersSearch : adminUsers;
 
+  useEffect(() => {
+    void cleanupExpiredTrials({});
+  }, [cleanupExpiredTrials]);
+
   const handlePromote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserId) {
@@ -43,11 +79,15 @@ export default function AdminConfigPage() {
 
     setIsSubmitting(true);
     try {
-      const result = await addSuperAdmin({ existingUserId: selectedUserId });
+      const result = await addSuperAdmin({
+        existingUserId: selectedUserId,
+        trialDurationDays: trialDuration === 'permanent' ? undefined : Number(trialDuration) as 1 | 7 | 30 | 90,
+      });
       if (result.success) {
         toast.success(result.message);
         setSelectedUserId('');
         setSearchTerm('');
+        setTrialDuration('permanent');
       } else {
         toast.error(result.message);
       }
@@ -77,6 +117,7 @@ export default function AdminConfigPage() {
         email,
         name: name || undefined,
         password,
+        trialDurationDays: trialDuration === 'permanent' ? undefined : Number(trialDuration) as 1 | 7 | 30 | 90,
       });
       if (result.success) {
         toast.success(result.message);
@@ -84,6 +125,7 @@ export default function AdminConfigPage() {
         setName('');
         setPassword('');
         setConfirmPassword('');
+        setTrialDuration('permanent');
       } else {
         toast.error(result.message);
       }
@@ -177,6 +219,9 @@ export default function AdminConfigPage() {
                   <div>
                     <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{item.name}</p>
                     <p className="text-xs text-slate-500">{item.email} • {item.status}</p>
+                    <p className={`text-xs mt-1 ${item.trialExpiresAt ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      {formatTrialLabel(item.trialExpiresAt)}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -247,6 +292,22 @@ export default function AdminConfigPage() {
                 {resolvedUsers && resolvedUsers.length === 0 && (
                   <p className="text-xs text-slate-500 mt-2">Không có user phù hợp.</p>
                 )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Thời hạn cấp quyền
+                </label>
+                <select
+                  value={trialDuration}
+                  onChange={(e) => setTrialDuration(e.target.value as TrialDurationValue)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-800 dark:text-white focus:border-cyan-500 focus:outline-none transition-colors"
+                >
+                  <option value="permanent">Vĩnh viễn</option>
+                  {TRIAL_DURATION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-2">Chọn thời gian dùng thử, hết hạn hệ thống sẽ xóa tài khoản trial.</p>
               </div>
               <button
                 type="submit"
@@ -327,6 +388,23 @@ export default function AdminConfigPage() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Thời hạn cấp quyền
+                </label>
+                <select
+                  value={trialDuration}
+                  onChange={(e) => setTrialDuration(e.target.value as TrialDurationValue)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-800 dark:text-white focus:border-cyan-500 focus:outline-none transition-colors"
+                >
+                  <option value="permanent">Vĩnh viễn</option>
+                  {TRIAL_DURATION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-2">Chọn thời gian dùng thử nếu muốn tự xóa tài khoản sau hạn.</p>
+              </div>
+
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -354,6 +432,7 @@ export default function AdminConfigPage() {
         <ul className="list-disc list-inside space-y-1">
           <li>Super Admin có toàn quyền trong /admin và không thể bị xóa từ /admin/users.</li>
           <li>Có thể có nhiều Super Admin nhưng phải giữ tối thiểu 1 tài khoản.</li>
+          <li>Tài khoản trial sẽ tự bị xóa khi hết hạn, kể cả session /admin đang dùng.</li>
           <li>Nên dùng “Nâng quyền user” để tránh tạo trùng email.</li>
         </ul>
       </div>

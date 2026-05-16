@@ -2,7 +2,7 @@
 
 import type { ImageItem } from '../../../components/MultiImageUploader';
 
-export type HomepageCategoryHeroSelectionMode = 'manual' | 'auto';
+export type HomepageCategoryHeroSelectionMode = 'manual' | 'auto' | 'demo';
 export type HomepageCategoryHeroBrandMode = 'single' | 'dual';
 export type HomepageCategoryHeroTabletBehavior = 'drawer' | 'compact-rail';
 export type HomepageCategoryHeroStyle = 'sidebar' | 'classic' | 'flush' | 'minimal' | 'soft' | 'top-nav';
@@ -80,6 +80,10 @@ export interface HomepageCategoryHeroConfig {
   maxCategoriesMobile: number;
   attachToHeader: boolean;
   tabletBehavior: HomepageCategoryHeroTabletBehavior;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
+  bannerImageFit?: 'cover' | 'contain';
+  demoCategoriesData?: { _id: string; name: string; image?: string }[];
 }
 
 export interface HomepageCategoryData {

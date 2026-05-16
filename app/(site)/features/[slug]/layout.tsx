@@ -38,8 +38,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       routeType: 'landing',
       seo,
       site,
-      titleOverride: 'Không tìm thấy trang',
       social,
+      titleOverride: 'Không tìm thấy trang',
     });
   }
 

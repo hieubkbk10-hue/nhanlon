@@ -94,6 +94,16 @@ export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
   muted: true,
   style: 'centered',
   texts: {},
+  hideHeader: false,
+  showTitle: true,
+  subtitle: '',
+  showSubtitle: true,
+  headerAlign: 'left',
+  titleColorPrimary: false,
+  subtitleAboveTitle: false,
+  uppercaseText: false,
+  showBadge: true,
+  badgeText: '',
 };
 
 export const VIDEO_STYLES_WITH_CTA: VideoStyle[] = ['split', 'fullwidth', 'cinema', 'minimal', 'parallax'];
@@ -113,6 +123,13 @@ const toBoolean = (value: unknown, fallback = false) => (typeof value === 'boole
 
 const ensureText = (value: string, max = 300) => value.trim().slice(0, max);
 
+const normalizeHeaderAlign = (value: unknown): 'left' | 'center' | 'right' => {
+  if (value === 'left' || value === 'center' || value === 'right') {
+    return value;
+  }
+  return 'left';
+};
+
 export const normalizeVideoConfig = (raw: unknown): VideoConfig => {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Partial<VideoConfig>;
 
@@ -129,6 +146,16 @@ export const normalizeVideoConfig = (raw: unknown): VideoConfig => {
     muted: toBoolean(source.muted, true),
     style: normalizeVideoStyle(source.style),
     texts: source.texts && typeof source.texts === 'object' ? source.texts : {},
+    hideHeader: toBoolean(source.hideHeader, false),
+    showTitle: toBoolean(source.showTitle, true),
+    subtitle: ensureText(toText(source.subtitle, ''), 300),
+    showSubtitle: toBoolean(source.showSubtitle, true),
+    headerAlign: normalizeHeaderAlign(source.headerAlign),
+    titleColorPrimary: toBoolean(source.titleColorPrimary, false),
+    subtitleAboveTitle: toBoolean(source.subtitleAboveTitle, false),
+    uppercaseText: toBoolean(source.uppercaseText, false),
+    showBadge: toBoolean(source.showBadge, true),
+    badgeText: ensureText(toText(source.badgeText, ''), 120),
   };
 };
 

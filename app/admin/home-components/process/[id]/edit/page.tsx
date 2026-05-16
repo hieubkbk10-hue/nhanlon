@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ListChecks, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../../components/ui';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -42,14 +43,23 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
   const [active, setActive] = useState(true);
   const [steps, setSteps] = useState<ProcessFormStep[]>([]);
   const [processStyle, setProcessStyle] = useState<ProcessStyle>('horizontal');
+  const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [initialData, setInitialData] = useState<{
-    title: string;
-    active: boolean;
-    steps: ProcessStep[];
-    style: ProcessStyle;
-  } | null>(null);
+
+  // Header config states
+  const [hideHeader, setHideHeader] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [subtitle, setSubtitle] = useState('');
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [headerAlign, setHeaderAlign] = useState<'left' | 'center' | 'right'>('center');
+  const [titleColorPrimary, setTitleColorPrimary] = useState(false);
+  const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
+  const [uppercaseText, setUppercaseText] = useState(false);
+  const [showBadge, setShowBadge] = useState(true);
+  const [badgeText, setBadgeText] = useState('');
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+
+  const [initialSnapshot, setInitialSnapshot] = useState('');
 
   useEffect(() => {
     if (component) {
@@ -60,21 +70,91 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
 
       const normalizedConfig = normalizeProcessConfig(component.config);
       const normalizedFormSteps = normalizeProcessFormSteps(normalizedConfig.steps);
-      const serializedSteps = serializeProcessFormSteps(normalizedFormSteps);
 
       setTitle(component.title);
       setActive(component.active);
       setSteps(normalizedFormSteps);
       setProcessStyle(normalizedConfig.style);
-      setInitialData({
-        title: component.title,
-        active: component.active,
-        steps: serializedSteps,
-        style: normalizedConfig.style,
-      });
-      setHasChanges(false);
+      setDesktopColumns(normalizedConfig.desktopColumns ?? 4);
+
+      // Load header config via shared extractor
+      const config = component.config ?? {};
+      const hc = extractSectionHeaderConfig(config);
+      setHideHeader(hc.hideHeader ?? false);
+      setShowTitle(hc.showTitle ?? true);
+      setSubtitle(hc.subtitle ?? '');
+      setShowSubtitle(hc.showSubtitle ?? true);
+      setHeaderAlign(hc.headerAlign ?? 'center');
+      setTitleColorPrimary(hc.titleColorPrimary ?? false);
+      setSubtitleAboveTitle(hc.subtitleAboveTitle ?? false);
+      setUppercaseText(hc.uppercaseText ?? false);
+      setShowBadge(hc.showBadge ?? true);
+      setBadgeText(hc.badgeText ?? '');
     }
   }, [component, id, router]);
+
+  const toSnapshot = (payload: {
+    title: string;
+    active: boolean;
+    steps: ProcessStep[];
+    style: ProcessStyle;
+    desktopColumns: 3 | 4;
+    hideHeader: boolean;
+    showTitle: boolean;
+    subtitle: string;
+    showSubtitle: boolean;
+    headerAlign: 'left' | 'center' | 'right';
+    titleColorPrimary: boolean;
+    subtitleAboveTitle: boolean;
+    uppercaseText: boolean;
+    showBadge: boolean;
+    badgeText: string;
+  }) => JSON.stringify(payload);
+
+  useEffect(() => {
+    if (!component) {return;}
+    const config = component.config ?? {};
+    const hc = extractSectionHeaderConfig(config);
+    const normalizedConfig = normalizeProcessConfig(component.config);
+    const normalizedFormSteps = normalizeProcessFormSteps(normalizedConfig.steps);
+    const serializedSteps = serializeProcessFormSteps(normalizedFormSteps);
+
+    setInitialSnapshot(toSnapshot({
+      title: component.title,
+      active: component.active,
+      steps: serializedSteps,
+      style: normalizedConfig.style,
+      desktopColumns: normalizedConfig.desktopColumns ?? 4,
+      hideHeader: hc.hideHeader ?? false,
+      showTitle: hc.showTitle ?? true,
+      subtitle: hc.subtitle ?? '',
+      showSubtitle: hc.showSubtitle ?? true,
+      headerAlign: hc.headerAlign ?? 'center',
+      titleColorPrimary: hc.titleColorPrimary ?? false,
+      subtitleAboveTitle: hc.subtitleAboveTitle ?? false,
+      uppercaseText: hc.uppercaseText ?? false,
+      showBadge: hc.showBadge ?? true,
+      badgeText: hc.badgeText ?? '',
+    }));
+  }, [component]);
+
+  const currentSnapshot = toSnapshot({
+    title,
+    active,
+    steps: serializeProcessFormSteps(steps),
+    style: processStyle,
+    desktopColumns,
+    hideHeader,
+    showTitle,
+    subtitle,
+    showSubtitle,
+    headerAlign,
+    titleColorPrimary,
+    subtitleAboveTitle,
+    uppercaseText,
+    showBadge,
+    badgeText,
+  });
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
   const customChanged = showCustomBlock
@@ -88,19 +168,7 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
 
-  useEffect(() => {
-    if (!initialData) {return;}
-
-    const currentSteps = JSON.stringify(serializeProcessFormSteps(steps));
-    const initialSteps = JSON.stringify(initialData.steps);
-
-    const changed = title !== initialData.title
-      || active !== initialData.active
-      || processStyle !== initialData.style
-      || currentSteps !== initialSteps;
-
-    setHasChanges(changed || customChanged || customFontChanged);
-  }, [title, active, steps, processStyle, initialData, customChanged, customFontChanged]);
+  const hasChanges = currentSnapshot !== initialSnapshot || customChanged || customFontChanged;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -115,6 +183,18 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
         config: {
           steps: serializedSteps,
           style: processStyle,
+          desktopColumns,
+          // Header config
+          hideHeader,
+          showTitle,
+          subtitle,
+          showSubtitle,
+          headerAlign,
+          titleColorPrimary,
+          subtitleAboveTitle,
+          uppercaseText,
+          showBadge,
+          badgeText,
         },
         id: id as Id<'homeComponents'>,
         title,
@@ -138,12 +218,7 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
       }
 
       toast.success('Đã cập nhật Process');
-      setInitialData({
-        title,
-        active,
-        steps: serializedSteps,
-        style: processStyle,
-      });
+      setInitialSnapshot(currentSnapshot);
       if (showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
@@ -158,7 +233,6 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
           fontKey: customFontState.fontKey,
         });
       }
-      setHasChanges(false);
     } catch (error) {
       toast.error('Lỗi khi cập nhật');
       console.error(error);
@@ -191,46 +265,37 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ListChecks size={20} />
-              Process
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(event) => { setTitle(event.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={headerExpanded}
+          onExpandedChange={setHeaderExpanded}
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
 
-            <div className="flex items-center gap-3">
-              <Label>Trạng thái:</Label>
-              <div
-                className={cn(
-                  'cursor-pointer inline-flex items-center justify-center rounded-full w-12 h-6 transition-colors',
-                  active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600',
-                )}
-                onClick={() => { setActive(!active); }}
-              >
-                <div
-                  className={cn(
-                    'w-5 h-5 bg-white rounded-full transition-transform shadow',
-                    active ? 'translate-x-2.5' : '-translate-x-2.5',
-                  )}
-                ></div>
-              </div>
-              <span className="text-sm text-slate-500">{active ? 'Bật' : 'Tắt'}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <ProcessForm steps={steps} onChange={setSteps} secondary={effectiveColors.secondary} />
+        <ProcessForm steps={steps} onChange={setSteps} secondary={effectiveColors.secondary} defaultExpanded={false} desktopColumns={desktopColumns} onDesktopColumnsChange={setDesktopColumns} />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
@@ -282,8 +347,20 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
               mode={effectiveColors.mode as ProcessBrandMode}
               selectedStyle={processStyle}
               onStyleChange={setProcessStyle}
+              title={title}
+              hideHeader={hideHeader}
+              showTitle={showTitle}
+              showSubtitle={showSubtitle}
+              subtitle={subtitle}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              showBadge={showBadge}
+              badgeText={badgeText}
               fontStyle={fontStyle}
               fontClassName="font-active"
+              desktopColumns={desktopColumns}
             />
           </div>
         </div>
@@ -293,6 +370,8 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
           hasChanges={hasChanges}
           onCancel={() => { router.push('/admin/home-components'); }}
           submitLabel="Lưu thay đổi"
+        active={active}
+        onActiveChange={setActive}
         />
       </form>
     </div>

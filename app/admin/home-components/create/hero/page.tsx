@@ -8,6 +8,7 @@ import { HeroForm } from '../../hero/_components/HeroForm';
 import type { HeroContent, HeroSlide, HeroStyle } from '../../hero/_types';
 import { DEFAULT_HERO_CONTENT } from '../../hero/_lib/constants';
 import { HeroPreview } from '../../hero/_components/HeroPreview';
+import { detectMediaType } from '@/lib/utils/media';
 
 const needsContentForm = (style: HeroStyle) => ['fullscreen', 'split', 'parallax'].includes(style);
 
@@ -21,18 +22,21 @@ export default function HeroCreatePage() {
   ]);
   const [heroStyle, setHeroStyle] = useState<HeroStyle>('slider');
   const [heroContent, setHeroContent] = useState<HeroContent>(DEFAULT_HERO_CONTENT);
+  const [noBorderRadius, setNoBorderRadius] = useState(false);
 
   const previewSlides = heroSlides.map((s, idx) => ({ 
     id: idx + 1, 
     image: s.url,
-    link: s.link 
+    link: s.link,
+    mediaType: detectMediaType(s.url),
   }));
   const fontStyle = { '--font-active': `var(${effectiveFont.fontVariable})` } as React.CSSProperties;
 
   const onSubmit = (e: React.FormEvent) => {
     void handleSubmit(e, {
       content: needsContentForm(heroStyle) ? heroContent : undefined,
-      slides: heroSlides.map(s => ({ image: s.url || s.image, link: s.link })),
+      noBorderRadius,
+      slides: heroSlides.map(s => ({ image: s.url || s.image, link: s.link, mediaType: detectMediaType(s.url) })),
       style: heroStyle,
     });
   };
@@ -60,6 +64,8 @@ export default function HeroCreatePage() {
         heroStyle={heroStyle}
         heroContent={heroContent}
         setHeroContent={setHeroContent}
+        noBorderRadius={noBorderRadius}
+        setNoBorderRadius={setNoBorderRadius}
       />
 
       <HeroPreview 

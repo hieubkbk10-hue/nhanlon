@@ -20,6 +20,9 @@ import { stripHtml, truncateText } from '@/lib/seo';
 import { ProductCategoryCombobox } from '@/app/admin/products/components/ProductCategoryCombobox';
 import { QuickCreateCategoryModal } from '@/app/admin/products/components/QuickCreateCategoryModal';
 import { normalizeRichText } from '@/app/admin/lib/normalize-rich-text';
+import { resolveProductImageAspectRatio } from '@/lib/products/image-aspect-ratio';
+import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
+import { AiEntityImportDialog, type AiEntityImportPayload } from '@/app/admin/components/AiEntityImportDialog';
 
 const MODULE_KEY = 'products';
 
@@ -62,7 +65,7 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
   const [status, setStatus] = useState<'Draft' | 'Active' | 'Archived'>('Draft');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('saved');
-  const [editorResetKey] = useState(0);
+  const [editorResetKey, setEditorResetKey] = useState(0);
   const [snapshotVersion, setSnapshotVersion] = useState(0);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -153,6 +156,10 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
     const setting = settingsData?.find(s => s.settingKey === 'enableImageCrop');
     return Boolean(setting?.value);
   }, [settingsData]);
+  const defaultImageAspectRatio = useMemo(() => {
+    const setting = settingsData?.find(s => s.settingKey === 'defaultImageAspectRatio');
+    return resolveProductImageAspectRatio(setting?.value);
+  }, [settingsData]);
 
   const isAffiliateMode = saleMode === 'affiliate';
   const isPriceRequired = saleMode === 'cart';
@@ -160,6 +167,12 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
   const hideBasePricing = variantEnabled && variantPricing === 'variant';
 
   const normalizedDescription = useMemo(() => normalizeRichText(description), [description]);
+
+  const generateSlugFromTitle = (value: string) => value.toLowerCase()
+    .normalize("NFD").replaceAll(/[\u0300-\u036F]/g, "")
+    .replaceAll(/[đĐ]/g, "d")
+    .replaceAll(/[^a-z0-9\s]/g, '')
+    .replaceAll(/\s+/g, '-');
 
   const currentSnapshot = useMemo(() => ({
     affiliateLink: affiliateLink.trim(),
@@ -226,6 +239,36 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
       setSaveStatus('saved');
     }
   }, [hasChanges, saveStatus]);
+
+  const handleApplyAiProduct = (item: AiEntityImportPayload) => {
+    const nextName = item.name?.trim() || item.title?.trim() || '';
+    if (!nextName) {return;}
+
+    setName(nextName);
+    setSlug(item.slug?.trim() || generateSlugFromTitle(nextName));
+    if (item.sku) {setSku(item.sku);}
+    if (typeof item.price === 'number') {setPrice(String(item.price));}
+    if (typeof item.salePrice === 'number') {setSalePrice(String(item.salePrice));}
+    if (typeof item.stock === 'number') {setStock(String(item.stock));}
+    const nextDescription = item.description || item.content || item.excerpt || '';
+    setDescription(nextDescription);
+    if (item.htmlRender) {
+      setRenderType('html');
+      setHtmlRender(item.htmlRender);
+      setMarkdownRender('');
+    } else if (item.markdownRender) {
+      setRenderType('markdown');
+      setMarkdownRender(item.markdownRender);
+      setHtmlRender('');
+    }
+    setMetaTitle(item.metaTitle || truncateText(nextName, 60));
+    setMetaDescription(item.metaDescription || truncateText(stripHtml(nextDescription), 160));
+    if (item.image) {
+      setImage(item.image);
+      setImageStorageId(undefined);
+    }
+    setEditorResetKey((prev) => prev + 1);
+  };
 
   useEffect(() => {
     if (productData && !isDataLoaded) {
@@ -524,12 +567,7 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
                   <Input value={name} onChange={(e) => {
                     const val = e.target.value;
                     setName(val);
-                    const generatedSlug = val.toLowerCase()
-                      .normalize("NFD").replaceAll(/[\u0300-\u036F]/g, "")
-                      .replaceAll(/[đĐ]/g, "d")
-                      .replaceAll(/[^a-z0-9\s]/g, '')
-                      .replaceAll(/\s+/g, '-');
-                    setSlug(generatedSlug);
+                    setSlug(generateSlugFromTitle(val));
                   }} required placeholder="Nhập tên sản phẩm..." autoFocus />
                   <Button
                     type="button"
@@ -871,7 +909,8 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
                 onStorageIdChange={setImageStorageId}
                 folder="products"
                 naming={{ entityName: slug.trim() || 'product', style: 'slug-index', index: 1 }}
-                enableSquareCrop={enableImageCrop}
+                enableCrop={enableImageCrop}
+                cropAspectRatio={defaultImageAspectRatio}
               />
             </CardContent>
           </Card>
@@ -891,7 +930,9 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
                   minItems={0}
                   maxItems={20}
                   aspectRatio="square"
-                  enableSquareCrop={enableImageCrop}
+                  enableCrop={enableImageCrop}
+                  cropAspectRatio={defaultImageAspectRatio}
+                  imageAspectRatio={defaultImageAspectRatio}
                   columns={2}
                   addButtonText="Thêm ảnh"
                   emptyText="Chưa có ảnh trong thư viện"
@@ -919,22 +960,31 @@ function ProductEditContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 lg:left-[280px] right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center z-10">
-        <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/products'); }}>Hủy bỏ</Button>
-        <Button
-          type="submit"
-          variant="accent"
-          disabled={isSubmitting || !hasChanges}
-          className={!hasChanges && !isSubmitting
-            ? 'bg-slate-300 hover:bg-slate-300 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-800 dark:text-slate-400'
-            : undefined}
-        >
-          {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
-          {isSubmitting || saveStatus === 'saving'
-            ? 'Đang lưu...'
-            : (saveStatus === 'saved' && !hasChanges ? 'Đã lưu' : 'Lưu thay đổi')}
-        </Button>
-      </div>
+      <HomeComponentStickyFooter
+        isSubmitting={isSubmitting || saveStatus === 'saving'}
+        hasChanges={hasChanges}
+        onCancel={() =>{  router.push('/admin/products'); }}
+        submitLabel="Lưu thay đổi"
+      >
+        <>
+          <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/products'); }} disabled={isSubmitting}>Hủy bỏ</Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <AiEntityImportDialog kind="product" enabledFields={enabledFields} onApply={handleApplyAiProduct} />
+            <Button
+              type="submit"
+              variant="accent"
+              disabled={isSubmitting || !hasChanges}
+              className={!hasChanges && !isSubmitting
+                ? 'bg-slate-300 hover:bg-slate-300 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-800 dark:text-slate-400'
+                : undefined}
+            >
+              {isSubmitting || saveStatus === 'saving'
+                ? 'Đang lưu...'
+                : (saveStatus === 'saved' && !hasChanges ? 'Đã lưu' : 'Lưu thay đổi')}
+            </Button>
+          </div>
+        </>
+      </HomeComponentStickyFooter>
     </form>
     </>
   );

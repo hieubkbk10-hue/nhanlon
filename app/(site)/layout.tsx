@@ -5,7 +5,10 @@ import { getConvexClient } from '@/lib/convex';
 import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings } from '@/lib/get-settings';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 import { buildSiteSchemas } from '@/lib/seo/schema-policy';
+import { TelemetryGate } from '@/components/telemetry/TelemetryGate';
 import type { Metadata } from 'next';
+
+export const revalidate = 1800; // 30 minutes — on-demand revalidation via seo-revalidate action
 
 const resolveUrl = (url: string, baseUrl: string): string => {
   if (!url) {
@@ -49,21 +52,28 @@ const SiteLayout = ({
 }: {
   children: React.ReactNode;
 }): Promise<React.ReactElement> => {
+  const client = getConvexClient();
   return Promise.all([
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
     getSocialSettings(),
-  ]).then(async ([site, seo, contact, social]) => {
+    client.query(api.menus.getMenuByLocation, { location: 'header' }),
+    client.query(api.settings.getMultiple, {
+      keys: ['header_style', 'header_config'],
+    }),
+  ]).then(async ([
+    site,
+    seo,
+    contact,
+    social,
+    headerMenu,
+    headerSettings,
+  ]) => {
     const baseUrl = (site.site_url || process.env.NEXT_PUBLIC_SITE_URL) ?? '';
-    const client = getConvexClient();
-    const headerMenu = await client.query(api.menus.getMenuByLocation, { location: 'header' });
     const headerItems = headerMenu
       ? await client.query(api.menus.listActiveMenuItems, { menuId: headerMenu._id })
       : [];
-    const headerSettings = await client.query(api.settings.getMultiple, {
-      keys: ['header_style', 'header_config'],
-    });
     const initialHeaderData = {
       contact: {
         contact_email: contact.contact_email,
@@ -99,6 +109,7 @@ const SiteLayout = ({
           ))}
           {headerItems.length > 0 && <JsonLd data={navigationSchema} />}
           {children}
+          <TelemetryGate includeSpeedInsights />
         </SiteShell>
       </div>
     );

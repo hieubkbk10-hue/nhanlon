@@ -1,24 +1,30 @@
 'use client';
 
 import React from 'react';
-import { GripVertical, Layers, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, GripVertical, Layers, Plus, Trash2, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
 import type { ProcessFormStep } from '../_lib/normalize';
 import { createProcessFormStep } from '../_lib/normalize';
+import { AiDemoProcessImport } from '../../product-list/_components/AiDemoProductsImport';
 
 interface ProcessFormProps {
   steps: ProcessFormStep[];
   onChange: (steps: ProcessFormStep[]) => void;
   secondary: string;
+  defaultExpanded?: boolean;
+  desktopColumns?: 3 | 4;
+  onDesktopColumnsChange?: (cols: 3 | 4) => void;
 }
 
-export const ProcessForm = ({ steps, onChange, secondary }: ProcessFormProps) => {
+export const ProcessForm = ({ steps, onChange, secondary, defaultExpanded = true, desktopColumns = 4, onDesktopColumnsChange }: ProcessFormProps) => {
+  const [expanded, setExpanded] = React.useState(defaultExpanded);
   const [draggedId, setDraggedId] = React.useState<string | null>(null);
   const [dragOverId, setDragOverId] = React.useState<string | null>(null);
 
   const safeSecondary = secondary.trim().length > 0 ? secondary : '#3b82f6';
 
   const handleAdd = () => {
+    if (steps.length >= 4) { return; }
     onChange([...steps, createProcessFormStep({ icon: String(steps.length + 1) })]);
   };
 
@@ -69,12 +75,63 @@ export const ProcessForm = ({ steps, onChange, secondary }: ProcessFormProps) =>
   return (
     <Card className="mb-6">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Các bước quy trình</CardTitle>
-        <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="gap-2">
-          <Plus size={14} /> Thêm bước
-        </Button>
+        <div
+          className="cursor-pointer flex items-center gap-2 flex-1"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <CardTitle className="text-base flex items-center gap-2">
+            <Layers size={20} />
+            Các bước quy trình ({steps.length})
+          </CardTitle>
+          <ChevronDown
+            size={16}
+            className={cn(
+              'transition-transform duration-200',
+              expanded ? 'rotate-180' : '',
+            )}
+          />
+        </div>
+        {expanded && (
+          <div className="flex items-center gap-2">
+            <div onClick={(e) => e.stopPropagation()}>
+              <AiDemoProcessImport onApply={(items) => onChange(items as ProcessFormStep[])} />
+            </div>
+            {steps.length < 4 && (
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="gap-2">
+                <Plus size={14} /> Thêm bước
+              </Button>
+            )}
+          </div>
+        )}
       </CardHeader>
+      {expanded && (
       <CardContent className="space-y-4">
+        {/* Số cột desktop */}
+        {onDesktopColumnsChange && (
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Số cột desktop</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {([3, 4] as const).map((option) => {
+                const selected = desktopColumns === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onDesktopColumnsChange(option)}
+                    className={cn(
+                      'h-9 rounded-md border text-xs transition-colors',
+                      selected
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                        : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                    )}
+                  >
+                    {option} cột
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {steps.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: `${safeSecondary}14` }}>
@@ -114,35 +171,58 @@ export const ProcessForm = ({ steps, onChange, secondary }: ProcessFormProps) =>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <Input
-                  placeholder="Icon/Số (VD: 1, 01, ✓)"
-                  value={step.icon}
-                  onChange={(event) => {
-                    handleUpdate(step.id, (current) => ({ ...current, icon: event.target.value }));
-                  }}
-                  className="md:col-span-1"
-                />
-                <Input
-                  placeholder="Tiêu đề bước"
-                  value={step.title}
-                  onChange={(event) => {
-                    handleUpdate(step.id, (current) => ({ ...current, title: event.target.value }));
-                  }}
-                  className="md:col-span-3"
-                />
+                <div className="relative md:col-span-1">
+                  <Input
+                    placeholder="Icon/Số (VD: 1, 01, ✓)"
+                    value={step.icon}
+                    onChange={(event) => {
+                      handleUpdate(step.id, (current) => ({ ...current, icon: event.target.value }));
+                    }}
+                    className="pr-6"
+                  />
+                  {step.icon && (
+                    <button type="button" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onClick={() => handleUpdate(step.id, (c) => ({ ...c, icon: '' }))}>
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <div className="relative md:col-span-3">
+                  <Input
+                    placeholder="Tiêu đề bước"
+                    value={step.title}
+                    onChange={(event) => {
+                      handleUpdate(step.id, (current) => ({ ...current, title: event.target.value }));
+                    }}
+                    className="pr-6"
+                  />
+                  {step.title && (
+                    <button type="button" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onClick={() => handleUpdate(step.id, (c) => ({ ...c, title: '' }))}>
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <Input
-                placeholder="Mô tả chi tiết bước này..."
-                value={step.description}
-                onChange={(event) => {
-                  handleUpdate(step.id, (current) => ({ ...current, description: event.target.value }));
-                }}
-              />
+              <div className="relative">
+                <Input
+                  placeholder="Mô tả chi tiết bước này..."
+                  value={step.description}
+                  onChange={(event) => {
+                    handleUpdate(step.id, (current) => ({ ...current, description: event.target.value }));
+                  }}
+                  className="pr-6"
+                />
+                {step.description && (
+                  <button type="button" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onClick={() => handleUpdate(step.id, (c) => ({ ...c, description: '' }))}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}
       </CardContent>
+      )}
     </Card>
   );
 };

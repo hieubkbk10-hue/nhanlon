@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
+import { PublicImage as Image } from '@/components/shared/PublicImage';
 import Link from 'next/link';
 import { useConvex, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
@@ -16,6 +16,7 @@ import type {
 } from '@/app/admin/home-components/homepage-category-hero/_types';
 import {
   DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG,
+  DEMO_CATEGORIES_DATA,
   normalizeHomepageCategoryHeroCategories,
   normalizeHomepageCategoryHeroStyle,
 } from '@/app/admin/home-components/homepage-category-hero/_lib/constants';
@@ -23,6 +24,7 @@ import { getHomepageCategoryHeroColors, type HomepageCategoryHeroTokens } from '
 import { getHomepageCategoryHeroIcon } from '@/app/admin/home-components/homepage-category-hero/_lib/icon-options';
 import { autoGenerateHomepageCategoryHeroMenu, buildCategoryAggregateMap } from '@/app/admin/home-components/homepage-category-hero/_lib/auto-generate';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { buildDetailPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 
 type ResolvedCategory = {
   id: number | string;
@@ -69,11 +71,13 @@ function BannerSlider({
   className,
   isHidden,
   tokens,
+  imageFit = 'cover',
 }: {
   slides: HomepageCategoryHeroSlide[];
   className?: string;
   isHidden?: boolean;
   tokens: HomepageCategoryHeroTokens;
+  imageFit?: 'cover' | 'contain';
 }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
@@ -84,6 +88,7 @@ function BannerSlider({
   const pointerIdRef = useRef<number | null>(null);
   const isDragging = useRef(false);
   const isPointerDown = useRef(false);
+  const [isInteracting, setIsInteracting] = useState(false);
   const normalizedSlides = slides.length > 0 ? slides : [{ url: '', link: '' }];
   const totalSlides = normalizedSlides.length;
 
@@ -113,6 +118,7 @@ function BannerSlider({
     pointerStartY.current = event.clientY;
     isDragging.current = false;
     isPointerDown.current = true;
+    setIsInteracting(true);
     setDragOffset(0);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -154,6 +160,7 @@ function BannerSlider({
     }
     window.setTimeout(() => {
       isDragging.current = false;
+      setIsInteracting(false);
     }, 0);
   };
 
@@ -168,20 +175,23 @@ function BannerSlider({
     event.preventDefault();
   };
 
+  const isContain = imageFit === 'contain';
+
   return (
-    <div className={cn('relative w-full h-full transition-opacity duration-300', className, isHidden ? 'opacity-0 pointer-events-none' : 'opacity-100')}>
+    <div className={cn('relative w-full transition-opacity duration-300', isContain ? '' : 'h-full', className, isHidden ? 'opacity-0 pointer-events-none' : 'opacity-100')}>
       <div
         ref={containerRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="relative w-full h-full overflow-hidden touch-pan-y"
+        className={cn('relative w-full overflow-hidden touch-pan-y', isContain ? '' : 'h-full')}
       >
         <div
           className={cn(
-            'flex h-full w-full transition-transform duration-500 ease-out',
-            isPointerDown.current || isDragging.current ? 'transition-none' : ''
+            'flex w-full transition-transform duration-500 ease-out',
+            isContain ? '' : 'h-full',
+            isInteracting ? 'transition-none' : ''
           )}
           style={{
             transform: `translate3d(calc(${-(currentSlide * 100)}% + ${dragOffset}px), 0, 0)`,
@@ -189,16 +199,34 @@ function BannerSlider({
         >
           {normalizedSlides.map((slide, idx) => {
             const content = slide.url ? (
-              <Image
-                src={slide.url}
-                alt={`Banner ${idx + 1}`}
-                fill
-                className="object-cover"
-                priority={idx === 0}
-                unoptimized
-                draggable={false}
-                onDragStart={handleDragStart}
-              />
+              isContain ? (
+                <Image
+                  mode="primary"
+                  src={slide.url}
+                  alt={`Banner ${idx + 1}`}
+                  width={1920}
+                  height={800}
+                  className="w-full h-auto"
+                  priority={idx === 0}
+                  fetchPriority={idx === 0 ? 'high' : 'auto'}
+                  sizes="100vw"
+                  draggable={false}
+                  onDragStart={handleDragStart}
+                />
+              ) : (
+                <Image
+                  mode="primary"
+                  src={slide.url}
+                  alt={`Banner ${idx + 1}`}
+                  fill
+                  className="object-cover"
+                  priority={idx === 0}
+                  fetchPriority={idx === 0 ? 'high' : 'auto'}
+                  sizes="100vw"
+                  draggable={false}
+                  onDragStart={handleDragStart}
+                />
+              )
             ) : (
               <div
                 className="flex h-full w-full items-center justify-center text-sm"
@@ -214,13 +242,13 @@ function BannerSlider({
             return (
               <div
                 key={`${slide.url}-${idx}`}
-                className="relative h-full w-full shrink-0"
+                className={cn('relative w-full shrink-0', isContain ? '' : 'h-full')}
                 style={{ backgroundColor: tokens.placeholder.background }}
               >
                 {slide.url && slide.link ? (
                   <Link
                     href={slide.link}
-                    className="absolute inset-0"
+                    className={isContain ? 'block' : 'absolute inset-0'}
                     onClick={handleLinkClick}
                     onDragStart={handleDragStart}
                     draggable={false}
@@ -283,7 +311,10 @@ export function HomepageCategoryHeroSection({
   }), [config]);
   const convex = useConvex();
   const categoriesData = useQuery(api.productCategories.listActive);
-  const needsHeroPayload = resolvedConfig.selectionMode === 'auto' || resolvedConfig.hideEmptyCategories;
+  const routeModeSetting = useQuery(api.settings.getValue, { key: 'ia_route_mode', defaultValue: 'unified' });
+  const routeMode = useMemo(() => normalizeRouteMode(routeModeSetting), [routeModeSetting]);
+  const isDemo = resolvedConfig.selectionMode === 'demo';
+  const needsHeroPayload = !isDemo && (resolvedConfig.selectionMode === 'auto' || resolvedConfig.hideEmptyCategories);
   const legacyPayload = useQuery(
     api.productCategories.listActiveWithStats,
     needsHeroPayload
@@ -348,8 +379,15 @@ export function HomepageCategoryHeroSection({
     (categoriesData ?? []).forEach((category) => {
       map.set(category._id, category);
     });
+    // Merge demo categories so demo IDs resolve properly
+    if (isDemo) {
+      const demoSource = resolvedConfig.demoCategoriesData ?? DEMO_CATEGORIES_DATA;
+      demoSource.forEach((cat) => {
+        map.set(cat._id, { _id: cat._id, name: cat.name, slug: cat._id, image: cat.image });
+      });
+    }
     return map;
-  }, [categoriesData]);
+  }, [categoriesData, isDemo, resolvedConfig.demoCategoriesData]);
 
   const resolvedHeroPayload = useMemo(() => {
     if (!needsHeroPayload) {return null;}
@@ -404,7 +442,8 @@ export function HomepageCategoryHeroSection({
         if (!category) {return null;}
         const image = item.imageOverride ?? category.image;
 
-        if (resolvedConfig.hideEmptyCategories && aggregateMap) {
+        // Skip empty-category filter for demo mode (no real stats)
+        if (!isDemo && resolvedConfig.hideEmptyCategories && aggregateMap) {
           const aggregated = aggregateMap.get(category._id);
           if (!aggregated || aggregated.productCount <= 0) {
             return null;
@@ -424,7 +463,7 @@ export function HomepageCategoryHeroSection({
       .filter(Boolean) as ResolvedCategory[];
 
     return list;
-  }, [aggregateMap, autoGenerated, categoryMap, resolvedConfig.categories, resolvedConfig.hideEmptyCategories, resolvedConfig.selectionMode]);
+  }, [aggregateMap, autoGenerated, categoryMap, isDemo, resolvedConfig.categories, resolvedConfig.hideEmptyCategories, resolvedConfig.selectionMode]);
 
   const maxCategories = device === 'mobile'
     ? resolvedConfig.maxCategoriesMobile
@@ -450,10 +489,6 @@ export function HomepageCategoryHeroSection({
     });
   }, [visibleCategories, isDesktop]);
 
-  useEffect(() => {
-    updateScrollState();
-  }, [visibleCategories, device]);
-
   const resolveCategoryLink = (category?: HomepageCategoryData) => {
     if (!category) {return '#';}
     const slug = category.slug ?? category._id;
@@ -477,7 +512,12 @@ export function HomepageCategoryHeroSection({
       const product = item.productId ? productMap.get(item.productId) : undefined;
       const label = item.label ?? product?.name ?? 'Sản phẩm';
       const slug = item.slug ?? product?.slug;
-      const href = slug ? `/products/${slug}` : '#';
+      const href = slug ? buildDetailPath({
+        categorySlug: product?.categoryId ? categoryMap.get(product.categoryId)?.slug : undefined,
+        mode: routeMode,
+        moduleKey: 'products',
+        recordSlug: slug,
+      }) : '#';
       return { label, href, isProduct: true, image: item.image ?? product?.image };
     }
     const category = item.categoryId ? categoryMap.get(item.categoryId) : undefined;
@@ -509,7 +549,7 @@ export function HomepageCategoryHeroSection({
     }, 120);
   };
 
-  const updateScrollState = () => {
+  const updateScrollState = React.useCallback(() => {
     const el = categoryListRef.current;
     if (!el) {
       setCanScrollUp(false);
@@ -518,7 +558,11 @@ export function HomepageCategoryHeroSection({
     }
     setCanScrollUp(el.scrollTop > 4);
     setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
-  };
+  }, []);
+
+  useEffect(() => {
+    updateScrollState();
+  }, [updateScrollState, visibleCategories, device]);
 
   const scrollCategoryList = (direction: 'up' | 'down') => {
     const el = categoryListRef.current;
@@ -594,12 +638,13 @@ export function HomepageCategoryHeroSection({
           }}
         >
           <Image
+            mode="primary"
             src={resolvedImage}
             alt={item.category.name}
             width={containerSize}
             height={containerSize}
             className="h-full w-full object-cover"
-            unoptimized
+            sizes={`${containerSize}px`}
           />
         </div>
       );
@@ -675,6 +720,71 @@ export function HomepageCategoryHeroSection({
     ));
   };
 
+  /** Ant Kitchen-style thumbnail grid: items with images render as visual cards */
+  const renderThumbnailGrid = (groups: HomepageCategoryHeroMenuGroup[], maxItems = 9) => {
+    const allItems = groups.flatMap((g) => g.items ?? []);
+    const itemsWithImages = allItems.filter((item) => {
+      const resolved = resolveMenuItem(item);
+      return item.image || resolved.image;
+    }).slice(0, maxItems);
+
+    if (itemsWithImages.length === 0) {return null;}
+
+    return (
+      <div
+        className="rounded-lg p-3 mb-4"
+        style={{ backgroundColor: resolvedTokens.neutral.surfaceAlt }}
+      >
+        <div className={cn(
+          'grid gap-3',
+          itemsWithImages.length <= 3 ? 'grid-cols-3' : itemsWithImages.length <= 6 ? 'grid-cols-3 sm:grid-cols-4' : 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5'
+        )}>
+          {itemsWithImages.map((item) => {
+            const resolved = resolveMenuItem(item);
+            const imgSrc = item.image || resolved.image;
+            return (
+              <Link
+                key={item.id}
+                href={resolved.href}
+                className="group flex flex-col items-center gap-1.5 rounded-lg p-2 transition-colors hover:bg-white/80"
+              >
+                <div
+                  className="relative w-[72px] h-[72px] sm:w-20 sm:h-20 rounded-lg overflow-hidden border"
+                  style={{
+                    backgroundColor: resolvedTokens.neutral.surface,
+                    borderColor: resolvedTokens.neutral.border,
+                  }}
+                >
+                  {imgSrc ? (
+                    <Image
+                      mode="primary"
+                      src={imgSrc}
+                      alt={resolved.label || ''}
+                      width={80}
+                      height={80}
+                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                      sizes="80px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs" style={{ color: resolvedTokens.neutral.textMuted }}>
+                      {(resolved.label || '?').slice(0, 2)}
+                    </div>
+                  )}
+                </div>
+                <span
+                  className="text-xs text-center leading-tight line-clamp-2 max-w-[80px]"
+                  style={{ color: resolvedTokens.neutral.text }}
+                >
+                  {resolved.label || 'Mục'}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderSidebarLayout = (variant: 'sidebar' | 'classic' | 'flush' | 'minimal' | 'soft') => {
     const isClassic = variant === 'classic';
     const isFlush = variant === 'flush';
@@ -691,25 +801,31 @@ export function HomepageCategoryHeroSection({
       '--hero-soft-hover-text': resolvedTokens.softPill.hoverText,
     } as React.CSSProperties;
 
+    const noBorderRadius = resolvedConfig.noBorderRadius ?? false;
+    const noVerticalMargin = resolvedConfig.noVerticalMargin ?? false;
+    const isContain = resolvedConfig.bannerImageFit === 'contain';
+
     const sectionClass = cn(
       'w-full',
       resolvedConfig.attachToHeader ? 'pt-0' : 'pt-4 md:pt-6'
     );
+    const fixedH = isContain ? '' : 'lg:h-[576px]';
+    const fixedHFlush = isContain ? '' : 'lg:h-[600px]';
     const containerClass = cn(
       'relative flex flex-col lg:flex-row w-full max-w-7xl mx-auto',
-      variant === 'sidebar' && 'border rounded-xl overflow-hidden lg:h-[576px]',
-      isClassic && 'gap-4 lg:h-[576px]',
-      isFlush && 'rounded-xl overflow-hidden border lg:h-[600px]',
-      isMinimal && 'gap-8 lg:h-[600px]',
-      isSoft && 'gap-6 lg:h-[576px]'
+      variant === 'sidebar' && (noBorderRadius ? `border overflow-hidden ${fixedH}` : `border rounded-xl overflow-hidden ${fixedH}`),
+      isClassic && `gap-4 ${fixedH}`,
+      isFlush && (noBorderRadius ? `overflow-hidden border ${fixedHFlush}` : `rounded-xl overflow-hidden border ${fixedHFlush}`),
+      isMinimal && `gap-8 ${fixedHFlush}`,
+      isSoft && `gap-6 ${fixedH}`
     );
     const sidebarClass = cn(
       'relative w-full shrink-0 flex flex-col z-20',
       variant === 'sidebar' && 'lg:w-72 lg:border-r py-2 lg:py-3',
-      isClassic && 'lg:w-72 rounded-lg border overflow-hidden',
+      isClassic && (noBorderRadius ? 'lg:w-72 border overflow-hidden' : 'lg:w-72 rounded-lg border overflow-hidden'),
       isFlush && 'lg:w-72 border-r',
       isMinimal && 'lg:w-64',
-      isSoft && 'lg:w-80 rounded-[1rem] border p-3'
+      isSoft && (noBorderRadius ? 'lg:w-80 border p-3' : 'lg:w-80 rounded-[1rem] border p-3')
     );
     const buttonPadding = {
       sidebar: 'px-4 py-3.5 lg:py-3',
@@ -735,45 +851,46 @@ export function HomepageCategoryHeroSection({
     const heroClass = cn(
       'hidden lg:block flex-1 relative overflow-hidden z-10',
       variant === 'sidebar' && '',
-      isClassic && 'rounded-lg',
+      isClassic && (noBorderRadius ? '' : 'rounded-lg'),
       isFlush && '',
       isMinimal && 'border',
-      isSoft && 'rounded-[1rem]'
+      isSoft && (noBorderRadius ? '' : 'rounded-[1rem]')
     );
     const mobileHeroClass = cn(
-      'block lg:hidden w-full relative aspect-[16/9] sm:aspect-[21/9]',
+      'block lg:hidden w-full relative',
+      !isContain && 'aspect-[16/9] sm:aspect-[21/9]',
       isMinimal ? 'border' : 'border-b',
-      isSoft ? 'rounded-[1rem] overflow-hidden' : ''
+      isSoft ? (noBorderRadius ? 'overflow-hidden' : 'rounded-[1rem] overflow-hidden') : ''
     );
     const megaPanelBase = {
-      sidebar: 'absolute left-6 top-6 bottom-6 w-[620px] max-w-[70%] rounded-xl border p-8 transition-all duration-300 ease-out',
-      classic: 'absolute top-4 bottom-4 left-4 w-[520px] max-w-[80%] rounded-lg border p-6 transition-all duration-300 ease-out',
-      flush: 'absolute inset-y-0 left-0 w-full lg:w-80 border-r p-6 transition-all duration-300 ease-in-out',
+      sidebar: noBorderRadius ? 'absolute inset-0 border p-8 transition-all duration-300 ease-out overflow-y-auto' : 'absolute inset-0 rounded-xl border p-8 transition-all duration-300 ease-out overflow-y-auto',
+      classic: noBorderRadius ? 'absolute inset-0 border p-6 transition-all duration-300 ease-out overflow-y-auto' : 'absolute inset-0 rounded-lg border p-6 transition-all duration-300 ease-out overflow-y-auto',
+      flush: 'absolute inset-0 p-6 transition-all duration-300 ease-out overflow-y-auto',
       minimal: 'absolute inset-0 p-8 md:p-12 transition-all duration-200',
-      soft: 'absolute inset-4 rounded-[0.75rem] p-6 border transition-all duration-200',
+      soft: noBorderRadius ? 'absolute inset-4 p-6 border transition-all duration-200' : 'absolute inset-4 rounded-[0.75rem] p-6 border transition-all duration-200',
     } satisfies Record<'sidebar' | 'classic' | 'flush' | 'minimal' | 'soft', string>;
     const megaPanelActive = {
       sidebar: 'opacity-100 translate-x-0 z-10',
       classic: 'opacity-100 translate-x-0 z-10',
-      flush: 'translate-x-0',
+      flush: 'opacity-100 z-10',
       minimal: 'opacity-100',
       soft: 'opacity-100',
     } satisfies Record<'sidebar' | 'classic' | 'flush' | 'minimal' | 'soft', string>;
     const megaPanelInactive = {
       sidebar: 'opacity-0 translate-x-4 pointer-events-none z-0',
       classic: 'opacity-0 translate-x-4 pointer-events-none z-0',
-      flush: '-translate-x-full',
+      flush: 'opacity-0 pointer-events-none z-0',
       minimal: 'opacity-0 pointer-events-none',
       soft: 'opacity-0 pointer-events-none',
     } satisfies Record<'sidebar' | 'classic' | 'flush' | 'minimal' | 'soft', string>;
     const mobilePanelClass = cn(
       'mx-4 px-4 py-5 border flex flex-col gap-6',
-      isSoft ? 'rounded-[0.75rem]' : 'rounded-lg'
+      noBorderRadius ? '' : (isSoft ? 'rounded-[0.75rem]' : 'rounded-lg')
     );
 
     return (
       <section className={sectionClass} style={sectionStyle}>
-        <div className="mx-auto max-w-8xl px-4 py-6 md:px-6 lg:px-8">
+        <div className={cn('mx-auto max-w-8xl px-4 md:px-6 lg:px-8', noVerticalMargin ? 'py-0' : 'py-6')}>
           <div
             className={containerClass}
             style={{
@@ -800,8 +917,9 @@ export function HomepageCategoryHeroSection({
             >
               <BannerSlider
                 slides={heroSlides}
-                className={isSoft ? 'absolute inset-0' : undefined}
+                className={isContain ? undefined : (isSoft ? 'absolute inset-0' : undefined)}
                 tokens={resolvedTokens}
+                imageFit={resolvedConfig.bannerImageFit}
               />
             </div>
 
@@ -850,7 +968,10 @@ export function HomepageCategoryHeroSection({
                       ? {
                         borderColor: resolvedTokens.sidebar.activeBorder,
                         color: resolvedTokens.sidebar.activeText,
-                        backgroundColor: resolvedTokens.sidebar.activeBg,
+                        // Seamless hover: sidebar/flush use panel bg for visual continuity with mega-menu
+                        backgroundColor: (variant === 'sidebar' || isFlush)
+                          ? resolvedTokens.panel.background
+                          : resolvedTokens.sidebar.activeBg,
                       }
                       : { color: resolvedTokens.sidebar.inactiveText };
                     return (
@@ -912,6 +1033,7 @@ export function HomepageCategoryHeroSection({
                                 borderColor: resolvedTokens.panel.border,
                               }}
                             >
+                              {renderThumbnailGrid(groups, 6)}
                               {splitGroupsIntoColumns(groups, 3).map((column, colIdx) => (
                                 <div key={colIdx} className="flex flex-col gap-5">
                                   {column.map((group) => {
@@ -1047,7 +1169,7 @@ export function HomepageCategoryHeroSection({
                 borderColor: resolvedTokens.neutral.border,
               }}
             >
-              <BannerSlider slides={heroSlides} className="absolute inset-0" tokens={resolvedTokens} />
+              <BannerSlider slides={heroSlides} className={isContain ? undefined : 'absolute inset-0'} tokens={resolvedTokens} imageFit={resolvedConfig.bannerImageFit} />
               {isClassic && <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to right, rgba(15,23,42,0.2), transparent)' }} />}
               {isMinimal && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }} />}
 
@@ -1108,8 +1230,11 @@ export function HomepageCategoryHeroSection({
                       </div>
                     </div>
                     {groups.length > 0 ? (
-                      <div className={cn('grid gap-10 h-full', isFlush ? 'grid-cols-1' : 'grid-cols-3')}>
-                        {renderMegaMenuColumns(groups, resolveMenuLabel(item.category))}
+                      <div className="flex flex-col h-full">
+                        {renderThumbnailGrid(groups)}
+                        <div className={cn('grid gap-10 flex-1 grid-cols-3')}>
+                          {renderMegaMenuColumns(groups, resolveMenuLabel(item.category))}
+                        </div>
                       </div>
                     ) : (
                       <div
@@ -1133,7 +1258,11 @@ export function HomepageCategoryHeroSection({
     );
   };
 
-  const renderTopNavLayout = () => (
+  const renderTopNavLayout = () => {
+    const noBorderRadius = resolvedConfig.noBorderRadius ?? false;
+    const noVerticalMargin = resolvedConfig.noVerticalMargin ?? false;
+    const isContain = resolvedConfig.bannerImageFit === 'contain';
+    return (
     <section
       className={cn('w-full', resolvedConfig.attachToHeader ? 'pt-0' : 'pt-4 md:pt-6')}
       style={{
@@ -1143,7 +1272,7 @@ export function HomepageCategoryHeroSection({
         '--hero-topnav-link-hover': resolvedTokens.menuLink.hover,
       } as React.CSSProperties}
     >
-      <div className="mx-auto max-w-8xl px-4 py-6 md:px-6 lg:px-8">
+      <div className={cn('mx-auto max-w-8xl px-4 md:px-6 lg:px-8', noVerticalMargin ? 'py-0' : 'py-6')}>
         <div
           className="relative flex flex-col gap-4"
           onMouseEnter={() => {
@@ -1219,21 +1348,24 @@ export function HomepageCategoryHeroSection({
                   }}
                 >
                   {groups.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                      {groups.flatMap((group) => group.items ?? []).slice(0, 12).map((link) => {
-                        const resolvedItem = resolveMenuItem(link);
-                        return (
-                          <Link
-                            key={link.id}
-                            href={resolvedItem.href}
-                            className="text-sm flex items-center gap-2 hover:text-[var(--hero-topnav-link-hover)]"
-                            style={{ color: resolvedTokens.menuLink.text }}
-                          >
-                            <span className="w-1 h-1 rounded-full" style={{ backgroundColor: resolvedTokens.topNav.bullet }} />
-                            {resolvedItem.label || 'Mục'}
-                          </Link>
-                        );
-                      })}
+                    <div className="flex flex-col gap-4">
+                      {renderThumbnailGrid(groups, 8)}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        {groups.flatMap((group) => group.items ?? []).filter((item) => !item.image).slice(0, 12).map((link) => {
+                          const resolvedItem = resolveMenuItem(link);
+                          return (
+                            <Link
+                              key={link.id}
+                              href={resolvedItem.href}
+                              className="text-sm flex items-center gap-2 hover:text-[var(--hero-topnav-link-hover)]"
+                              style={{ color: resolvedTokens.menuLink.text }}
+                            >
+                              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: resolvedTokens.topNav.bullet }} />
+                              {resolvedItem.label || 'Mục'}
+                            </Link>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between">
@@ -1260,16 +1392,17 @@ export function HomepageCategoryHeroSection({
           </div>
 
           <div
-            className="relative rounded-lg overflow-hidden h-[360px] md:h-[480px] z-10"
+            className={cn('relative overflow-hidden z-10', !noVerticalMargin && !isContain && 'h-[360px] md:h-[480px]', !noBorderRadius && 'rounded-lg')}
             style={{ backgroundColor: resolvedTokens.neutral.surfaceMuted, borderColor: resolvedTokens.neutral.border }}
           >
-            <BannerSlider slides={heroSlides} className="absolute inset-0" tokens={resolvedTokens} />
-            <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+            <BannerSlider slides={heroSlides} className={isContain ? undefined : 'absolute inset-0'} tokens={resolvedTokens} imageFit={resolvedConfig.bannerImageFit} />
+            {!isContain && <div className="absolute inset-0 bg-black/20 pointer-events-none" />}
           </div>
         </div>
       </div>
     </section>
   );
+  };
 
   if (resolvedConfig.style === 'top-nav') {
     return renderTopNavLayout();
