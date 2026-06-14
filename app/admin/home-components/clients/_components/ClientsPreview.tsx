@@ -4,14 +4,16 @@ import React from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
-import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { PreviewWrapper, usePreviewDark } from '../../_shared/components/PreviewWrapper';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import {
   getClientsValidationResult,
 } from '../_lib/colors';
 import { CLIENTS_STYLES } from '../_lib/constants';
 import { ClientsSectionShared } from './ClientsSectionShared';
-import type { ClientItem, ClientsBrandMode, ClientsStyle, ClientsHeaderAlign } from '../_types';
+import type { ClientItem, ClientsBrandMode, ClientsCornerRadius, ClientsStyle, ClientsHeaderAlign } from '../_types';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 interface ClientsPreviewProps {
   items: ClientItem[];
@@ -34,7 +36,8 @@ interface ClientsPreviewProps {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
-  noBorderRadius?: boolean;
+  spacing?: SectionSpacing;
+  cornerRadius?: ClientsCornerRadius;
 }
 
 const getImageInfoText = (style: ClientsStyle, count: number) => {
@@ -45,6 +48,7 @@ const getImageInfoText = (style: ClientsStyle, count: number) => {
   if (style === 'layout04') {return `${count} ảnh • 2 banner ngang cân đối`;}
   if (style === 'layout05') {return `${count} ảnh • 3 banner landscape`;}
   if (style === 'layout07') {return `${count} ảnh • Grid 2×2 ngang`;}
+  if (style === 'layout08') {return `${count} ảnh • Carousel vuốt ngang`;}
   return `${count} ảnh • 4 banner dọc nổi bật`;
 };
 
@@ -68,9 +72,11 @@ export const ClientsPreview = ({
   uppercaseText,
   showBadge,
   badgeText,
-  noBorderRadius,
+  spacing,
+  cornerRadius,
 }: ClientsPreviewProps) => {
   const { device, setDevice } = usePreviewDevice();
+  const { isDark } = usePreviewDark();
 
   const validation = React.useMemo(() => getClientsValidationResult({
     primary: brandColor,
@@ -78,6 +84,7 @@ export const ClientsPreview = ({
     mode,
     style: selectedStyle,
   }), [brandColor, secondary, mode, selectedStyle]);
+  const tokens = React.useMemo(() => adaptTokensForDarkMode(validation.tokens, isDark), [validation.tokens, isDark]);
 
   const info = getImageInfoText(selectedStyle, items.length);
   const resolvedTitle = typeof title === 'string' ? title.trim() : '';
@@ -100,47 +107,44 @@ export const ClientsPreview = ({
       >
         <BrowserFrame>
           {items.length === 0 ? (
-            <section className="px-4 py-8" style={{ backgroundColor: validation.tokens.neutralSurface }}>
+            <section className="px-4 py-8" style={{ backgroundColor: tokens.neutralSurface }}>
               <div className="flex flex-col items-center justify-center h-40">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: validation.tokens.placeholderIconBackground }}>
-                  <ImageIcon size={28} style={{ color: validation.tokens.placeholderIcon }} />
+                <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: tokens.placeholderIconBackground }}>
+                  <ImageIcon size={28} style={{ color: tokens.placeholderIcon }} />
                 </div>
-                <p className="text-sm font-medium" style={{ color: validation.tokens.neutralText }}>Chưa có ảnh banner</p>
-                <p className="text-xs mt-1" style={{ color: validation.tokens.placeholderText }}>Thêm từ 1 đến 4 ảnh để xem preview</p>
+                <p className="text-sm font-medium" style={{ color: tokens.neutralText }}>Chưa có ảnh banner</p>
+                <p className="text-xs mt-1" style={{ color: tokens.placeholderText }}>Thêm từ 1 đến 8 ảnh để xem preview</p>
               </div>
             </section>
           ) : (
-            <section className="px-4 py-10" style={{ backgroundColor: validation.tokens.neutralBackground }}>
-              <div className="mx-auto space-y-6">
-                <ClientsSectionShared
-                  context="preview"
-                  title={resolvedTitle}
-                  style={selectedStyle}
-                  items={items}
-                  tokens={validation.tokens}
-                  device={device}
-                  hideHeader={hideHeader}
-                  showTitle={showTitle}
-                  subtitle={previewSubtitle}
-                  showSubtitle={showSubtitle}
-                  headerAlign={headerAlign}
-                  titleColorPrimary={titleColorPrimary}
-                  subtitleAboveTitle={subtitleAboveTitle}
-                  uppercaseText={uppercaseText}
-                  showBadge={showBadge}
-                  badgeText={previewBadgeText}
-                  noBorderRadius={noBorderRadius}
-                  brandColor={brandColor}
-                />
-              </div>
-            </section>
+            <ClientsSectionShared
+              context="preview"
+              title={resolvedTitle}
+              style={selectedStyle}
+              items={items}
+              tokens={tokens}
+              device={device}
+              hideHeader={hideHeader}
+              showTitle={showTitle}
+              subtitle={previewSubtitle}
+              showSubtitle={showSubtitle}
+              headerAlign={headerAlign}
+              titleColorPrimary={titleColorPrimary}
+              subtitleAboveTitle={subtitleAboveTitle}
+              uppercaseText={uppercaseText}
+              showBadge={showBadge}
+              badgeText={previewBadgeText}
+              spacing={spacing}
+              cornerRadius={cornerRadius}
+              brandColor={brandColor}
+            />
           )}
         </BrowserFrame>
       </PreviewWrapper>
 
       <ColorInfoPanel
-        brandColor={validation.tokens.primary}
-        secondary={mode === 'single' ? validation.tokens.primary : validation.tokens.secondary}
+        brandColor={tokens.primary}
+        secondary={mode === 'single' ? tokens.primary : tokens.secondary}
         description={mode === 'single'
           ? 'Chế độ một màu: màu chính được dùng cho badge, viền ảnh, nền overlay và các điểm nhấn của banner ảnh thương hiệu.'
           : 'Màu phụ áp dụng cho badge, viền ảnh, nền overlay và các điểm nhấn của banner ảnh thương hiệu.'}
@@ -157,6 +161,7 @@ export const ClientsPreview = ({
             {selectedStyle === 'layout05' && <span><strong>Layout 05</strong> • 3 banner landscape trong một hàng</span>}
             {selectedStyle === 'layout06' && <span><strong>Layout 06</strong> • 4 banner dọc/portrait</span>}
             {selectedStyle === 'layout07' && <span><strong>Layout 07</strong> • Grid 2×2, 4 ảnh ngang</span>}
+            {selectedStyle === 'layout08' && <span><strong>Layout 08</strong> • Carousel vuốt ngang, có trạng thái nút trước/sau</span>}
           </div>
         </div>
       </div>

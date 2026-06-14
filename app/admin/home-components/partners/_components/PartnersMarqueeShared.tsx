@@ -4,7 +4,7 @@ import React from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import { getPartnersColors, type PartnersBrandMode } from '../_lib/colors';
-import type { PartnersAlign, PartnersDisplayMode } from '../_types';
+import { getPartnersItemGapClassName, getPartnersLogoBoxClassName, getPartnersLogoCardClassName, getPartnersLogoFallbackSize, getPartnersSectionSpacingClassName, type PartnersAlign, type PartnersDisplayMode, type PartnersLogoSize, type PartnersSpacing } from '../_types';
 
 export type PartnerMarqueeItem = {
   id?: string | number;
@@ -29,8 +29,11 @@ export const PartnersMarqueeShared = ({
   items,
   title,
   subheading,
+  badgeText,
   align: _align = 'center',
   displayMode = 'withName',
+  logoSize = 'normal',
+  spacing = 'normal',
   brandColor,
   secondary,
   mode = 'dual',
@@ -43,8 +46,11 @@ export const PartnersMarqueeShared = ({
   items: PartnerMarqueeItem[];
   title?: string;
   subheading?: React.ReactNode;
+  badgeText?: string;
   align?: PartnersAlign;
   displayMode?: PartnersDisplayMode;
+  logoSize?: PartnersLogoSize;
+  spacing?: PartnersSpacing;
   brandColor: string;
   secondary: string;
   mode?: PartnersBrandMode;
@@ -61,24 +67,31 @@ export const PartnersMarqueeShared = ({
 
   const showName = displayMode === 'withName';
   const linkProps = openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+  const logoBoxClassName = getPartnersLogoBoxClassName('marquee', logoSize, showName);
+  const logoCardClassName = getPartnersLogoCardClassName('marquee', logoSize, showName);
+  const fallbackIconSize = getPartnersLogoFallbackSize('marquee', logoSize, showName);
+  const logoGridGapClassName = getPartnersItemGapClassName(spacing, 'marqueeGrid');
+  const columnGapClassName = getPartnersItemGapClassName(spacing, 'marqueeColumns');
+  const skipSectionSpacingClassName = getPartnersSectionSpacingClassName(spacing, 'marqueeSkip');
+  const sectionSpacingClassName = getPartnersSectionSpacingClassName(spacing, 'marquee');
 
   // Logo grid — flexbox wrap + center for balanced last row
   const logoGrid = (
-    <div className="flex flex-wrap justify-center gap-x-4 gap-y-4 md:gap-x-6 md:gap-y-5">
+    <div className={cn('flex flex-wrap justify-center', logoGridGapClassName)}>
       {normalizedItems.map((item, index) => {
         const keyBase = item.id ?? item.url ?? item.name ?? index;
         return (
           <a
             key={keyBase}
             href={item.link ?? '#'}
-            className="group flex w-[100px] flex-col items-center gap-1.5 transition-opacity duration-200 hover:opacity-80 md:w-[120px]"
+            className={cn('group flex flex-col items-center gap-1.5 transition-opacity duration-200 hover:opacity-80', logoCardClassName)}
             {...linkProps}
           >
             {/* Logo — direct, no circle wrapper */}
-            <div className="flex h-14 w-full items-center justify-center md:h-16">
+            <div className={cn('flex w-full items-center justify-center', logoBoxClassName)}>
               {item.url
                 ? renderImage(item, 'h-full w-auto max-w-full object-contain')
-                : <ImageIcon size={28} className="text-slate-300" />}
+                : <ImageIcon size={fallbackIconSize} className="text-slate-300" />}
             </div>
             {/* Partner name */}
             {showName && (
@@ -95,7 +108,7 @@ export const PartnersMarqueeShared = ({
   // Skip header: chỉ render grid (parent sẽ handle header)
   if (skipHeader) {
     return (
-      <section className={cn('w-full py-8 md:py-12', className)} style={{ backgroundColor: '#f7f3ee' }}>
+      <section className={cn('w-full', skipSectionSpacingClassName, className)} style={{ backgroundColor: '#f7f3ee' }}>
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
           {logoGrid}
         </div>
@@ -105,29 +118,35 @@ export const PartnersMarqueeShared = ({
 
   // Full layout: 2 cột — trái header, phải logo grid
   return (
-    <section className={cn('w-full py-10 md:py-14', className)} style={{ backgroundColor: '#f7f3ee' }}>
+    <section className={cn('w-full', sectionSpacingClassName, className)} style={{ backgroundColor: '#f7f3ee' }}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-12 xl:gap-16">
+        <div className={cn('flex flex-col lg:flex-row lg:items-center', columnGapClassName)}>
           {/* Cột trái: Header text */}
           <div className="flex-shrink-0 lg:w-[320px] xl:w-[360px]">
-            <div className="flex flex-col items-start text-left">
+            <div className={cn(
+              "flex flex-col",
+              _align === 'left' ? "items-start text-left" : _align === 'right' ? "items-end text-right" : "items-center text-center"
+            )}>
               {/* Badge — short label */}
-              <span
-                className="mb-4 inline-block rounded-sm border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 md:text-[11px]"
-                style={{ borderColor: '#d1ccc6' }}
-              >
-                Đối tác chúng tôi
-              </span>
+              {badgeText && (
+                <span
+                  className={cn('inline-block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 md:text-[11px]', spacing === 'none' ? 'mb-0' : spacing === 'compact' ? 'mb-1' : 'mb-2')}
+                >
+                  {badgeText}
+                </span>
+              )}
               {/* Title — italic style */}
-              <h2
-                className="text-xl font-bold leading-snug tracking-tight md:text-2xl xl:text-[1.65rem]"
-                style={{ color: '#1a1a2e', fontStyle: 'italic' }}
-              >
-                {title || 'Tự Hào Là Đối Tác Tin Cậy'}
-              </h2>
+              {title && (
+                <h2
+                  className="text-xl font-bold leading-snug tracking-tight md:text-2xl xl:text-[1.65rem]"
+                  style={{ color: '#1a1a2e', fontStyle: 'italic' }}
+                >
+                  {title}
+                </h2>
+              )}
               {/* Description — subheading */}
               {subheading && (
-                <p className="mt-3 text-sm leading-relaxed text-slate-500 md:text-[13px] md:leading-relaxed">
+                <p className={cn('text-sm leading-relaxed text-slate-500 md:text-[13px] md:leading-relaxed', spacing === 'none' ? 'mt-0' : spacing === 'compact' ? 'mt-1.5' : 'mt-3')}>
                   {subheading}
                 </p>
               )}

@@ -32,6 +32,18 @@ const shiftColor = (hex: string, lightnessDelta: number, chromaScale = 1, fallba
   }));
 };
 
+const getDarkModeAccent = (hex: string, fallback = DEFAULT_BRAND_COLOR) => {
+  const color = safeParseOklch(hex, fallback);
+  const lightness = color.l ?? 0.62;
+  const chroma = color.c ?? 0.14;
+
+  return formatHex(oklch({
+    ...color,
+    l: lightness < 0.62 ? 0.68 : Math.min(lightness, 0.82),
+    c: color.h == null ? Math.min(chroma, 0.02) : clampChroma(Math.max(chroma * 0.9, Math.min(chroma + 0.02, 0.14))),
+  }));
+};
+
 const getAPCAThreshold = (fontSize = 16, fontWeight = 500) => (
   (fontSize >= 18 || fontWeight >= 700) ? 45 : 60
 );
@@ -60,12 +72,6 @@ const getAPCALc = (text: string, background: string) => {
 
   const lc = Math.abs(APCAcontrast(sRGBtoY(textRgb), sRGBtoY(backgroundRgb)));
   return Number.isFinite(lc) ? lc : 0;
-};
-
-const pickReadableTextOnSolid = (background: string): string => {
-  const whiteLc = getAPCALc('#ffffff', background);
-  const nearBlackLc = getAPCALc('#111111', background);
-  return whiteLc > nearBlackLc ? '#ffffff' : '#111111';
 };
 
 export const getAPCATextColor = (background: string, fontSize = 16, fontWeight = 500) => {
@@ -274,28 +280,25 @@ export const getContactColorTokens = ({
   const primaryPalette = buildPalette(primaryResolved, DEFAULT_BRAND_COLOR);
   const secondaryPalette = buildPalette(secondaryResolved, primaryResolved);
 
-  const neutralBackground = '#f8fafc';
+  const neutralBackground = '#faf7f0';
   const neutralSurface = '#ffffff';
   const neutralBorder = '#e2e8f0';
   const neutralText = '#0f172a';
   const mutedText = '#64748b';
 
-  const sectionBadgeBg = primaryPalette.surface;
-  const badgeTextCandidate = pickReadableTextOnSolid(sectionBadgeBg);
-  const sectionBadgeText = ensureAPCATextColor(badgeTextCandidate, sectionBadgeBg, 11, 600);
+  const sectionBadgeBg = neutralSurface;
+  const sectionBadgeText = ensureAPCATextColor(primaryPalette.interactiveText, neutralSurface, 11, 600);
 
-  const iconBg = primaryPalette.surface;
-  const iconCandidate = pickReadableTextOnSolid(iconBg);
-  const iconTintColor = ensureAPCATextColor(iconCandidate, iconBg, 14, 600);
+  const iconBg = neutralSurface;
+  const iconTintColor = ensureAPCATextColor(primaryPalette.interactiveText, neutralSurface, 14, 600);
 
-  const socialBg = secondaryPalette.surface;
-  const socialCandidate = pickReadableTextOnSolid(socialBg);
-  const socialIcon = ensureAPCATextColor(socialCandidate, socialBg, 14, 600);
+  const socialBg = neutralSurface;
+  const socialIcon = neutralText;
 
   const formFieldBorder = neutralBorder;
-  const formFieldFocus = secondaryPalette.border;
-  const formButtonBackground = primaryPalette.solid;
-  const formButtonText = primaryPalette.textOnSolid;
+  const formFieldFocus = neutralText;
+  const formButtonBackground = neutralText;
+  const formButtonText = '#ffffff';
 
   return {
     primary: primaryResolved,
@@ -307,10 +310,10 @@ export const getContactColorTokens = ({
     neutralText,
     mutedText,
 
-    heading: primaryPalette.solid,
-    sectionTint: shiftColor(secondaryPalette.solid, 0.4, 0.7, primaryResolved),
+    heading: neutralText,
+    sectionTint: neutralBackground,
     sectionBadgeBg,
-    sectionBadgeBorder: secondaryPalette.border,
+    sectionBadgeBorder: neutralBorder,
     sectionBadgeText,
 
     cardBackground: neutralSurface,
@@ -320,19 +323,19 @@ export const getContactColorTokens = ({
     iconTintBackground: iconBg,
     iconTintColor,
 
-    labelText: ensureAPCATextColor(secondaryPalette.interactiveText, neutralSurface, 12, 600),
+    labelText: ensureAPCATextColor(primaryPalette.interactiveText, neutralSurface, 12, 600),
     valueText: neutralText,
     helperText: mutedText,
 
     socialBackground: socialBg,
-    socialBorder: secondaryPalette.border,
+    socialBorder: neutralBorder,
     socialIcon,
 
     mapPlaceholderBg: neutralBackground,
-    mapPlaceholderIcon: primaryPalette.solid,
+    mapPlaceholderIcon: ensureAPCATextColor(primaryPalette.interactiveText, neutralBackground, 14, 600),
 
-    centeredHeaderBg: shiftColor(secondaryPalette.solid, 0.38, 0.7, primaryResolved),
-    centeredSurface: shiftColor(secondaryPalette.solid, 0.42, 0.7, primaryResolved),
+    centeredHeaderBg: neutralSurface,
+    centeredSurface: neutralBackground,
 
     floatingCardBg: neutralSurface,
     floatingCardBorder: neutralBorder,
@@ -341,7 +344,7 @@ export const getContactColorTokens = ({
     formBorder: neutralBorder,
     formTitle: neutralText,
     formDescription: mutedText,
-    formAccent: secondaryPalette.solid,
+    formAccent: ensureAPCATextColor(primaryPalette.interactiveText, neutralSurface, 14, 600),
     formFieldBackground: neutralSurface,
     formFieldBorder,
     formFieldText: neutralText,
@@ -357,7 +360,7 @@ export const getContactColorTokens = ({
   };
 };
 
-export const getContactValidationResult = ({
+export const getContactDarkColorTokens = ({
   primary,
   secondary,
   mode,
@@ -365,11 +368,119 @@ export const getContactValidationResult = ({
   primary: string;
   secondary: string;
   mode: ContactBrandMode;
+}): ContactColorTokens => {
+  const primaryResolved = normalizeHex(primary, DEFAULT_BRAND_COLOR);
+  const secondaryResolved = resolveSecondaryForMode(primaryResolved, secondary, mode);
+  const primaryAccent = getDarkModeAccent(primaryResolved, DEFAULT_BRAND_COLOR);
+  const secondaryAccent = mode === 'single'
+    ? primaryAccent
+    : getDarkModeAccent(secondaryResolved, primaryResolved);
+
+  const darkBackground = '#020617';
+  const darkSurface = '#0f172a';
+  const darkElevatedSurface = '#111827';
+  const darkBorder = '#334155';
+  const darkText = '#f8fafc';
+  const darkMutedText = '#cbd5e1';
+  const darkSubtleText = '#94a3b8';
+
+  const primaryText = ensureAPCATextColor(primaryAccent, darkElevatedSurface, 14, 600);
+  const secondaryText = ensureAPCATextColor(secondaryAccent, darkElevatedSurface, 14, 600);
+  const badgeAccentText = ensureAPCATextColor(mode === 'dual' ? secondaryAccent : primaryAccent, darkElevatedSurface, 11, 600);
+  const buttonText = getAPCATextColor(primaryAccent, 14, 700);
+
+  return {
+    primary: primaryAccent,
+    secondary: secondaryAccent,
+
+    neutralBackground: darkBackground,
+    neutralSurface: darkSurface,
+    neutralBorder: darkBorder,
+    neutralText: darkText,
+    mutedText: darkMutedText,
+
+    heading: darkText,
+    sectionTint: darkBackground,
+    sectionBadgeBg: darkElevatedSurface,
+    sectionBadgeBorder: darkBorder,
+    sectionBadgeText: badgeAccentText,
+
+    cardBackground: darkSurface,
+    cardBorder: darkBorder,
+    cardHoverBorder: secondaryAccent,
+
+    iconTintBackground: darkElevatedSurface,
+    iconTintColor: primaryText,
+
+    labelText: secondaryText,
+    valueText: darkText,
+    helperText: darkMutedText,
+
+    socialBackground: darkElevatedSurface,
+    socialBorder: darkBorder,
+    socialIcon: darkText,
+
+    mapPlaceholderBg: darkElevatedSurface,
+    mapPlaceholderIcon: darkSubtleText,
+
+    centeredHeaderBg: darkSurface,
+    centeredSurface: darkElevatedSurface,
+
+    floatingCardBg: darkSurface,
+    floatingCardBorder: darkBorder,
+
+    formBackground: darkSurface,
+    formBorder: darkBorder,
+    formTitle: darkText,
+    formDescription: darkMutedText,
+    formAccent: primaryText,
+    formFieldBackground: darkElevatedSurface,
+    formFieldBorder: darkBorder,
+    formFieldText: darkText,
+    formFieldPlaceholder: darkSubtleText,
+    formFieldFocus: primaryText,
+    formFieldDisabledBackground: darkBackground,
+    formFieldDisabledText: darkSubtleText,
+    formButtonBackground: primaryAccent,
+    formButtonText: buttonText,
+    formButtonBorder: primaryAccent,
+    formHelperText: darkMutedText,
+    formWarningText: '#fbbf24',
+  };
+};
+
+export const getContactThemeTokens = ({
+  primary,
+  secondary,
+  mode,
+  isDark = false,
+}: {
+  primary: string;
+  secondary: string;
+  mode: ContactBrandMode;
+  isDark?: boolean;
+}) => (
+  isDark
+    ? getContactDarkColorTokens({ primary, secondary, mode })
+    : getContactColorTokens({ primary, secondary, mode })
+);
+
+export const getContactValidationResult = ({
+  primary,
+  secondary,
+  mode,
+  isDark = false,
+}: {
+  primary: string;
+  secondary: string;
+  mode: ContactBrandMode;
+  isDark?: boolean;
 }) => {
-  const tokens = getContactColorTokens({
+  const tokens = getContactThemeTokens({
     primary,
     secondary,
     mode,
+    isDark,
   });
 
   const harmonyStatus = mode === 'single'

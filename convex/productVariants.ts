@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import { recalculateProductEffectivePrice } from "./products";
 
 const variantStatus = v.union(v.literal("Active"), v.literal("Inactive"));
 
@@ -87,13 +88,17 @@ export const listByProductActive = query({
 });
 
 export const listByIds = query({
-  args: { ids: v.array(v.id("productVariants")) },
+  args: { ids: v.array(v.string()) },
   handler: async (ctx, args) => {
-    if (args.ids.length === 0) {
+    const ids = args.ids
+      .map((id) => ctx.db.normalizeId("productVariants", id))
+      .filter((id): id is Id<"productVariants"> => id !== null);
+
+    if (ids.length === 0) {
       return [];
     }
 
-    const items = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
+    const items = await Promise.all(ids.map((id) => ctx.db.get(id)));
     return items.filter((item): item is Doc<"productVariants"> => item !== null).sort((a, b) => a.order - b.order);
   },
   returns: v.array(variantDoc),
@@ -269,12 +274,15 @@ export const create = mutation({
     const resolvedSalePrice = resolveSalePrice(args.salePrice);
     assertSalePrice(args.price, resolvedSalePrice);
 
-    return ctx.db.insert("productVariants", {
+    const variantId = await ctx.db.insert("productVariants", {
       ...args,
       salePrice: resolvedSalePrice,
       order: nextOrder,
       status: args.status ?? "Active",
     });
+
+    await recalculateProductEffectivePrice(ctx, args.productId);
+    return variantId;
   },
   returns: v.id("productVariants"),
 });
@@ -338,6 +346,7 @@ export const update = mutation({
     };
 
     await ctx.db.patch(id, nextUpdates);
+    await recalculateProductEffectivePrice(ctx, variant.productId);
     return null;
   },
   returns: v.null(),
@@ -349,6 +358,7 @@ export const remove = mutation({
     const variant = await ctx.db.get(args.id);
     if (!variant) {throw new Error("Variant không tồn tại");}
     await ctx.db.delete(args.id);
+    await recalculateProductEffectivePrice(ctx, variant.productId);
     return null;
   },
   returns: v.null(),
@@ -508,6 +518,7 @@ export const bulkUpsertFromCombinations = mutation({
     }
 
     result.skipped += args.rows.length - rows.length;
+    await recalculateProductEffectivePrice(ctx, args.productId);
     return result;
   },
   returns: v.object({

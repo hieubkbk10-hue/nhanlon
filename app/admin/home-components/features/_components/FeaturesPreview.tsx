@@ -5,21 +5,24 @@ import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { FeaturesSectionShared } from './FeaturesSectionShared';
 import type {
   FeatureItem,
   FeaturesBrandMode,
+  FeaturesCornerRadius,
+  FeaturesDesktopColumns,
   FeaturesStyle,
 } from '../_types';
 
 const styles: Array<{ id: FeaturesStyle; label: string }> = [
+  { id: 'carousel6', label: 'Carousel 6' },
   { id: 'iconGrid', label: 'Icon Grid' },
   { id: 'alternating', label: 'Alternating' },
   { id: 'compact', label: 'Compact' },
   { id: 'cards', label: 'Cards' },
   { id: 'carousel', label: 'Carousel' },
-  { id: 'carousel6', label: 'Carousel 6' },
-  { id: 'timeline', label: 'Timeline' },
+  { id: 'timeline', label: 'Media Carousel' },
 ];
 
 interface FeaturesPreviewProps {
@@ -44,6 +47,9 @@ interface FeaturesPreviewProps {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  desktopColumns?: FeaturesDesktopColumns;
+  cornerRadius?: FeaturesCornerRadius;
 }
 
 export function FeaturesPreview({
@@ -67,10 +73,13 @@ export function FeaturesPreview({
   uppercaseText,
   showBadge,
   badgeText,
+  spacing,
+  desktopColumns,
+  cornerRadius,
 }: FeaturesPreviewProps) {
   const { device, setDevice } = usePreviewDevice();
 
-  const previewStyle = selectedStyle ?? 'iconGrid';
+  const previewStyle = selectedStyle ?? 'carousel6';
   const info = (() => {
     const modeLabel = mode === 'dual' ? '2 màu' : '1 màu';
     if (items.length === 0) {return `Chưa có tính năng • ${modeLabel}`;}
@@ -79,7 +88,7 @@ export function FeaturesPreview({
       : previewStyle === 'carousel6'
         ? 'Icon: 48×48px • Carousel 6'
         : previewStyle === 'timeline'
-          ? 'Icon: 24×24px • Timeline'
+          ? 'Ảnh + icon • Media Carousel'
           : 'Icon: 40-56px';
     return `${items.length} tính năng • ${sizeLabel} • ${modeLabel}`;
   })();
@@ -119,6 +128,9 @@ export function FeaturesPreview({
             uppercaseText={uppercaseText}
             showBadge={showBadge}
             badgeText={badgeText}
+            spacing={spacing}
+            desktopColumns={desktopColumns}
+            cornerRadius={cornerRadius}
           />
         </BrowserFrame>
       </PreviewWrapper>

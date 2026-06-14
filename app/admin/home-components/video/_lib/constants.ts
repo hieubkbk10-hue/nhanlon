@@ -1,12 +1,13 @@
-import type { VideoBrandMode, VideoConfig, VideoStyle } from '../_types';
+import type { VideoAspect, VideoBrandMode, VideoConfig, VideoCornerRadius, VideoPlayButtonSize, VideoStyle } from '../_types';
+import { DEFAULT_SECTION_SPACING, normalizeSectionSpacing } from '../../_shared/types/sectionSpacing';
 
 export const VIDEO_STYLES: Array<{ id: VideoStyle; label: string }> = [
-  { id: 'centered', label: 'Centered' },
-  { id: 'split', label: 'Split' },
-  { id: 'fullwidth', label: 'Fullwidth' },
-  { id: 'cinema', label: 'Cinema' },
-  { id: 'minimal', label: 'Minimal' },
-  { id: 'parallax', label: 'Parallax' },
+  { id: 'centered', label: '(1) Căn giữa' },
+  { id: 'split', label: '(2) Chia đôi' },
+  { id: 'fullwidth', label: '(3) Tràn viền' },
+  { id: 'cinema', label: '(4) Khung rộng' },
+  { id: 'minimal', label: '(5) Tối giản' },
+  { id: 'parallax', label: '(6) Cuộn nền' },
 ];
 
 export const DEFAULT_TEXTS: Record<VideoStyle, Record<string, string>> = {
@@ -92,6 +93,9 @@ export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
   autoplay: false,
   loop: false,
   muted: true,
+  videoAspect: 'landscape',
+  cornerRadius: 'lg',
+  playButtonSize: 'large',
   style: 'centered',
   texts: {},
   hideHeader: false,
@@ -104,6 +108,7 @@ export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  spacing: DEFAULT_SECTION_SPACING,
 };
 
 export const VIDEO_STYLES_WITH_CTA: VideoStyle[] = ['split', 'fullwidth', 'cinema', 'minimal', 'parallax'];
@@ -130,8 +135,41 @@ const normalizeHeaderAlign = (value: unknown): 'left' | 'center' | 'right' => {
   return 'left';
 };
 
+export const normalizeVideoAspect = (value: unknown): VideoAspect => (
+  value === 'portrait' ? 'portrait' : 'landscape'
+);
+
+export const normalizeVideoCornerRadius = (value: unknown, noBorderRadius?: unknown): VideoCornerRadius => {
+  if (noBorderRadius === true) {
+    return 'none';
+  }
+
+  if (value === 'none' || value === 'sm' || value === 'lg') {
+    return value;
+  }
+
+  if (value === 'small') {
+    return 'sm';
+  }
+
+  if (value === 'medium' || value === 'large') {
+    return 'lg';
+  }
+
+  return 'lg';
+};
+
+export const normalizeVideoPlayButtonSize = (value: unknown): VideoPlayButtonSize => {
+  if (value === 'small' || value === 'medium' || value === 'large') {
+    return value;
+  }
+  return 'large';
+};
+
 export const normalizeVideoConfig = (raw: unknown): VideoConfig => {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Partial<VideoConfig>;
+  const cornerRadius = normalizeVideoCornerRadius(source.cornerRadius, source.noBorderRadius);
+  const spacing = source.noVerticalMargin === true ? 'none' : normalizeSectionSpacing(source.spacing);
 
   return {
     videoUrl: ensureText(toText(source.videoUrl, ''), 2048),
@@ -144,6 +182,9 @@ export const normalizeVideoConfig = (raw: unknown): VideoConfig => {
     autoplay: toBoolean(source.autoplay, false),
     loop: toBoolean(source.loop, false),
     muted: toBoolean(source.muted, true),
+    videoAspect: normalizeVideoAspect(source.videoAspect),
+    cornerRadius,
+    playButtonSize: normalizeVideoPlayButtonSize(source.playButtonSize),
     style: normalizeVideoStyle(source.style),
     texts: source.texts && typeof source.texts === 'object' ? source.texts : {},
     hideHeader: toBoolean(source.hideHeader, false),
@@ -156,6 +197,9 @@ export const normalizeVideoConfig = (raw: unknown): VideoConfig => {
     uppercaseText: toBoolean(source.uppercaseText, false),
     showBadge: toBoolean(source.showBadge, true),
     badgeText: ensureText(toText(source.badgeText, ''), 120),
+    spacing,
+    noBorderRadius: cornerRadius === 'none',
+    noVerticalMargin: spacing === 'none',
   };
 };
 

@@ -6,9 +6,19 @@ import { cn } from '../../../components/ui';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { SectionHeader } from '../../_shared/components/SectionHeader';
 import { deviceWidths, type PreviewDevice } from '../../_shared/hooks/usePreviewDevice';
-import { getAPCALc, getProcessColors, type ProcessColorTokens } from '../_lib/colors';
-import type { ProcessBrandMode, ProcessStyle } from '../_types';
+import { getProcessColors, type ProcessColorTokens } from '../_lib/colors';
+import {
+  DEFAULT_PROCESS_CORNER_RADIUS,
+  DEFAULT_PROCESS_SPACING,
+  getProcessCornerRadiusClassName,
+  getProcessSectionSpacingClassName,
+  type ProcessBrandMode,
+  type ProcessCornerRadius,
+  type ProcessSpacing,
+  type ProcessStyle,
+} from '../_types';
 
 type ProcessSectionContext = 'preview' | 'site';
 
@@ -45,6 +55,11 @@ interface ProcessSectionSharedProps {
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
+  circularCtaText?: string;
+  circularCtaLink?: string;
+  isDark?: boolean;
 }
 
 const PROCESS_STYLES: Array<{ id: ProcessStyle; label: string }> = [
@@ -53,18 +68,22 @@ const PROCESS_STYLES: Array<{ id: ProcessStyle; label: string }> = [
   { id: 'cards', label: 'Cards' },
   { id: 'accordion', label: 'Accordion' },
   { id: 'minimal', label: 'Minimal' },
+  { id: 'compactMinimal', label: 'Compact Minimal' },
   { id: 'grid', label: 'Grid' },
   { id: 'alternating', label: 'Alternating' },
+  { id: 'circular', label: 'Circular (Builder.io)' },
 ];
 
 const PREVIEW_MAX_VISIBLE_BY_STYLE: Record<ProcessStyle, Record<PreviewDevice, number>> = {
   horizontal: { desktop: 4, tablet: 4, mobile: 4 },
-  stepper: { desktop: 4, tablet: 4, mobile: 4 },
+  stepper: { desktop: 8, tablet: 8, mobile: 8 },
   cards: { desktop: 4, tablet: 4, mobile: 4 },
   accordion: { desktop: 4, tablet: 4, mobile: 4 },
   minimal: { desktop: 4, tablet: 4, mobile: 4 },
+  compactMinimal: { desktop: 4, tablet: 4, mobile: 4 },
   grid: { desktop: 4, tablet: 4, mobile: 4 },
   alternating: { desktop: 4, tablet: 4, mobile: 4 },
+  circular: { desktop: 8, tablet: 8, mobile: 8 },
 };
 
 const getMaxVisible = (
@@ -78,11 +97,12 @@ const getMaxVisible = (
   return PREVIEW_MAX_VISIBLE_BY_STYLE[style][previewDevice];
 };
 
-const getSectionPadding = (context: ProcessSectionContext, device: PreviewDevice) => {
+const getSectionPadding = (context: ProcessSectionContext, device: PreviewDevice, spacing: ProcessSpacing = DEFAULT_PROCESS_SPACING) => {
+  const spacingClass = getProcessSectionSpacingClassName(spacing);
   if (context === 'preview') {
-    return cn('py-5 px-4', device === 'mobile' ? 'py-4 px-3' : 'md:py-6 md:px-6');
+    return cn(spacingClass, 'px-4', device === 'mobile' ? 'px-3' : 'md:px-6');
   }
-  return 'py-6 md:py-10 px-4';
+  return cn(spacingClass, 'px-4');
 };
 
 const getResponsiveGridClass = (count: number, desktopColumns: 3 | 4 = 4) => {
@@ -125,6 +145,7 @@ const renderHorizontal = ({
   previewDevice,
   headerConfig = {},
   desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
 }: {
   tokens: ProcessColorTokens;
   steps: ProcessSharedStep[];
@@ -133,13 +154,15 @@ const renderHorizontal = ({
   previewDevice: PreviewDevice;
   headerConfig?: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
 }) => {
   if (steps.length === 0) {return renderEmptyState(tokens);}
 
   const maxVisible = getMaxVisible('horizontal', context, previewDevice);
   const visibleSteps = steps.slice(0, maxVisible);
   const remainingCount = steps.length - visibleSteps.length;
-  const containerClass = getSectionPadding(context, previewDevice);
+  const containerClass = getSectionPadding(context, previewDevice, spacing);
   const isSite = context === 'site';
   const isMobile = previewDevice === 'mobile';
 
@@ -152,7 +175,7 @@ const renderHorizontal = ({
   const lineMarginTop = isSite ? -40 : (isMobile ? -32 : -40);
 
   return (
-    <div className={containerClass} style={{ backgroundColor: tokens.neutralBackground }}>
+    <div className={containerClass} style={{ backgroundColor: 'transparent' }}>
       {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
 
       <div className="relative">
@@ -219,7 +242,7 @@ const renderHorizontal = ({
 
 const padNumber = (n: number) => String(n).padStart(2, '0');
 
-const renderStepper = ({
+const RenderStepper = ({
   tokens,
   steps,
   sectionTitle,
@@ -227,6 +250,8 @@ const renderStepper = ({
   previewDevice,
   headerConfig = {},
   desktopColumns: _desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
+  cornerRadius = DEFAULT_PROCESS_CORNER_RADIUS,
 }: {
   tokens: ProcessColorTokens;
   steps: ProcessSharedStep[];
@@ -235,6 +260,8 @@ const renderStepper = ({
   previewDevice: PreviewDevice;
   headerConfig?: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
 }) => {
   if (steps.length === 0) {return renderEmptyState(tokens);}
 
@@ -246,7 +273,7 @@ const renderStepper = ({
 
 
   return (
-    <div className={getSectionPadding(context, previewDevice)} style={{ backgroundColor: tokens.neutralBackground }}>
+    <div className={getSectionPadding(context, previewDevice, spacing)} style={{ backgroundColor: 'transparent' }}>
       {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
 
       <div className={cn('mx-auto', previewDevice === 'mobile' ? 'max-w-sm' : 'max-w-2xl')}>
@@ -280,8 +307,9 @@ const renderStepper = ({
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition-colors duration-200 relative z-10"
                   style={{
-                    backgroundColor: isActive ? tokens.stepDotBg : `${tokens.stepDotBg}18`,
+                    backgroundColor: isActive ? tokens.stepDotBg : tokens.neutralSurface,
                     color: isActive ? tokens.stepDotText : tokens.stepDotBg,
+                    border: `1px solid ${isActive ? tokens.stepDotBg : tokens.neutralBorder}`,
                   }}
                 >
                   {stepNum}
@@ -294,7 +322,8 @@ const renderStepper = ({
               {/* Card content */}
               <div
                 className={cn(
-                  'flex-1 rounded-xl border-2 p-4 transition-colors duration-200',
+                  'flex-1 border-2 p-4 transition-colors duration-200',
+                  getProcessCornerRadiusClassName(cornerRadius),
                   previewDevice === 'mobile' && 'p-3',
                   idx < visibleSteps.length - 1 && 'mb-3',
                 )}
@@ -344,6 +373,7 @@ const renderCards = ({
   previewDevice,
   headerConfig = {},
   desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
 }: {
   tokens: ProcessColorTokens;
   steps: ProcessSharedStep[];
@@ -352,6 +382,8 @@ const renderCards = ({
   previewDevice: PreviewDevice;
   headerConfig?: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
 }) => {
   if (steps.length === 0) {return renderEmptyState(tokens);}
 
@@ -388,7 +420,7 @@ const renderCards = ({
     : (isMobile ? 'text-xs' : 'text-sm');
 
   return (
-    <div className={getSectionPadding(context, previewDevice)} style={{ backgroundColor: tokens.neutralBackground }}>
+    <div className={getSectionPadding(context, previewDevice, spacing)} style={{ backgroundColor: 'transparent' }}>
       {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
 
       <div className={gridClass}>
@@ -411,16 +443,16 @@ const renderCards = ({
                   >
                     <path
                       d="M5 38 C40 38, 45 8, 70 22 C95 38, 100 8, 135 8"
-                      stroke={tokens.connectorLine}
-                      strokeWidth="1.5"
+                      stroke={tokens.arrowIcon}
+                      strokeWidth="2"
                       strokeDasharray="5 4"
                       strokeLinecap="round"
                       fill="none"
                     />
                     <path
                       d="M128 3 L136 8 L128 13"
-                      stroke={tokens.connectorLine}
-                      strokeWidth="1.8"
+                      stroke={tokens.arrowIcon}
+                      strokeWidth="2.2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       fill="none"
@@ -475,6 +507,7 @@ const renderAccordion = ({
   previewDevice,
   headerConfig = {},
   desktopColumns: _desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
 }: {
   tokens: ProcessColorTokens;
   steps: ProcessSharedStep[];
@@ -483,6 +516,8 @@ const renderAccordion = ({
   previewDevice: PreviewDevice;
   headerConfig?: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
 }) => {
   if (steps.length === 0) {return renderEmptyState(tokens);}
 
@@ -532,7 +567,7 @@ const renderAccordion = ({
   const resolvedText = isSite ? siteCircleText : circleTextSize;
 
   return (
-    <div className={getSectionPadding(context, previewDevice)} style={{ backgroundColor: tokens.neutralBackground }}>
+    <div className={getSectionPadding(context, previewDevice, spacing)} style={{ backgroundColor: 'transparent' }}>
       {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
 
       {/* Desktop Layout - Zigzag wave */}
@@ -550,8 +585,8 @@ const renderAccordion = ({
           >
             <path
               d={wavePath}
-              stroke={tokens.connectorLine}
-              strokeWidth="2"
+              stroke={tokens.arrowIcon}
+              strokeWidth="2.5"
               strokeDasharray="8 6"
               strokeLinecap="round"
               fill="none"
@@ -652,6 +687,8 @@ const renderMinimal = ({
   previewDevice,
   headerConfig = {},
   desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
+  cornerRadius = DEFAULT_PROCESS_CORNER_RADIUS,
 }: {
   tokens: ProcessColorTokens;
   steps: ProcessSharedStep[];
@@ -660,6 +697,8 @@ const renderMinimal = ({
   previewDevice: PreviewDevice;
   headerConfig?: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
 }) => {
   if (steps.length === 0) {return renderEmptyState(tokens);}
 
@@ -672,50 +711,10 @@ const renderMinimal = ({
   const isTablet = previewDevice === 'tablet';
   const isCompact = isMobile || isTablet;
 
-  // Derive tint color from primary for icon circle backgrounds
-  const iconCircleBg = `${tokens.primary}1A`; // 10% opacity of primary
-
-  // Smart badge/accent color on dark band (#0a0f18)
-  // Single: brand if readable on dark, else white
-  // Dual: primary if readable → secondary if readable → white
-  const DARK_BAND_BG = '#0a0f18';
-  const MIN_CONTRAST = 45; // APCA Lc threshold for small bold text
-  const primaryLc = getAPCALc(tokens.primary, DARK_BAND_BG);
-  const secondaryLc = getAPCALc(tokens.secondary, DARK_BAND_BG);
-  const badgeAccentColor = primaryLc >= MIN_CONTRAST
-    ? tokens.primary
-    : (secondaryLc >= MIN_CONTRAST ? tokens.secondary : '#ffffff');
-
-  // Badge info from headerConfig
-  const {
-    showBadge = true,
-    badgeText = '',
-    showTitle = true,
-    subtitle = '',
-    showSubtitle = true,
-  } = headerConfig;
-
-  const resolvedBadge = typeof badgeText === 'string' ? badgeText.trim() : '';
-  const resolvedSubtitle = typeof subtitle === 'string' ? subtitle.trim() : '';
-  const hasBadge = showBadge && resolvedBadge.length > 0;
-  const hasSubtitle = showSubtitle && resolvedSubtitle.length > 0;
-
   // Layout classes
   const outerPadding = isSite
-    ? 'py-6 md:py-10 lg:py-14'
-    : (isCompact ? 'py-4 px-3' : 'py-5 md:py-10 px-4');
-
-  const flexDirection = isSite
-    ? 'flex-col lg:flex-row'
-    : (isCompact ? 'flex-col' : 'flex-row');
-
-  const headerWidth = isSite
-    ? 'w-full lg:w-[30%]'
-    : (isCompact ? 'w-full' : 'w-[30%]');
-
-  const cardsWidth = isSite
-    ? 'w-full lg:w-[70%]'
-    : (isCompact ? 'w-full' : 'w-[70%]');
+    ? cn(getProcessSectionSpacingClassName(spacing), 'lg:py-14')
+    : cn(getProcessSectionSpacingClassName(spacing), isCompact ? 'px-3' : 'px-4');
 
   // Cards grid: use desktopColumns setting
   const mdColsMap: Record<number, string> = {
@@ -734,83 +733,54 @@ const renderMinimal = ({
       : (isCompact ? 'grid-cols-2' : desktopColsClass));
 
   const gapClass = isSite
-    ? 'gap-2 md:gap-3'
-    : (isCompact ? 'gap-2' : 'gap-2 md:gap-3');
+    ? 'gap-3 md:gap-4'
+    : (isCompact ? 'gap-3' : 'gap-3 md:gap-4');
 
   // Card sizing
   const cardPadding = isSite
-    ? 'p-4 md:p-5 lg:p-6'
-    : (isCompact ? 'p-3' : 'p-4 md:p-5 lg:p-6');
+    ? 'p-4 md:p-5'
+    : (isCompact ? 'p-3' : 'p-4 md:p-5');
 
   const iconSize = isSite
-    ? 'w-[36px] h-[36px] md:w-[43px] md:h-[43px] lg:w-[50px] lg:h-[50px]'
-    : (isCompact ? 'w-[31px] h-[31px]' : 'w-[36px] h-[36px] md:w-[43px] md:h-[43px] lg:w-[50px] lg:h-[50px]');
+    ? 'h-10 w-10 md:h-11 md:w-11'
+    : (isCompact ? 'h-8 w-8' : 'h-10 w-10 md:h-11 md:w-11');
 
   const iconInner = isSite
-    ? 'w-[1rem] h-[1rem] md:w-[1.2rem] md:h-[1.2rem] lg:w-[1.4rem] lg:h-[1.4rem]'
-    : (isCompact ? 'w-[0.85rem] h-[0.85rem]' : 'w-[1rem] h-[1rem] md:w-[1.2rem] md:h-[1.2rem]');
+    ? 'h-4 w-4 md:h-5 md:w-5'
+    : (isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4 md:h-5 md:w-5');
 
   const cardMinH = isSite
-    ? 'min-h-[280px] lg:min-h-[380px]'
-    : (isCompact ? 'min-h-[200px]' : 'min-h-[280px] lg:min-h-[380px]');
+    ? 'min-h-[190px] md:min-h-[220px]'
+    : (isCompact ? 'min-h-[170px]' : 'min-h-[210px]');
 
   const titleSize = isSite
-    ? 'text-[1rem] md:text-[1.08rem] lg:text-[1.2rem]'
-    : (isCompact ? 'text-xs' : 'text-[1rem] md:text-[1.08rem] lg:text-[1.2rem]');
+    ? 'text-sm md:text-base'
+    : (isCompact ? 'text-xs' : 'text-sm md:text-base');
 
   const descSize = isSite
-    ? 'text-[11px] md:text-[12px] lg:text-[13px]'
-    : (isCompact ? 'text-[10px]' : 'text-[11px] md:text-[12px]');
-
-  const headingSize = isSite
-    ? 'text-[14px] md:text-base lg:text-[1.4rem]'
-    : (isCompact ? 'text-[10px]' : 'text-[14px] md:text-base lg:text-[1.35rem]');
+    ? 'text-xs md:text-[13px]'
+    : (isCompact ? 'text-[10px]' : 'text-xs');
 
   return (
-    <div className={outerPadding} style={{ backgroundColor: tokens.neutralBackground }}>
-      <div className="relative w-full max-w-[1360px] mx-auto flex items-center">
+    <div className={outerPadding} style={{ backgroundColor: 'transparent' }}>
+      {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
+      <div className="relative mx-auto w-full max-w-[1360px]">
         {/* Dark Background Band */}
         <div
           className={cn(
             'absolute left-0 right-0',
             isSite
-              ? 'top-0 bottom-[120px] md:bottom-[160px] lg:top-[20%] lg:bottom-[20%] lg:right-4'
+              ? 'top-[18%] bottom-[18%] lg:right-4'
               : (isCompact
-                ? 'top-0 bottom-[100px]'
-                : 'top-[20%] bottom-[20%] right-4'),
+                ? 'top-[16%] bottom-[16%]'
+                : 'top-[18%] bottom-[18%] right-4'),
           )}
           style={{ backgroundColor: '#0a0f18' }}
         />
 
-        <div className={cn('relative z-10 w-full flex items-stretch gap-3 px-4 md:px-6 lg:px-8', flexDirection)}>
-          {/* Header Text Block */}
-          <div className={cn('flex flex-col justify-start py-4', headerWidth, isSite ? 'lg:justify-center lg:py-0' : (!isCompact ? 'justify-center py-0' : ''))}>
-            {hasBadge && (
-              <div className="flex items-center gap-2 mb-3 lg:mb-4" style={{ color: badgeAccentColor }}>
-                <Layers className={cn('stroke-[2]', isSite ? 'w-4 h-4 lg:w-5 lg:h-5' : (isCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'))} />
-                <span className={cn('font-bold', isSite ? 'text-[12px] lg:text-[13px]' : (isCompact ? 'text-[10px]' : 'text-xs'))}>{resolvedBadge}</span>
-              </div>
-            )}
-            {showTitle && (
-              <h2
-                className={cn('font-bold tracking-tight leading-[1.2]', headingSize)}
-                style={{ color: '#ffffff' }}
-              >
-                {sectionTitle || 'Quy trình làm việc'}
-              </h2>
-            )}
-            {hasSubtitle && (
-              <p
-                className={cn('mt-1.5 leading-relaxed', isSite ? 'text-[9px] lg:text-[11px]' : (isCompact ? 'text-[7px]' : 'text-[9px]'))}
-                style={{ color: 'rgba(255,255,255,0.65)' }}
-              >
-                {resolvedSubtitle}
-              </p>
-            )}
-          </div>
-
+        <div className="relative z-10 w-full px-4 md:px-6 lg:px-8">
           {/* Cards */}
-          <div className={cn('grid', gridClass, gapClass, cardsWidth)}>
+          <div className={cn('grid', gridClass, gapClass)}>
             {visibleSteps.map((step, idx) => {
               const _stepNum = padNumber(step.icon && /^\d+$/.test(step.icon) ? Number(step.icon) : idx + 1);
 
@@ -818,17 +788,19 @@ const renderMinimal = ({
                 <div
                   key={step.key}
                   className={cn(
-                    'bg-white border border-[#e2e8f0]/80 flex flex-col relative shadow-sm hover:shadow-md transition-shadow',
+                    'flex flex-col relative border shadow-sm hover:shadow-md transition-shadow',
+                    getProcessCornerRadiusClassName(cornerRadius),
                     cardPadding,
                     cardMinH,
                   )}
+                  style={{ backgroundColor: tokens.neutralSurface, borderColor: tokens.neutralBorder }}
                 >
 
 
                   {/* Icon circle */}
                   <div
-                    className={cn('rounded-full flex items-center justify-center mb-5 mt-1', iconSize, isSite ? 'lg:mb-9' : (!isCompact ? 'lg:mb-9' : 'mb-4'))}
-                    style={{ backgroundColor: iconCircleBg }}
+                    className={cn('mb-4 mt-0 flex items-center justify-center rounded-full', iconSize)}
+                    style={{ backgroundColor: tokens.neutralSurface, border: `1px solid ${tokens.neutralBorder}` }}
                   >
                     <span className={iconInner} style={{ color: tokens.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: isCompact ? '0.72rem' : '1rem' }}>
                       {step.icon || (idx + 1)}
@@ -837,7 +809,7 @@ const renderMinimal = ({
 
                   {/* Title */}
                   <h3
-                    className={cn('font-bold tracking-tight mb-2 lg:mb-3.5', titleSize)}
+                    className={cn('mb-2 font-bold tracking-tight', titleSize)}
                     style={{ color: tokens.bodyText }}
                   >
                     {step.title || `Bước ${idx + 1}`}
@@ -874,6 +846,8 @@ const renderGrid = ({
   previewDevice,
   headerConfig = {},
   desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
+  cornerRadius = DEFAULT_PROCESS_CORNER_RADIUS,
 }: {
   tokens: ProcessColorTokens;
   steps: ProcessSharedStep[];
@@ -882,6 +856,8 @@ const renderGrid = ({
   previewDevice: PreviewDevice;
   headerConfig?: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
 }) => {
   if (steps.length === 0) {return renderEmptyState(tokens);}
 
@@ -890,7 +866,7 @@ const renderGrid = ({
   const remainingCount = steps.length - visibleSteps.length;
 
   return (
-    <div className={getSectionPadding(context, previewDevice)} style={{ backgroundColor: tokens.neutralBackground }}>
+    <div className={getSectionPadding(context, previewDevice, spacing)} style={{ backgroundColor: 'transparent' }}>
       {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
 
       <div className={cn(
@@ -902,7 +878,7 @@ const renderGrid = ({
         {visibleSteps.map((step, idx) => (
           <div
             key={step.key}
-            className="rounded-xl p-4 border"
+            className={cn('border p-4', getProcessCornerRadiusClassName(cornerRadius))}
             style={{ backgroundColor: tokens.neutralSurface, borderColor: tokens.cardBorder }}
           >
             <div
@@ -932,14 +908,16 @@ const renderGrid = ({
 
 const isImageUrl = (value: string) => /^https?:\/\//i.test(value) || value.startsWith('/');
 
-const renderAlternating = ({
+const renderCompactMinimal = ({
   tokens,
   steps,
   sectionTitle,
   context,
   previewDevice,
   headerConfig = {},
-  desktopColumns: _desktopColumns = 4,
+  desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
+  cornerRadius = DEFAULT_PROCESS_CORNER_RADIUS,
 }: {
   tokens: ProcessColorTokens;
   steps: ProcessSharedStep[];
@@ -948,6 +926,108 @@ const renderAlternating = ({
   previewDevice: PreviewDevice;
   headerConfig?: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
+}) => {
+  if (steps.length === 0) {return renderEmptyState(tokens);}
+
+  const maxVisible = getMaxVisible('compactMinimal', context, previewDevice);
+  const visibleSteps = steps.slice(0, maxVisible);
+  const remainingCount = steps.length - visibleSteps.length;
+  const isSite = context === 'site';
+  const isMobile = previewDevice === 'mobile';
+  const gridClass = isSite
+    ? (desktopColumns === 3 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-4')
+    : (desktopColumns === 3 ? (isMobile ? 'grid-cols-1' : 'grid-cols-3') : (isMobile ? 'grid-cols-2' : 'grid-cols-4'));
+  const itemOffset = isSite ? 'md:translate-y-10' : 'translate-y-0 md:translate-y-10';
+
+  return (
+    <div className={cn(getSectionPadding(context, previewDevice, spacing), 'overflow-hidden')} style={{ backgroundColor: 'transparent' }}>
+      {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
+
+      <div className="mx-auto max-w-7xl">
+        <div className={cn('grid gap-x-5 gap-y-8', gridClass)}>
+          {visibleSteps.map((step, idx) => {
+            const stepNum = step.icon && /^\d+$/.test(step.icon) ? padNumber(Number(step.icon)) : padNumber(idx + 1);
+            const iconIsImage = isImageUrl(step.icon);
+            const isOffset = idx % 2 === 0;
+
+            return (
+              <article
+                key={step.key}
+                className={cn(
+                  'relative min-w-0 pl-7',
+                  !isMobile && isOffset && itemOffset,
+                )}
+              >
+                <div
+                  aria-hidden="true"
+                  className="absolute left-0 top-12 h-[calc(100%+42px)] w-px"
+                  style={{ background: `linear-gradient(to bottom, ${tokens.neutralBorder}, ${tokens.bodyText})` }}
+                />
+                <div className="relative">
+                  <h3
+                    className={cn(
+                      'mb-2 pr-2 text-lg font-bold leading-tight break-words md:text-xl',
+                      isSite ? 'lg:text-2xl' : '',
+                    )}
+                    style={{ color: tokens.bodyText }}
+                  >
+                    {step.title || `Bước ${idx + 1}`}
+                    <sup
+                      className="ml-2 inline-flex h-8 w-8 -translate-y-2 items-center justify-center rounded-full text-sm font-bold"
+                      style={{ backgroundColor: tokens.primary, color: tokens.stepDotText }}
+                    >
+                      {stepNum}
+                    </sup>
+                  </h3>
+                  <p className="text-sm leading-relaxed break-words" style={{ color: tokens.mutedText }}>
+                    {step.description || 'Mô tả bước này...'}
+                  </p>
+                  {iconIsImage && (
+                    <img
+                      src={step.icon}
+                      alt=""
+                      className={cn('mt-3 h-10 w-10 object-contain', getProcessCornerRadiusClassName(cornerRadius))}
+                      loading="lazy"
+                    />
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      {remainingCount > 0 && (
+        <div className="mt-4 text-center">
+          <span className="text-xs" style={{ color: tokens.secondary }}>+{remainingCount} bước khác</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const renderAlternating = ({
+  tokens,
+  steps,
+  sectionTitle,
+  context,
+  previewDevice,
+  headerConfig = {},
+  desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
+  cornerRadius = DEFAULT_PROCESS_CORNER_RADIUS,
+}: {
+  tokens: ProcessColorTokens;
+  steps: ProcessSharedStep[];
+  sectionTitle: string;
+  context: ProcessSectionContext;
+  previewDevice: PreviewDevice;
+  headerConfig?: HeaderConfig;
+  desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
 }) => {
   if (steps.length === 0) {return renderEmptyState(tokens);}
 
@@ -957,95 +1037,24 @@ const renderAlternating = ({
   const isSite = context === 'site';
   const isMobile = previewDevice === 'mobile';
   const isTablet = previewDevice === 'tablet';
-  const hasDistinctAccents = tokens.primary.toLowerCase() !== tokens.secondary.toLowerCase();
-  const sectionBackground = tokens.cardStepBg;
-  const sectionText = tokens.cardStepText;
-  const cardBackground = hasDistinctAccents ? tokens.stepDotBg : tokens.neutralSurface;
-  const cardText = hasDistinctAccents ? tokens.stepDotText : tokens.bodyText;
-  const cardIconBackground = hasDistinctAccents ? tokens.neutralSurface : tokens.cardStepBg;
-  const cardIconText = hasDistinctAccents ? tokens.stepDotBg : tokens.cardStepText;
+  const sectionText = tokens.mutedText;
+  const cardBackground = tokens.neutralSurface;
+  const cardText = tokens.bodyText;
+  const cardIconBackground = tokens.primary;
+  const cardIconText = tokens.cardStepText;
 
   const outerPadding = isSite
-    ? 'py-6 px-3 md:py-8 lg:py-10'
-    : (isMobile ? 'py-5 px-3' : 'py-7 px-4');
+    ? cn(getProcessSectionSpacingClassName(spacing), 'px-3')
+    : cn(getProcessSectionSpacingClassName(spacing), isMobile ? 'px-3' : 'px-4');
   const trackClass = isSite
-    ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4'
-    : cn('grid gap-4', isMobile ? 'grid-cols-1' : (isTablet ? 'grid-cols-2' : 'grid-cols-4'));
+    ? cn('grid gap-4', desktopColumns === 3 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-4')
+    : cn('grid gap-4', desktopColumns === 3 ? (isMobile ? 'grid-cols-1' : 'grid-cols-3') : (isMobile || isTablet ? 'grid-cols-2' : 'grid-cols-4'));
   const itemWidthClass = 'w-full min-w-0';
   const itemHeightClass = isMobile ? 'min-h-[250px]' : 'min-h-[320px]';
 
-  const renderDarkHeader = () => {
-    const {
-      hideHeader = false,
-      showTitle = true,
-      showSubtitle = true,
-      subtitle = '',
-      headerAlign = 'center',
-      subtitleAboveTitle = false,
-      uppercaseText = false,
-      showBadge = true,
-      badgeText = '',
-    } = headerConfig;
-
-    if (hideHeader) {return null;}
-    const resolvedTitle = typeof sectionTitle === 'string' ? sectionTitle.trim() : '';
-    const resolvedSubtitle = typeof subtitle === 'string' ? subtitle.trim() : '';
-    const resolvedBadge = typeof badgeText === 'string' ? badgeText.trim() : '';
-    const hasTitle = showTitle && resolvedTitle.length > 0;
-    const hasSubtitle = showSubtitle && resolvedSubtitle.length > 0;
-    const hasBadge = showBadge && resolvedBadge.length > 0;
-
-    if (!hasTitle && !hasSubtitle && !hasBadge) {return null;}
-
-    const alignClass = headerAlign === 'center' ? 'text-center' : headerAlign === 'right' ? 'text-right' : 'text-left';
-    const textTransform = uppercaseText ? 'uppercase' as const : undefined;
-    const titleEl = hasTitle && (
-      <h2 className={cn('font-bold tracking-tight', isMobile ? 'text-2xl' : 'text-3xl')} style={{ color: sectionText, textTransform }}>
-        {resolvedTitle}
-      </h2>
-    );
-    const subtitleEl = hasSubtitle && (
-      <p className="text-sm leading-relaxed" style={{ color: sectionText, textTransform }}>
-        {resolvedSubtitle}
-      </p>
-    );
-    const badgeEl = hasBadge && (
-      <div>
-        <span
-          className="inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wider"
-          style={{
-            backgroundColor: tokens.neutralSurface,
-            borderColor: tokens.neutralBorder,
-            color: tokens.secondary,
-          }}
-        >
-          {resolvedBadge}
-        </span>
-      </div>
-    );
-
-    return (
-      <div className={cn(alignClass, 'mx-auto mb-5 max-w-3xl space-y-1.5')}>
-        {subtitleAboveTitle ? (
-          <>
-            {badgeEl}
-            {subtitleEl}
-            {titleEl}
-          </>
-        ) : (
-          <>
-            {badgeEl}
-            {titleEl}
-            {subtitleEl}
-          </>
-        )}
-      </div>
-    );
-  };
-
   return (
-    <div className={cn('relative z-[1] overflow-hidden', outerPadding)} style={{ backgroundColor: sectionBackground }}>
-      {renderDarkHeader()}
+    <div className={cn('relative z-[1] overflow-hidden', outerPadding)} style={{ backgroundColor: 'transparent' }}>
+      {renderSectionHeader({ tokens, sectionTitle, previewDevice, headerConfig, showBadgeInline: true })}
 
       <div className={trackClass}>
         {visibleSteps.map((step, idx) => {
@@ -1061,6 +1070,7 @@ const renderAlternating = ({
             <div
               className={cn(
                 'relative w-full min-w-0 text-center transition-all duration-300',
+                getProcessCornerRadiusClassName(cornerRadius),
                 inverted
                   ? (isMobile ? 'mb-6 pt-4 pb-14' : 'mb-8 pt-4 pb-14')
                   : (isMobile ? 'mt-6 pt-14 pb-4' : 'mt-8 pt-14 pb-4'),
@@ -1068,7 +1078,7 @@ const renderAlternating = ({
               )}
               style={{
                 backgroundColor: cardBackground,
-                borderRadius: '38px 6px',
+                border: `1px solid ${tokens.neutralBorder}`,
               }}
             >
               <div
@@ -1092,7 +1102,7 @@ const renderAlternating = ({
                 )}
               </div>
 
-              <h3 className="mb-2 overflow-hidden text-ellipsis whitespace-nowrap text-lg font-bold leading-6" style={{ color: cardText }}>
+              <h3 className="mb-2 break-words text-lg font-bold leading-6" style={{ color: cardText }}>
                 {step.title || `Bước ${idx + 1}`}
               </h3>
               <p className="min-h-12 overflow-hidden break-words text-sm leading-5" style={{ color: cardText }}>
@@ -1152,9 +1162,7 @@ type HeaderConfig = {
 const renderSectionHeader = ({
   tokens,
   sectionTitle,
-  previewDevice,
   headerConfig,
-  showBadgeInline = false,
 }: {
   tokens: ProcessColorTokens;
   sectionTitle: string;
@@ -1175,60 +1183,200 @@ const renderSectionHeader = ({
     badgeText = '',
   } = headerConfig;
 
-  if (hideHeader) {return null;}
-  if (!showTitle && !showSubtitle && !showBadge) {return null;}
-
-  const resolvedTitle = typeof sectionTitle === 'string' ? sectionTitle.trim() : '';
-  const resolvedSubtitle = typeof subtitle === 'string' ? subtitle.trim() : '';
-  const resolvedBadge = typeof badgeText === 'string' ? badgeText.trim() : '';
-  const hasTitle = showTitle && resolvedTitle.length > 0;
-  const hasSubtitle = showSubtitle && resolvedSubtitle.length > 0;
-  const hasBadge = showBadge && resolvedBadge.length > 0 && showBadgeInline;
-
-  if (!hasTitle && !hasSubtitle && !hasBadge) {return null;}
-
-  const textTransform = uppercaseText ? 'uppercase' as const : undefined;
-  const alignClass = headerAlign === 'center' ? 'text-center' : headerAlign === 'right' ? 'text-right' : 'text-left';
-
-  const titleEl = hasTitle && (
-    <h2
-      className={cn('font-bold tracking-tight', previewDevice === 'mobile' ? 'text-xl' : 'text-2xl')}
-      style={{ color: titleColorPrimary ? tokens.primary : '#0f172a', textTransform }}
-    >
-      {resolvedTitle}
-    </h2>
+  return (
+    <SectionHeader
+      title={sectionTitle}
+      subtitle={subtitle}
+      headerAlign={headerAlign}
+      titleColorPrimary={titleColorPrimary}
+      subtitleAboveTitle={subtitleAboveTitle}
+      uppercaseText={uppercaseText}
+      showTitle={showTitle}
+      showSubtitle={showSubtitle}
+      showBadge={showBadge}
+      badgeText={badgeText}
+      hideHeader={hideHeader}
+      brandColor={tokens.primary}
+    />
   );
+};
 
-  const subtitleEl = hasSubtitle && (
-    <p className="text-sm leading-relaxed" style={{ color: tokens.mutedText, textTransform }}>
-      {resolvedSubtitle}
-    </p>
-  );
+const RenderCircular = ({
+  tokens,
+  steps,
+  sectionTitle,
+  context,
+  previewDevice,
+  headerConfig = {},
+  spacing = DEFAULT_PROCESS_SPACING,
+  circularCtaText = '',
+  circularCtaLink = '',
+}: {
+  tokens: ProcessColorTokens;
+  steps: ProcessSharedStep[];
+  sectionTitle: string;
+  context: ProcessSectionContext;
+  previewDevice: PreviewDevice;
+  headerConfig?: HeaderConfig;
+  spacing?: ProcessSpacing;
+  circularCtaText?: string;
+  circularCtaLink?: string;
+}) => {
+  if (steps.length === 0) { return renderEmptyState(tokens); }
 
-  const badgeEl = hasBadge && (
-    <div className={cn('mb-1', alignClass)}>
-      <span className="inline-block px-3 py-1 text-[11px] font-medium tracking-wider uppercase bg-slate-100 text-slate-600 rounded-full border border-slate-200">
-        {resolvedBadge}
-      </span>
-    </div>
-  );
+  const maxVisible = getMaxVisible('circular', context, previewDevice);
+  const visibleSteps = steps.slice(0, maxVisible);
+  
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  
+  React.useEffect(() => {
+    if (activeIndex >= visibleSteps.length) {
+      setActiveIndex(0);
+    }
+  }, [visibleSteps.length, activeIndex]);
+
+  const activeStep = visibleSteps[activeIndex] || visibleSteps[0];
+
+  if (!activeStep) { return renderEmptyState(tokens); }
+
+  const N = visibleSteps.length;
+  const R = 250;
+  const buttonSize = 110;
+  const center = 250;
+
+  const getStepCoords = (i: number) => {
+    const angle = -90 + i * (360 / N);
+    const angleRad = (angle * Math.PI) / 180;
+    const x = center + R * Math.cos(angleRad) - buttonSize / 2;
+    const y = center + R * Math.sin(angleRad) - buttonSize / 2;
+    return { left: `${x}px`, top: `${y}px` };
+  };
+
+  const subtitleText = headerConfig.subtitle || '';
+  const primaryColor = tokens.primary;
+
+  // Xác định độ tương phản: Nếu màu chính là màu sáng (ví dụ màu vàng, cần chữ tối #0f172a), 
+  const surfaceCol = tokens.neutralSurface;
+  const borderCol = tokens.neutralBorder;
+  const textCol = tokens.bodyText;
+  const mutedTextCol = tokens.mutedText;
+
+  // Lấy nhãn nút CTA từ circularCtaText, nếu không có mới fallback về text mặc định
+  const ctaText = circularCtaText || "BẮT ĐẦU DỰ ÁN";
 
   return (
-    <div className={cn(alignClass, 'mb-4')}>
-      <div className={cn('space-y-2', headerAlign === 'center' ? 'mx-auto max-w-2xl' : '')}>
-        {subtitleAboveTitle ? (
-          <>
-            {badgeEl}
-            {subtitleEl}
-            {titleEl}
-          </>
-        ) : (
-          <>
-            {badgeEl}
-            {titleEl}
-            {subtitleEl}
-          </>
-        )}
+    <div 
+      className={cn(getSectionPadding(context, previewDevice, spacing), "w-full py-16 px-4 md:px-8 transition-colors duration-300")}
+    >
+      <div className="mx-auto max-w-[1140px] tv:max-w-[1536px]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 tv:gap-24 items-center">
+          
+          <div className="text-center lg:text-left space-y-6">
+            <h2 
+              className="text-4xl sm:text-5xl lg:text-[61px] tv:text-8xl font-light leading-tight tracking-wide uppercase font-sans"
+              style={{ color: textCol }}
+            >
+              {sectionTitle || "CÁCH CHÚNG TÔI LÀM VIỆC"}
+            </h2>
+            {subtitleText && (
+              <p 
+                className="text-lg sm:text-xl tv:text-2xl font-light leading-relaxed max-w-lg tv:max-w-2xl mx-auto lg:mx-0"
+                style={{ color: mutedTextCol }}
+              >
+                {subtitleText}
+              </p>
+            )}
+            <div className="pt-2 flex justify-center lg:justify-start">
+              <a
+                href={circularCtaLink || "#contact"}
+                target="_self"
+                className="inline-flex items-center justify-center px-8 tv:px-12 py-4 tv:py-6 border font-medium tracking-wide text-sm tv:text-lg rounded-lg uppercase transition-all duration-300 hover:bg-opacity-10"
+                style={{ 
+                  color: primaryColor, 
+                  borderColor: primaryColor,
+                  backgroundColor: 'transparent'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = primaryColor;
+                  e.currentTarget.style.color = tokens.stepDotText;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = primaryColor;
+                }}
+              >
+                {ctaText}
+              </a>
+            </div>
+          </div>
+
+          <div className="flex justify-center items-center py-8 lg:py-0 overflow-visible">
+            {/* Wrapper có kích thước vừa vặn chứa toàn bộ vòng tròn 500px + 2 nút lồi 55px (tổng cộng 610px) */}
+            <div className="w-[315px] h-[315px] sm:w-[425px] sm:h-[425px] md:w-[480px] md:h-[480px] lg:w-[490px] lg:h-[490px] xl:w-[610px] xl:h-[610px] tv:w-[750px] tv:h-[750px] flex items-center justify-center overflow-visible relative">
+              <div className="w-[500px] h-[500px] shrink-0 scale-[0.52] sm:scale-[0.70] md:scale-[0.79] lg:scale-[0.80] xl:scale-100 tv:scale-[1.25] origin-center absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 transition-transform">
+                
+                <div 
+                  className="absolute inset-0 rounded-full border flex flex-col items-center justify-center p-12 text-center transition-all duration-500"
+                  style={{ 
+                    borderColor: primaryColor, 
+                    backgroundColor: surfaceCol,
+                    boxShadow: `0 10px 40px ${primaryColor}0f`,
+                    borderWidth: '3px'
+                  }}
+                >
+                  <div className="mb-4 flex items-center justify-center" style={{ color: primaryColor }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-circle-check">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="m9 12 2 2 4-4"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl tv:text-4xl font-medium tracking-wide uppercase mb-3" style={{ color: primaryColor }}>
+                    {activeStep.title || `BƯỚC ${activeIndex + 1}`}
+                  </h3>
+                  <p className="text-sm tv:text-lg font-light leading-relaxed max-w-xs tv:max-w-md" style={{ color: textCol }}>
+                    {activeStep.description || "Mô tả bước này..."}
+                  </p>
+                </div>
+
+                {visibleSteps.map((step, idx) => {
+                  const isActive = activeIndex === idx;
+                  const coords = getStepCoords(idx);
+                  const isImg = step.icon && (/^https?:\/\//i.test(step.icon) || step.icon.startsWith('/'));
+
+                  return (
+                    <button
+                      key={step.key}
+                      onClick={() => setActiveIndex(idx)}
+                      style={{ 
+                        left: coords.left, 
+                        top: coords.top,
+                        borderColor: isActive ? primaryColor : borderCol,
+                        color: isActive ? tokens.stepDotText : textCol,
+                        backgroundColor: isActive ? primaryColor : surfaceCol,
+                        boxShadow: isActive ? `0 8px 24px ${primaryColor}30` : 'none',
+                        borderWidth: '3px'
+                      }}
+                      className="absolute w-[110px] h-[110px] rounded-full border flex items-center justify-center text-sm font-medium tracking-wider cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-md z-20 focus:outline-none"
+                      aria-label={`Step ${idx + 1}`}
+                    >
+                      {isImg ? (
+                        <img 
+                          src={step.icon} 
+                          alt="" 
+                          className={cn("w-8 h-8 object-contain transition-all", isActive ? "brightness-0 invert" : "")} 
+                        />
+                      ) : (
+                        <span>{step.icon || `Step ${idx + 1}`}</span>
+                      )}
+                    </button>
+                  );
+                })}
+
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   );
@@ -1243,6 +1391,10 @@ const ProcessSectionContent = ({
   previewDevice,
   headerConfig,
   desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
+  cornerRadius = DEFAULT_PROCESS_CORNER_RADIUS,
+  circularCtaText = '',
+  circularCtaLink = '',
 }: {
   steps: ProcessSharedStep[];
   sectionTitle: string;
@@ -1252,33 +1404,71 @@ const ProcessSectionContent = ({
   previewDevice: PreviewDevice;
   headerConfig: HeaderConfig;
   desktopColumns?: 3 | 4;
+  spacing?: ProcessSpacing;
+  cornerRadius?: ProcessCornerRadius;
+  circularCtaText?: string;
+  circularCtaLink?: string;
 }) => {
   if (style === 'horizontal') {
-    return renderHorizontal({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns });
+    return renderHorizontal({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns, spacing, cornerRadius });
   }
 
   if (style === 'stepper') {
-    return renderStepper({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns });
+    return (
+      <RenderStepper
+        context={context}
+        previewDevice={previewDevice}
+        sectionTitle={sectionTitle}
+        steps={steps}
+        tokens={tokens}
+        headerConfig={headerConfig}
+        desktopColumns={desktopColumns}
+        spacing={spacing}
+        cornerRadius={cornerRadius}
+      />
+    );
   }
 
   if (style === 'cards') {
-    return renderCards({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns });
+    return renderCards({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns, spacing, cornerRadius });
   }
 
   if (style === 'accordion') {
-    return renderAccordion({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns });
+    return renderAccordion({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns, spacing, cornerRadius });
   }
 
   if (style === 'minimal') {
-    return renderMinimal({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns });
+    return renderMinimal({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns, spacing, cornerRadius });
+  }
+
+  if (style === 'compactMinimal') {
+    return renderCompactMinimal({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns, spacing, cornerRadius });
   }
 
   if (style === 'alternating') {
-    return renderAlternating({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns });
+    return renderAlternating({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns, spacing, cornerRadius });
   }
 
-  return renderGrid({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns });
+  if (style === 'circular') {
+    return (
+      <RenderCircular
+        context={context}
+        previewDevice={previewDevice}
+        sectionTitle={sectionTitle}
+        steps={steps}
+        tokens={tokens}
+        headerConfig={headerConfig}
+        spacing={spacing}
+        circularCtaText={circularCtaText}
+        circularCtaLink={circularCtaLink}
+      />
+    );
+  }
+
+  return renderGrid({ context, previewDevice, sectionTitle, steps, tokens, headerConfig, desktopColumns, spacing, cornerRadius });
 };
+
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 export function ProcessSectionShared({
   steps,
@@ -1306,8 +1496,13 @@ export function ProcessSectionShared({
   fontStyle,
   fontClassName,
   desktopColumns = 4,
+  spacing = DEFAULT_PROCESS_SPACING,
+  cornerRadius = DEFAULT_PROCESS_CORNER_RADIUS,
+  circularCtaText = '',
+  circularCtaLink = '',
+  isDark,
 }: ProcessSectionSharedProps) {
-  const tokens = React.useMemo(() => getProcessColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
+  const tokens = React.useMemo(() => adaptTokensForDarkMode(getProcessColors(brandColor, secondary, mode), isDark ?? false), [brandColor, secondary, mode, isDark]);
   const selectedStyle = previewStyle ?? style;
   const maxVisible = getMaxVisible(selectedStyle, context, previewDevice);
   const info = getSharedInfoText(selectedStyle, steps.length, Math.min(steps.length, maxVisible), mode);
@@ -1325,6 +1520,10 @@ export function ProcessSectionShared({
         previewDevice={previewDevice}
         headerConfig={headerConfig}
         desktopColumns={desktopColumns}
+        spacing={spacing}
+        cornerRadius={cornerRadius}
+        circularCtaText={circularCtaText}
+        circularCtaLink={circularCtaLink}
       />
     );
   }
@@ -1353,6 +1552,10 @@ export function ProcessSectionShared({
             previewDevice={previewDevice}
             headerConfig={headerConfig}
             desktopColumns={desktopColumns}
+            spacing={spacing}
+            cornerRadius={cornerRadius}
+            circularCtaText={circularCtaText}
+            circularCtaLink={circularCtaLink}
           />
         </BrowserFrame>
       </PreviewWrapper>
@@ -1360,7 +1563,7 @@ export function ProcessSectionShared({
         <ColorInfoPanel
           brandColor={tokens.primary}
           secondary={tokens.secondary}
-          description="Màu phụ được áp dụng cho: progress, dot timeline, badge và border accent của Process."
+          description="Màu phụ được dùng tiết chế cho badge và accent phụ; màu chính giữ vai trò chủ đạo trong Process."
         />
       )}
       {mode === 'single' && (

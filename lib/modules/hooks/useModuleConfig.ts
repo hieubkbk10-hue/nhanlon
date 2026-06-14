@@ -75,6 +75,11 @@ export function useModuleConfig(config: ModuleDefinition) {
    useEffect(() => {
      if (featuresData) {
        const state: FeaturesState = {};
+       if (config.features) {
+         for (const feature of config.features) {
+           state[feature.key] = feature.enabled ?? false;
+         }
+       }
        for (const f of featuresData) {
          state[f.featureKey] = f.enabled;
        }
@@ -83,7 +88,7 @@ export function useModuleConfig(config: ModuleDefinition) {
       }
        setLocalFeatures(state);
      }
-  }, [featuresData, moduleKey]);
+  }, [featuresData, moduleKey, config.features]);
    
    useEffect(() => {
      if (fieldsData) {
@@ -184,13 +189,18 @@ export function useModuleConfig(config: ModuleDefinition) {
    // ============ SERVER STATE FOR COMPARISON ============
    const serverFeatures = useMemo<FeaturesState>(() => {
      const state: FeaturesState = {};
+     if (config.features) {
+       for (const feature of config.features) {
+         state[feature.key] = feature.enabled ?? false;
+       }
+     }
      if (featuresData) {
        for (const f of featuresData) {
          state[f.featureKey] = f.enabled;
        }
      }
      return state;
-   }, [featuresData]);
+   }, [featuresData, config.features]);
    
    const serverSettings = useMemo<SettingsState>(() => {
      const state: SettingsState = {};
@@ -238,11 +248,12 @@ export function useModuleConfig(config: ModuleDefinition) {
    
    // ============ HANDLERS ============
    const handleToggleFeature = useCallback((key: string) => {
-     const newState = !localFeatures[key];
+     const feature = config.features?.find(f => f.key === key);
+     const currentState = localFeatures[key] ?? feature?.enabled ?? false;
+     const newState = !currentState;
      setLocalFeatures(prev => ({ ...prev, [key]: newState }));
      
      // Auto-update linked fields
-     const feature = config.features?.find(f => f.key === key);
      if (feature?.linkedField) {
        setLocalFields(prev => prev.map(f => {
         if (f.linkedFeature !== key) {return f;}
@@ -264,21 +275,63 @@ export function useModuleConfig(config: ModuleDefinition) {
      ));
    }, []);
    
-   const handleToggleCategoryField = useCallback((fieldKey: string) => {
-     setLocalCategoryFields(prev => prev.map(f => 
-       f.key === fieldKey ? { ...f, enabled: !f.enabled } : f
-     ));
-   }, []);
-   
-   const handleSettingChange = useCallback((key: string, value: string | number | boolean) => {
-    setLocalSettings(prev => ({ ...prev, [key]: value }));
-    if (moduleKey === 'posts' && key === 'enableAutoPostGenerator' && value === true) {
-      setLocalFeatures(prev => ({ ...prev, enableHtmlRender: true }));
-      setLocalFields(prev => prev.map(field => (
-        field.linkedFeature === 'enableHtmlRender' ? { ...field, enabled: true } : field
-      )));
-    }
-  }, [moduleKey]);
+    const handleToggleCategoryField = useCallback((fieldKey: string) => {
+      setLocalCategoryFields(prev => {
+        const nextFields = prev.map(f => 
+          f.key === fieldKey ? { ...f, enabled: !f.enabled } : f
+        );
+        const targetField = nextFields.find(f => f.key === fieldKey);
+        const isNowEnabled = targetField?.enabled ?? false;
+
+        if (!isNowEnabled && moduleKey === 'products') {
+          setLocalSettings(prevSettings => {
+            const nextSettings = { ...prevSettings };
+            if (fieldKey === 'description') {
+              nextSettings.showCategorySubtitle = false;
+            } else if (fieldKey === 'filterFooterContent') {
+              nextSettings.enableCategoryFilterFooterContent = false;
+            } else if (fieldKey === 'productDetailSuffixContent') {
+              nextSettings.enableCategoryProductDetailSuffix = false;
+            } else if (fieldKey === 'productDetailFaqItems') {
+              nextSettings.enableCategoryProductDetailFaq = false;
+            }
+            return nextSettings;
+          });
+        }
+        return nextFields;
+      });
+    }, [moduleKey]);
+    
+    const handleSettingChange = useCallback((key: string, value: string | number | boolean) => {
+      setLocalSettings(prev => {
+        const next = { ...prev, [key]: value };
+        if (moduleKey === 'homepage' && key === 'enableSmartWizard' && value === false) {
+          next.enableLegacySnapshotQuickCreate = false;
+        }
+        return next;
+      });
+
+      if (moduleKey === 'products') {
+        if (key === 'showCategorySubtitle') {
+          if (value === true) {
+            setLocalCategoryFields(prev => prev.map(f => f.key === 'description' ? { ...f, enabled: true } : f));
+          }
+        } else if (key === 'enableCategoryFilterFooterContent') {
+          setLocalCategoryFields(prev => prev.map(f => f.key === 'filterFooterContent' ? { ...f, enabled: value === true } : f));
+        } else if (key === 'enableCategoryProductDetailSuffix') {
+          setLocalCategoryFields(prev => prev.map(f => f.key === 'productDetailSuffixContent' ? { ...f, enabled: value === true } : f));
+        } else if (key === 'enableCategoryProductDetailFaq') {
+          setLocalCategoryFields(prev => prev.map(f => f.key === 'productDetailFaqItems' ? { ...f, enabled: value === true } : f));
+        }
+      }
+
+      if (moduleKey === 'posts' && key === 'enableAutoPostGenerator' && value === true) {
+        setLocalFeatures(prev => ({ ...prev, enableHtmlRender: true }));
+        setLocalFields(prev => prev.map(field => (
+          field.linkedFeature === 'enableHtmlRender' ? { ...field, enabled: true } : field
+        )));
+      }
+    }, [moduleKey]);
    
    // ============ BATCH SAVE ============
    const handleSave = useCallback(async () => {

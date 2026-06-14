@@ -1,4 +1,5 @@
 import type { ServicesConfig } from '../_types';
+import { DEFAULT_SERVICES_CORNER_RADIUS, DEFAULT_SERVICES_SPACING } from '../_types';
 
 export const DEFAULT_SERVICES_CONFIG: ServicesConfig = {
   items: [
@@ -25,6 +26,8 @@ export const DEFAULT_SERVICES_CONFIG: ServicesConfig = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  spacing: DEFAULT_SERVICES_SPACING,
+  cornerRadius: DEFAULT_SERVICES_CORNER_RADIUS,
 };
 
 export const AVAILABLE_SERVICE_ICONS = [

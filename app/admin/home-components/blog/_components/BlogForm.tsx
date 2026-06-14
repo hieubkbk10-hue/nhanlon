@@ -2,13 +2,21 @@
 
 import React from 'react';
 import { AdminImage as Image } from '@/app/admin/components/AdminImage';
-import { Bot, Check, ChevronDown, FileText, GripVertical, Package, Plus, Search, Trash2, X } from 'lucide-react';
+import { Bot, Check, FileText, GripVertical, Package, Plus, Search, X } from 'lucide-react';
 import { Button, Card, CardContent, Input, Label, cn } from '../../../components/ui';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
 import { InputWithClear } from '../../stats/_components/InputWithClear';
-import type { BlogSelectionMode, BlogSortBy, DemoBlogItem } from '../_types';
+import { type BlogCardRadius, type BlogSelectionMode, type BlogSortBy, type DemoBlogItem } from '../_types';
 import { DEFAULT_DEMO_BLOG_POSTS } from '../_lib/constants';
 import { AiDemoBlogPostsImport } from '../../product-list/_components/AiDemoProductsImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useDemoItemList } from '../../_shared/hooks/useDemoItemList';
+import { DemoItemRowShell } from '../../_shared/components/DemoItemRowShell';
+import { DemoPrimaryFields } from '../../_shared/components/DemoPrimaryFields';
 
 export interface BlogPostItem {
   _id: string;
@@ -22,46 +30,6 @@ export interface BlogPostItem {
   publishedAt?: number;
   status?: string;
   views?: number;
-}
-
-/* ── Collapsible sub-section (reuse pattern from ProductListForm) ── */
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <Icon size={15} className="text-slate-400 shrink-0" />
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          size={15}
-          className={cn(
-            'text-slate-400 transition-transform duration-200',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && (
-        <div className="p-3 space-y-3 bg-white dark:bg-slate-900">
-          {children}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export const BlogForm = ({
@@ -87,6 +55,10 @@ export const BlogForm = ({
   defaultExpanded = true,
   desktopColumns = 4,
   onDesktopColumnsChange,
+  spacing,
+  onSpacingChange,
+  cornerRadius,
+  onCornerRadiusChange,
 }: {
   showAuthor: boolean;
   canShowAuthor?: boolean;
@@ -115,90 +87,101 @@ export const BlogForm = ({
   defaultExpanded?: boolean;
   desktopColumns?: 3 | 4;
   onDesktopColumnsChange?: (cols: 3 | 4) => void;
+  spacing: SectionSpacing;
+  onSpacingChange: (spacing: SectionSpacing) => void;
+  cornerRadius: BlogCardRadius;
+  onCornerRadiusChange: (radius: BlogCardRadius) => void;
 }) => {
-  const addDemoItem = () => {
-    setDemoPosts(prev => [...prev, {
-      id: `demo-${Date.now()}`,
-      title: '',
-      excerpt: '',
-      thumbnail: '',
-      category: '',
-      date: '',
-      author: '',
-    }]);
-  };
+  const activeSections = React.useMemo(() => ['settings', 'source'], []);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(activeSections, defaultExpanded);
 
-  const updateDemoItem = (id: string, patch: Partial<DemoBlogItem>) => {
-    setDemoPosts(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
-  };
-
-  const removeDemoItem = (id: string) => {
-    if (demoPosts.length <= 1) { return; }
-    setDemoPosts(prev => prev.filter(d => d.id !== id));
-  };
-
-  const loadDefaultDemo = () => {
-    setDemoPosts(DEFAULT_DEMO_BLOG_POSTS.map((d, i) => ({ ...d, id: `demo-${Date.now() + i}` })));
-  };
+  const { add: addDemoItem, update: updateDemoItem, remove: removeDemoItem, loadDefault: loadDefaultDemo } = useDemoItemList(
+    demoPosts,
+    setDemoPosts,
+    {
+      createEmpty: () => ({ title: '', excerpt: '', thumbnail: '', category: '', date: '', author: '', link: '' }),
+      defaults: DEFAULT_DEMO_BLOG_POSTS,
+    },
+  );
 
   return (
     <Card className="mb-6">
       <CardContent className="p-4 space-y-3">
-        {/* ── Nội dung hiển thị ── */}
-        <SubSection icon={FileText} title="Nội dung hiển thị" defaultOpen={defaultExpanded}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {[
-              canShowAuthor ? { key: 'showAuthor', label: 'Hiện tác giả', value: showAuthor } : null,
-              { key: 'showDate', label: 'Hiện ngày đăng', value: showDate },
-              { key: 'showExcerpt', label: 'Hiện đoạn trích', value: showExcerpt },
-            ].filter(Boolean).map((item) => (
-              <button
-                key={item!.key}
-                type="button"
-                onClick={() => { onDisplayConfigChange({ [item!.key]: !item!.value } as { showAuthor?: boolean; showExcerpt?: boolean; showDate?: boolean }); }}
-                className={cn(
-                  'flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition-all',
-                  item!.value
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
-                    : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300',
-                )}
-              >
-                <span>{item!.label}</span>
-                <span className={cn('h-2.5 w-2.5 rounded-full', item!.value ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600')} />
-              </button>
-            ))}
-          </div>
-        </SubSection>
+        <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
 
-        {/* ── Số cột desktop ── */}
-        {onDesktopColumnsChange && (
-          <div className="space-y-2">
-            <Label>Số cột desktop</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {([3, 4] as const).map((option) => {
-                const selected = desktopColumns === option;
-                return (
+        <AiDemoBlogPostsImport onApply={(items) => {
+          setDemoPosts(items);
+          onSelectionModeChange('demo');
+        }} />
+
+        <HomeComponentDisplaySettingsSection
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={onCornerRadiusChange}
+          spacing={spacing}
+          onSpacingChange={onSpacingChange}
+        >
+          {onDesktopColumnsChange && (
+            <div className="space-y-2">
+                <Label>Số cột desktop</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([3, 4] as const).map((option) => {
+                    const selected = desktopColumns === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => onDesktopColumnsChange(option)}
+                        className={cn(
+                          'h-9 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                        )}
+                      >
+                        {option} cột
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+          )}
+
+          <div className="space-y-2 md:col-span-2">
+              <Label>Thành phần hiển thị</Label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  canShowAuthor ? { key: 'showAuthor', label: 'Hiện tác giả', value: showAuthor } : null,
+                  { key: 'showDate', label: 'Hiện ngày đăng', value: showDate },
+                  { key: 'showExcerpt', label: 'Hiện đoạn trích', value: showExcerpt },
+                ].filter(Boolean).map((item) => (
                   <button
-                    key={option}
+                    key={item!.key}
                     type="button"
-                    onClick={() => onDesktopColumnsChange(option)}
+                    onClick={() => { onDisplayConfigChange({ [item!.key]: !item!.value } as { showAuthor?: boolean; showExcerpt?: boolean; showDate?: boolean }); }}
                     className={cn(
-                      'h-9 rounded-md border text-xs transition-colors',
-                      selected
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                        : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      'flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition-all',
+                      item!.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300',
                     )}
                   >
-                    {option} cột
+                    <span>{item!.label}</span>
+                    <span className={cn('h-2.5 w-2.5 rounded-full', item!.value ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600')} />
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+        </HomeComponentDisplaySettingsSection>
 
         {/* ── Nguồn dữ liệu ── */}
-        <SubSection icon={Package} title="Nguồn dữ liệu" defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={Package}
+          title="Nguồn dữ liệu"
+          open={openSections.source}
+          onOpenChange={(open) => toggleSection('source', open)}
+        >
           <div className="space-y-2">
             <Label>Chế độ chọn bài viết</Label>
             <div className="flex gap-2">
@@ -383,7 +366,6 @@ export const BlogForm = ({
                     onClick={loadDefaultDemo}>
                     <Bot size={11} /> Mẫu mặc định
                   </Button>
-                  <AiDemoBlogPostsImport onApply={setDemoPosts} />
                   <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
                     onClick={addDemoItem}>
                     <Plus size={12} /> Thêm
@@ -393,41 +375,26 @@ export const BlogForm = ({
 
               <div className="space-y-2 max-h-[500px] overflow-y-auto">
                 {demoPosts.map((item, index) => (
-                  <div
+                  <DemoItemRowShell
                     key={item.id}
-                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"
+                    index={index}
+                    image={item.thumbnail}
+                    onRemove={() => removeDemoItem(item.id)}
+                    placeholderIcon={<FileText size={12} />}
                   >
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      <span className="w-5 h-5 flex items-center justify-center bg-amber-500 text-white text-[10px] rounded-full font-medium shrink-0">
-                        {index + 1}
-                      </span>
-                      {item.thumbnail ? (
-                        <Image src={item.thumbnail} alt="" width={36} height={36} className="w-9 h-9 object-cover rounded shrink-0" />
-                      ) : (
-                        <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded flex items-center justify-center shrink-0">
-                          <FileText size={12} className="text-slate-400" />
-                        </div>
-                      )}
-                      <InputWithClear
-                        placeholder="Tiêu đề bài viết *"
-                        className="h-8 flex-1 text-xs min-w-0"
-                        value={item.title}
-                        onChange={(value) => updateDemoItem(item.id, { title: value })}
-                      />
-                      <InputWithClear
-                        placeholder="Danh mục"
-                        className="h-8 w-28 text-xs shrink-0"
-                        value={item.category ?? ''}
-                        onChange={(value) => updateDemoItem(item.id, { category: value })}
-                      />
-                      <Button
-                        type="button" variant="ghost" size="icon"
-                        className="h-7 w-7 shrink-0 text-slate-400 hover:text-red-500"
-                        onClick={() => removeDemoItem(item.id)}
-                      >
-                        <Trash2 size={13} />
-                      </Button>
-                    </div>
+                    <DemoPrimaryFields
+                      name={item.title}
+                      namePlaceholder="Tiêu đề bài viết *"
+                      onNameChange={v => updateDemoItem(item.id, { title: v })}
+                      link={item.link ?? ''}
+                      onLinkChange={v => updateDemoItem(item.id, { link: v })}
+                    />
+                    <InputWithClear
+                      placeholder="Danh mục"
+                      className="h-8 w-28 text-xs shrink-0"
+                      value={item.category ?? ''}
+                      onChange={value => updateDemoItem(item.id, { category: value })}
+                    />
                     <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-1.5">
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <InputWithClear
@@ -446,7 +413,7 @@ export const BlogForm = ({
                         />
                       </div>
                     </div>
-                  </div>
+                  </DemoItemRowShell>
                 ))}
               </div>
 
@@ -458,7 +425,6 @@ export const BlogForm = ({
                     <Button type="button" variant="outline" size="sm" className="gap-1" onClick={loadDefaultDemo}>
                       <Bot size={12} /> Tải mẫu
                     </Button>
-                    <AiDemoBlogPostsImport buttonClassName="h-9" onApply={setDemoPosts} />
                     <Button type="button" variant="outline" size="sm" className="gap-1" onClick={addDemoItem}>
                       <Plus size={12} /> Thêm mới
                     </Button>

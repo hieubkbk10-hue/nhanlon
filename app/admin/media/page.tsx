@@ -1,22 +1,25 @@
 'use client';
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import Link from 'next/link';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { 
-  Check, Copy, Edit, Eye, FileText, FileVideo, 
+  Check, ChevronDown, ClipboardPaste, Copy, Edit, Eye, FileText, FileVideo, 
   FolderOpen, Grid, Image as ImageIcon, List, 
-  Loader2, Search, Trash2, Upload, X
+  Loader2, Plus, RefreshCw, Search, Trash2, Upload, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, Input, cn } from '../components/ui';
-import { BulkActionBar, SelectCheckbox } from '../components/TableUtilities';
+import { BulkActionBar, SelectCheckbox, generatePaginationItems } from '../components/TableUtilities';
 import { ModuleGuard } from '../components/ModuleGuard';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { resolveNamingContext } from '@/lib/image/uploadNaming';
+import { usePersistedPageSize } from '../components/usePersistedPageSize';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 500, 5000];
 
 const MODULE_KEY = 'media';
 type ViewMode = 'grid' | 'list';
@@ -44,9 +47,12 @@ type MediaItem = {
   folder?: string;
   url: string | null;
   isOrphan?: boolean;
+  usageCheckedAt?: number;
   usageCount?: number;
   usages?: MediaUsage[];
 };
+
+type UsageCheckResult = Pick<MediaItem, 'isOrphan' | 'usageCount' | 'usages'>;
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) {return '0 B';}
@@ -82,7 +88,7 @@ export default function MediaPage() {
 }
 
 function MediaContent() {
-  const mediaData = useQuery(api.media.listWithUrlsAndUsage, { limit: 100 }) as MediaItem[] | undefined;
+  const mediaData = useQuery(api.media.listWithUrlsAndUsage, { limit: 5000 }) as MediaItem[] | undefined;
   const foldersData = useQuery(api.media.getFolders);
   const statsData = useQuery(api.media.getStats);
   const featuresData = useQuery(api.admin.modules.listModuleFeatures, { moduleKey: MODULE_KEY });
@@ -90,6 +96,8 @@ function MediaContent() {
   const generateUploadUrl = useMutation(api.media.generateUploadUrl);
   const createMedia = useMutation(api.media.create);
   const bulkRemoveOrphanMedia = useMutation(api.media.bulkRemoveOnlyOrphans);
+  const resyncMediaCounters = useMutation(api.seed.syncMediaCounters);
+  const recheckMediaUsage = useMutation(api.media.recheckUsageForMedia);
 
   // Check enabled features
   const enabledFeatures = useMemo(() => {
@@ -106,21 +114,47 @@ function MediaContent() {
   const [filterFolder, setFilterFolder] = useState('');
   const [usageFilter, setUsageFilter] = useState<UsageFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
-  const [selectedIds, setSelectedIds] = useState<Id<"images">[]>([]);
+  const [manualSelectedIds, setManualSelectedIds] = useState<Id<"images">[]>([]);
+  const [selectionMode, setSelectionMode] = useState<'manual' | 'all'>('manual');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const applyManualSelection = (nextIds: Id<"images">[]) => {
+    setSelectionMode('manual');
+    setManualSelectedIds(nextIds);
+  };
   const [isUploading, setIsUploading] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
+  const [isCheckingUsage, setIsCheckingUsage] = useState(false);
+  const [usageOverrides, setUsageOverrides] = useState<Record<string, UsageCheckResult>>({});
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isLoading = mediaData === undefined;
+  const [resolvedItemsPerPage, setPageSizeOverride] = usePersistedPageSize('admin_media_page_size', 100);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination on filter
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, filterFolder, usageFilter]);
+
+  const mediaItems = useMemo(() => {
+    if (!mediaData) {return [];}
+    return mediaData.map(media => ({
+      ...media,
+      ...usageOverrides[media._id],
+    }));
+  }, [mediaData, usageOverrides]);
 
   // Filter media
   const filteredMedia = useMemo(() => {
-    if (!mediaData) {return [];}
+    if (!mediaItems) {return [];}
     
-    let data = [...mediaData];
+    let data = [...mediaItems];
     
     // Search filter
     if (searchTerm) {
@@ -162,20 +196,41 @@ function MediaContent() {
     });
     
     return data;
-  }, [mediaData, searchTerm, filterType, filterFolder, usageFilter, sortMode]);
+  }, [mediaItems, searchTerm, filterType, filterFolder, usageFilter, sortMode]);
+
+  const totalPages = Math.ceil(filteredMedia.length / resolvedItemsPerPage) || 1;
+  const paginatedMedia = useMemo(() => {
+    return filteredMedia.slice((currentPage - 1) * resolvedItemsPerPage, currentPage * resolvedItemsPerPage);
+  }, [filteredMedia, currentPage, resolvedItemsPerPage]);
+
+  const isSelectAllActive = selectionMode === 'all';
+  const selectedIds = isSelectAllActive ? filteredMedia.map(m => m._id) : manualSelectedIds;
+
+  const selectedOnPage = paginatedMedia.filter(media => selectedIds.includes(media._id));
+  const isPageSelected = paginatedMedia.length > 0 && selectedOnPage.length === paginatedMedia.length;
+  const isPageIndeterminate = selectedOnPage.length > 0 && selectedOnPage.length < paginatedMedia.length;
 
   // Selection handlers
   const toggleSelectAll = () => {
-    setSelectedIds(selectedIds.length === filteredMedia.length ? [] : filteredMedia.map(m => m._id));
+    if (isPageSelected) {
+      const remaining = selectedIds.filter(id => !paginatedMedia.some(media => media._id === id));
+      applyManualSelection(remaining);
+      return;
+    }
+    const next = new Set(selectedIds);
+    paginatedMedia.forEach(media => next.add(media._id));
+    applyManualSelection(Array.from(next));
   };
 
   const toggleSelectItem = (id: Id<"images">) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    const next = selectedIds.includes(id)
+      ? selectedIds.filter(i => i !== id)
+      : [...selectedIds, id];
+    applyManualSelection(next);
   };
 
-  // Upload handler with compression
-  const handleFileSelect = useCallback(async (files: FileList | null) => {
-    if (!files || files.length === 0) {return;}
+  const uploadFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) {return;}
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -237,13 +292,47 @@ function MediaContent() {
     }
   }, [generateUploadUrl, createMedia]);
 
+  // Upload handler with compression
+  const handleFileSelect = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) {return;}
+    await uploadFiles(Array.from(files));
+  }, [uploadFiles]);
+
+  const handleClipboardPaste = useCallback(async () => {
+    if (isUploading) {return;}
+    setIsAddMenuOpen(false);
+
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (!imageType) {continue;}
+
+        const blob = await item.getType(imageType);
+        const ext = imageType.split('/')[1] || 'png';
+        const file = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: imageType });
+        await uploadFiles([file]);
+        return;
+      }
+
+      toast.error('Clipboard không có ảnh. Hãy copy ảnh trước.');
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        toast.error('Trình duyệt chặn quyền đọc clipboard.');
+      } else {
+        toast.error('Không đọc được clipboard. Hãy copy ảnh trước.');
+      }
+    }
+  }, [isUploading, uploadFiles]);
+
   // Delete handlers
   const handleDelete = async (id: Id<"images">) => {
     if (!confirm('Chỉ xóa nếu file này đang cô đơn, không còn được tham chiếu ở đâu. Tiếp tục?')) {return;}
     
     try {
       const result = await bulkRemoveOrphanMedia({ ids: [id] });
-      setSelectedIds(prev => prev.filter(i => i !== id));
+      applyManualSelection(selectedIds.filter(i => i !== id));
       if (result.deleted.length > 0) {
         toast.success('Đã xóa file cô đơn');
       } else {
@@ -262,13 +351,59 @@ function MediaContent() {
     }
     if (!confirm(`Xóa ${selectedOrphanCount} ảnh cô đơn đã chọn? Server sẽ kiểm tra lại usage ngay trước khi xóa.`)) {return;}
     
+    setIsDeleting(true);
     try {
       const result = await bulkRemoveOrphanMedia({ ids: selectedIds });
-      setSelectedIds([]);
+      applyManualSelection([]);
       const skippedText = result.skipped.length > 0 ? `, bỏ qua ${result.skipped.length} file chưa đủ an toàn để xóa` : '';
       toast.success(`Đã xóa ${result.deleted.length} ảnh cô đơn${skippedText}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Có lỗi khi xóa files');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleResyncCounters = async () => {
+    if (!confirm('Hệ thống sẽ quét lại toàn bộ media để tính đúng số file và dung lượng đã dùng. Tiếp tục?')) {return;}
+
+    setIsResyncing(true);
+    try {
+      const result = await resyncMediaCounters();
+      const total = result.stats.total;
+      toast.success(`Đã tính lại: ${total.count} file · ${formatBytes(total.totalSize)}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Có lỗi khi tính lại dung lượng media');
+    } finally {
+      setIsResyncing(false);
+    }
+  };
+
+  const handleRecheckUsage = async () => {
+    if (mediaItems.length === 0) {
+      toast.info('Chưa có file nào để kiểm tra');
+      return;
+    }
+    if (!confirm('Hệ thống sẽ quét toàn bộ dữ liệu, bao gồm cả bản lưu trang chủ, để kiểm tra file nào chưa được sử dụng. Tiếp tục?')) {return;}
+
+    setIsCheckingUsage(true);
+    try {
+      const result = await recheckMediaUsage({ ids: mediaItems.map(media => media._id) });
+      const nextOverrides: Record<string, UsageCheckResult> = {};
+      result.forEach(item => {
+        nextOverrides[item.id] = {
+          isOrphan: item.isOrphan,
+          usageCount: item.usageCount,
+          usages: item.usages,
+        };
+      });
+      setUsageOverrides(prev => ({ ...prev, ...nextOverrides }));
+      const orphanCount = result.filter(item => item.isOrphan).length;
+      toast.success(`Đã kiểm tra: ${orphanCount}/${result.length} file chưa được sử dụng`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Có lỗi khi kiểm tra file chưa dùng');
+    } finally {
+      setIsCheckingUsage(false);
     }
   };
 
@@ -309,7 +444,25 @@ function MediaContent() {
             {statsData?.totalCount ?? 0} files - {formatBytes(statsData?.totalSize ?? 0)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => void handleResyncCounters()}
+            disabled={isResyncing || isUploading}
+          >
+            <RefreshCw size={16} className={isResyncing ? 'animate-spin' : ''} />
+            {isResyncing ? 'Đang tính lại' : 'Tính lại dung lượng'}
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => void handleRecheckUsage()}
+            disabled={isCheckingUsage || isUploading || isResyncing}
+          >
+            <RefreshCw size={16} className={isCheckingUsage ? 'animate-spin' : ''} />
+            {isCheckingUsage ? 'Đang kiểm tra' : 'Kiểm tra file chưa dùng'}
+          </Button>
           <input
             ref={inputRef}
             type="file"
@@ -318,22 +471,61 @@ function MediaContent() {
             onChange={(e) => void handleFileSelect(e.target.files)}
             className="hidden"
           />
-          <Button 
-            className="gap-2 bg-cyan-600 hover:bg-cyan-500" 
-            onClick={() => inputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? (
+          <div className="relative">
+            <Button
+              className="gap-2 bg-cyan-600 hover:bg-cyan-500"
+              onClick={() => setIsAddMenuOpen(prev => !prev)}
+              disabled={isUploading}
+              aria-haspopup="menu"
+              aria-expanded={isAddMenuOpen}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  {uploadProgress}%
+                </>
+              ) : (
+                <>
+                  <Plus size={16} /> Thêm ảnh <ChevronDown size={16} className={cn('transition-transform', isAddMenuOpen && 'rotate-180')} />
+                </>
+              )}
+            </Button>
+            {isAddMenuOpen && (
               <>
-                <Loader2 size={16} className="animate-spin" />
-                {uploadProgress}%
-              </>
-            ) : (
-              <>
-                <Upload size={16} /> Tải lên
+                <div className="fixed inset-0 z-10" onClick={() => setIsAddMenuOpen(false)} />
+                <div className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsAddMenuOpen(false);
+                      inputRef.current?.click();
+                    }}
+                    className="flex w-full items-start gap-3 px-3 py-3 text-left text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Upload size={16} className="mt-0.5 text-cyan-600" />
+                    <span>
+                      <span className="block font-medium text-slate-800 dark:text-slate-100">Upload ảnh</span>
+                      <span className="block text-xs text-slate-500">Chọn file từ máy tính.</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void handleClipboardPaste()}
+                    className="flex w-full items-start gap-3 px-3 py-3 text-left text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                    title="Copy ảnh rồi click vào đây"
+                  >
+                    <ClipboardPaste size={16} className="mt-0.5 text-emerald-600" />
+                    <span>
+                      <span className="block font-medium text-slate-800 dark:text-slate-100">Dán từ clipboard</span>
+                      <span className="block text-xs text-slate-500">Dùng ảnh vừa copy.</span>
+                    </span>
+                  </button>
+                </div>
               </>
             )}
-          </Button>
+          </div>
         </div>
       </div>
 
@@ -341,8 +533,15 @@ function MediaContent() {
       <BulkActionBar 
         selectedCount={selectedIds.length} 
         entityLabel="tệp"
+        selectionScope={isSelectAllActive ? 'all_results' : isPageSelected ? 'page' : 'partial'}
+        pageItemCount={paginatedMedia.length}
+        totalMatchingCount={filteredMedia.length}
+        onSelectPage={() =>{  applyManualSelection(paginatedMedia.map(media => media._id)); }}
+        onSelectAllResults={() =>{  setSelectionMode('all'); }}
+        isSelectingAllResults={isSelectAllActive}
         onDelete={handleBulkDelete} 
-        onClearSelection={() =>{  setSelectedIds([]); }} 
+        onClearSelection={() =>{  applyManualSelection([]); }} 
+        isLoading={isDeleting}
       />
 
       {/* Filters */}
@@ -456,7 +655,7 @@ function MediaContent() {
           ) : (viewMode === 'grid' ? (
             // Grid View
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {filteredMedia.map(media => {
+              {paginatedMedia.map(media => {
                 const FileIcon = getFileIcon(media.mimeType);
                 const isImage = media.mimeType.startsWith('image/');
                 const isSelected = selectedIds.includes(media._id);
@@ -552,14 +751,15 @@ function MediaContent() {
               {/* Select all */}
               <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 dark:border-slate-800">
                 <SelectCheckbox 
-                  checked={selectedIds.length === filteredMedia.length && filteredMedia.length > 0} 
+                  checked={isPageSelected} 
                   onChange={toggleSelectAll}
-                  indeterminate={selectedIds.length > 0 && selectedIds.length < filteredMedia.length}
+                  indeterminate={isPageIndeterminate}
+                  disabled={paginatedMedia.length === 0}
                 />
-                <span className="text-sm text-slate-500">Chọn tất cả</span>
+                <span className="text-sm text-slate-500">Chọn tất cả trang này</span>
               </div>
 
-              {filteredMedia.map(media => {
+              {paginatedMedia.map(media => {
                 const FileIcon = getFileIcon(media.mimeType);
                 const isImage = media.mimeType.startsWith('image/');
                 const isSelected = selectedIds.includes(media._id);
@@ -658,8 +858,75 @@ function MediaContent() {
 
         {/* Footer */}
         {filteredMedia.length > 0 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-500">
-            Hiển thị {filteredMedia.length} / {mediaData?.length ?? 0} files
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-slate-500">
+              Hiển thị {paginatedMedia.length} trên trang này (Đã lọc {filteredMedia.length} / Tổng DB: {statsData?.totalCount ?? 0} files)
+            </div>
+            
+            <div className="flex w-full items-center justify-between sm:w-auto sm:justify-end gap-4">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <span className="hidden sm:inline">Hiển thị</span>
+                <select
+                  value={resolvedItemsPerPage}
+                  onChange={(event) =>{  setPageSizeOverride(Number(event.target.value)); setCurrentPage(1); }}
+                  className="h-8 w-[70px] appearance-none rounded-md border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm focus:border-slate-300 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-slate-600"
+                  aria-label="Số file mỗi trang"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size === 5000 ? 'Tất cả' : size}</option>
+                  ))}
+                </select>
+              </div>
+
+              <nav className="flex items-center space-x-1 sm:space-x-2" aria-label="Phân trang">
+                <button
+                  onClick={() =>{  setCurrentPage((prev) => Math.max(1, prev - 1)); }}
+                  disabled={currentPage === 1}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Trang trước"
+                >
+                  <ChevronDown className="h-4 w-4 rotate-90" />
+                </button>
+
+                {generatePaginationItems(currentPage, totalPages).map((item, index) => {
+                  if (item === 'ellipsis') {
+                    return (
+                      <div key={`ellipsis-${index}`} className="flex h-8 w-8 items-center justify-center text-slate-400">
+                        …
+                      </div>
+                    );
+                  }
+
+                  const pageNum = item as number;
+                  const isActive = pageNum === currentPage;
+                  const isMobileHidden = !isActive && pageNum !== 1 && pageNum !== totalPages;
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() =>{  setCurrentPage(pageNum); }}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-sm transition-all duration-200 ${
+                        isActive
+                          ? 'bg-cyan-600 text-white shadow-sm border font-medium dark:bg-cyan-500'
+                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-300'
+                      } ${isMobileHidden ? 'hidden sm:inline-flex' : ''}`}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                <button
+                  onClick={() =>{  setCurrentPage((prev) => Math.min(totalPages, prev + 1)); }}
+                  disabled={currentPage >= totalPages}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Trang sau"
+                >
+                  <ChevronDown className="h-4 w-4 -rotate-90" />
+                </button>
+              </nav>
+            </div>
           </div>
         )}
       </Card>

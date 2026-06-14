@@ -1,34 +1,41 @@
 'use client';
 
 import React from 'react';
-import { AdminImage as Image } from '@/app/admin/components/AdminImage';
-import { Bot, ChevronDown, GripVertical, Package, Plus, Trash2, X } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { Bot, Database, GripVertical, Package, Plus, Trash2 } from 'lucide-react';
+import { ToggleSwitch } from '@/components/modules/shared';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { CategoryImageSelector } from '../../../components/CategoryImageSelector';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
-import type { CategoryConfigItem, DemoProductCategoryItem, ProductCategoriesSelectionMode } from '../_types';
-import { DEFAULT_DEMO_PRODUCT_CATEGORIES } from '../_lib/constants';
+import type { CategoryConfigItem, DemoProductCategoryItem, ProductCategoriesCornerRadius, ProductCategoriesDesktopColumns, ProductCategoriesSelectionMode, ProductCategoriesSpacing, ProductCategoriesStyle } from '../_types';
+import { DEFAULT_DEMO_PRODUCT_CATEGORIES, getProductCategoriesCropAspectRatio } from '../_lib/constants';
 import { normalizeDemoImageSrc } from '../_lib/imageSrc';
 import { AiDemoProductCategoriesImport } from '../../product-list/_components/AiDemoProductsImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useDemoItemList } from '../../_shared/hooks/useDemoItemList';
+import { DemoItemRowShell } from '../../_shared/components/DemoItemRowShell';
+import { DemoPrimaryFields } from '../../_shared/components/DemoPrimaryFields';
 
-const ClearableInput = ({ value, onChange, className, ...rest }: React.ComponentProps<typeof Input> & { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) => (
-  <div className="relative">
-    <Input {...rest} value={value} onChange={onChange} className={cn(className, value && 'pr-7')} />
-    {value && (
-      <button type="button" className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700" onClick={() => onChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>)}>
-        <X size={12} />
-      </button>
-    )}
-  </div>
-);
+
+const activeSections = ['settings', 'categories'];
 
 export const ProductCategoriesForm = ({
   productCategoriesItems, setProductCategoriesItems,
   productCategoriesShowCount, setProductCategoriesShowCount,
   onAutoGenerate, autoGenerateReady, autoGenerateLoading,
+  onAutoGenerateAllActive,
   productCategoriesData, brandColor,
   selectionMode = 'real', onSelectionModeChange,
   demoCategories = [], setDemoCategories,
+  productCategoriesStyle = 'grid',
+  spacing,
+  setSpacing,
+  cornerRadius,
+  setCornerRadius,
+  desktopColumns,
+  setDesktopColumns,
   defaultExpanded = true,
 }: {
   productCategoriesItems: CategoryConfigItem[];
@@ -38,17 +45,24 @@ export const ProductCategoriesForm = ({
   onAutoGenerate?: () => void;
   autoGenerateReady?: boolean;
   autoGenerateLoading?: boolean;
+  onAutoGenerateAllActive?: () => void;
   productCategoriesData: { _id: string; name: string; image?: string }[];
   brandColor: string;
   selectionMode?: ProductCategoriesSelectionMode;
   onSelectionModeChange?: (mode: ProductCategoriesSelectionMode) => void;
   demoCategories?: DemoProductCategoryItem[];
   setDemoCategories?: React.Dispatch<React.SetStateAction<DemoProductCategoryItem[]>>;
+  productCategoriesStyle?: ProductCategoriesStyle;
+  spacing?: ProductCategoriesSpacing;
+  setSpacing?: (value: ProductCategoriesSpacing) => void;
+  cornerRadius?: ProductCategoriesCornerRadius;
+  setCornerRadius?: (value: ProductCategoriesCornerRadius) => void;
+  desktopColumns?: ProductCategoriesDesktopColumns;
+  setDesktopColumns?: (value: ProductCategoriesDesktopColumns) => void;
   defaultExpanded?: boolean;
 }) => {
-  const [displayExpanded, setDisplayExpanded] = React.useState(defaultExpanded);
-  const [dataExpanded, setDataExpanded] = React.useState(defaultExpanded);
-
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(activeSections, defaultExpanded);
+  const cropAspectRatio = getProductCategoriesCropAspectRatio(productCategoriesStyle);
   // Duplicate detection for real mode
   const categoryIdCounts = productCategoriesItems.reduce<Record<string, number>>((acc, item) => {
     if (!item.categoryId) {return acc;}
@@ -70,69 +84,101 @@ export const ProductCategoriesForm = ({
   };
 
   // Demo helpers
-  const addDemoItem = () => {
-    setDemoCategories?.(prev => [...prev, { id: `demo-${Date.now()}`, name: '', image: '', productCount: 0 }]);
-  };
-  const updateDemoItem = (id: string, patch: Partial<DemoProductCategoryItem>) => {
-    setDemoCategories?.(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
-  };
-  const removeDemoItem = (id: string) => {
-    if (demoCategories.length <= 1) return;
-    setDemoCategories?.(prev => prev.filter(d => d.id !== id));
-  };
-  const loadDefaultDemo = () => {
-    setDemoCategories?.(DEFAULT_DEMO_PRODUCT_CATEGORIES.map((d, i) => ({ ...d, id: `demo-${Date.now() + i}` })));
-  };
+  const { add: addDemoItem, update: updateDemoItem, remove: removeDemoItem, loadDefault: loadDefaultDemo } = useDemoItemList(
+    demoCategories,
+    (setDemoCategories ?? (() => {})) as React.Dispatch<React.SetStateAction<DemoProductCategoryItem[]>>,
+    {
+      createEmpty: () => ({ name: '', image: '', productCount: 0, link: '' }),
+      defaults: DEFAULT_DEMO_PRODUCT_CATEGORIES,
+      minItems: 1,
+    },
+  );
 
   return (
-  <>
-    {/* Card 1: Display config */}
-    <Card className="mb-6">
-      <CardHeader className="cursor-pointer" onClick={() => setDisplayExpanded(!displayExpanded)}>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Cấu hình hiển thị</CardTitle>
-          <ChevronDown size={16} className={cn('transition-transform duration-200 text-slate-400', displayExpanded ? 'rotate-180' : '')} />
+    <>
+      <AiDemoProductCategoriesImport onApply={(items) => setDemoCategories?.(items)} />
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+      <div className="mb-6 space-y-3">
+        {spacing && setSpacing && cornerRadius && setCornerRadius ? (
+          <HomeComponentDisplaySettingsSection
+            open={openSections.settings}
+            onOpenChange={(open) => toggleSection('settings', open)}
+            cornerRadius={cornerRadius}
+            onCornerRadiusChange={setCornerRadius}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+          >
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 md:col-span-2">
+              <div className="space-y-0.5">
+                <Label className="text-sm">Hiển thị số lượng sản phẩm</Label>
+                <p className="text-xs text-slate-500">Bật để hiện tổng số sản phẩm trong từng danh mục.</p>
+              </div>
+              <ToggleSwitch enabled={productCategoriesShowCount} onChange={() => setProductCategoriesShowCount(!productCategoriesShowCount)} />
+            </div>
+            {desktopColumns !== undefined && setDesktopColumns && (
+              <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700 md:col-span-2">
+                <Label className="text-sm">Số cột trên Desktop</Label>
+                <div className="flex gap-2">
+                  {[3, 4].map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setDesktopColumns(col as 3 | 4)}
+                      className={cn(
+                        'flex-1 rounded-md border py-2 text-sm font-medium transition-colors',
+                        desktopColumns === col
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/10 dark:text-blue-400'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
+                      )}
+                    >
+                      {col} cột
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </HomeComponentDisplaySettingsSection>
+        ) : (
+          <SubSection
+          icon={Database}
+          title="Cài đặt hiển thị"
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+        >
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
+        <div className="space-y-0.5">
+          <Label className="text-sm">Hiển thị số lượng sản phẩm</Label>
+          <p className="text-xs text-slate-500">Bật để hiện tổng số sản phẩm trong từng danh mục.</p>
         </div>
-      </CardHeader>
-      {displayExpanded && (
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-3">
-          <input type="checkbox" id="showProductCount" checked={productCategoriesShowCount} onChange={(e) => setProductCategoriesShowCount(e.target.checked)} className="w-4 h-4 rounded border-slate-300" />
-          <Label htmlFor="showProductCount" className="cursor-pointer">Hiển thị số lượng sản phẩm</Label>
-        </div>
-      </CardContent>
-      )}
-    </Card>
+        <ToggleSwitch enabled={productCategoriesShowCount} onChange={() => setProductCategoriesShowCount(!productCategoriesShowCount)} />
+      </div>
+    </SubSection>
+        )}
 
-    {/* Card 3: Category selection / Demo */}
-    <Card className="mb-6">
-      <CardHeader className="cursor-pointer" onClick={() => setDataExpanded(!dataExpanded)}>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">
-            {selectionMode === 'demo' ? `Danh mục demo (${demoCategories.length})` : `Chọn danh mục (${productCategoriesItems.length})`}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {selectionMode === 'real' && dataExpanded && (
+    <SubSection
+      icon={Database}
+      title={selectionMode === 'demo' ? `Danh mục demo (${demoCategories.length})` : `Chọn danh mục (${productCategoriesItems.length})`}
+      open={openSections.categories}
+      onOpenChange={(open) => toggleSection('categories', open)}
+      actions={(
+        <>
+            {selectionMode === 'real' && (
               <>
-                <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onAutoGenerate?.(); }} disabled={!autoGenerateReady || autoGenerateLoading} className="gap-2">Sinh nhanh</Button>
-                <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); const newId = Math.max(0, ...productCategoriesItems.map(c => c.id)) + 1; setProductCategoriesItems([...productCategoriesItems, { categoryId: '', customImage: '', id: newId }]); }} disabled={productCategoriesItems.length >= 12 || !productCategoriesData?.length} className="gap-2"><Plus size={14} /> Thêm</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => onAutoGenerateAllActive?.()} disabled={!productCategoriesData?.length} className="gap-1 border-blue-200 bg-blue-50/50 hover:bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-400">Sinh tất cả</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => onAutoGenerate?.()} disabled={!autoGenerateReady || autoGenerateLoading} className="gap-1">Sinh có SP &gt; 0</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => { const newId = Math.max(0, ...productCategoriesItems.map(c => c.id)) + 1; setProductCategoriesItems([...productCategoriesItems, { categoryId: '', customImage: '', id: newId }]); }} disabled={productCategoriesItems.length >= 12 || !productCategoriesData?.length} className="gap-1"><Plus size={12} /> Thêm</Button>
               </>
             )}
-            {selectionMode === 'demo' && dataExpanded && (
+            {selectionMode === 'demo' && (
               <>
-                <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={(e) => { e.stopPropagation(); loadDefaultDemo(); }}><Bot size={11} /> Mẫu mặc định</Button>
-                <span onClick={(e) => e.stopPropagation()}>
-                  <AiDemoProductCategoriesImport onApply={(items) => setDemoCategories?.(items)} />
-                </span>
-                <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={(e) => { e.stopPropagation(); addDemoItem(); }}><Plus size={12} /> Thêm</Button>
+                <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={loadDefaultDemo}><Bot size={11} /> Mẫu mặc định</Button>
+                <AiDemoProductCategoriesImport onApply={(items) => setDemoCategories?.(items)} />
+                <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={addDemoItem}><Plus size={12} /> Thêm</Button>
               </>
             )}
-            <ChevronDown size={16} className={cn('transition-transform duration-200 text-slate-400 shrink-0', dataExpanded ? 'rotate-180' : '')} />
-          </div>
-        </div>
-      </CardHeader>
-      {dataExpanded && (
-      <CardContent className="space-y-4">
+        </>
+      )}
+    >
         {/* Mode toggle */}
         {onSelectionModeChange && (
           <div className="space-y-2">
@@ -180,7 +226,7 @@ export const ProductCategoriesForm = ({
                     {item.categoryId && (
                       <div className="space-y-2">
                         <Label className="text-xs text-slate-500">Hình ảnh hiển thị</Label>
-                        <CategoryImageSelector value={item.customImage || ''} onChange={(value, mode) => setProductCategoriesItems(productCategoriesItems.map(c => c.id === item.id ? {...c, customImage: value, imageMode: mode} : c))} categoryId={item.categoryId} categoryImage={productCategoriesData?.find(cat => cat._id === item.categoryId)?.image} brandColor={brandColor} />
+                        <CategoryImageSelector value={item.customImage || ''} onChange={(value, mode, storageId) => setProductCategoriesItems(productCategoriesItems.map(c => c.id === item.id ? {...c, customImage: value, imageMode: mode, storageId: storageId === undefined ? c.storageId ?? null : storageId} : c))} categoryId={item.categoryId} categoryImage={productCategoriesData?.find(cat => cat._id === item.categoryId)?.image} brandColor={brandColor} cropAspectRatio={cropAspectRatio} />
                       </div>
                     )}
                   </div>
@@ -195,35 +241,41 @@ export const ProductCategoriesForm = ({
         {selectionMode === 'demo' && setDemoCategories && (
           <div className="space-y-3">
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {demoCategories.map((item, index) => {
-                const imageSrc = normalizeDemoImageSrc(item.image);
-
-                return (
-                  <div key={item.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      <span className="w-5 h-5 flex items-center justify-center bg-amber-500 text-white text-[10px] rounded-full font-medium shrink-0">{index + 1}</span>
-                      {imageSrc ? (
-                        <Image src={imageSrc} alt="" width={36} height={36} className="w-9 h-9 object-cover rounded shrink-0" />
-                      ) : (
-                        <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded flex items-center justify-center shrink-0"><Package size={12} className="text-slate-400" /></div>
-                      )}
-                      <ClearableInput placeholder="Tên danh mục *" className="h-8 flex-1 text-xs min-w-0" value={item.name} onChange={(e) => updateDemoItem(item.id, { name: e.target.value })} />
-                      <Input placeholder="SL" type="number" className="h-8 w-16 text-xs shrink-0" value={item.productCount ?? ''} onChange={(e) => updateDemoItem(item.id, { productCount: Number.parseInt(e.target.value) || 0 })} />
-                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-slate-400 hover:text-red-500" onClick={() => removeDemoItem(item.id)}><Trash2 size={13} /></Button>
-                    </div>
-                    <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-1.5">
-                      <SettingsImageUploader
-                        label="Ảnh đại diện"
-                        value={item.image ?? ''}
-                        onChange={(url) => updateDemoItem(item.id, { image: url ?? '' })}
-                        folder="home-components/product-categories"
-                        naming={{ entityName: item.name || 'demo-category', field: 'image', index: index + 1 }}
-                        previewSize="sm"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+              {demoCategories.map((item, index) => (
+                <DemoItemRowShell
+                  key={item.id}
+                  index={index}
+                  image={normalizeDemoImageSrc(item.image)}
+                  onRemove={() => removeDemoItem(item.id)}
+                  placeholderIcon={<Package size={12} />}
+                  footer={
+                    <SettingsImageUploader
+                      label="Ảnh đại diện"
+                      value={item.image ?? ''}
+                      onChange={(url, storageId) => updateDemoItem(item.id, { image: url ?? '', storageId: storageId ?? null })}
+                      folder="home-components/product-categories"
+                      naming={{ entityName: item.name || 'demo-category', field: 'image', index: index + 1 }}
+                      previewSize="sm"
+                      cropAspectRatio={cropAspectRatio}
+                    />
+                  }
+                >
+                  <DemoPrimaryFields
+                    name={item.name}
+                    namePlaceholder="Tên danh mục *"
+                    onNameChange={(v) => updateDemoItem(item.id, { name: v })}
+                    link={item.link ?? ''}
+                    onLinkChange={(v) => updateDemoItem(item.id, { link: v })}
+                  />
+                  <Input
+                    placeholder="SL"
+                    type="number"
+                    className="h-8 w-16 text-xs shrink-0"
+                    value={item.productCount ?? ''}
+                    onChange={(e) => updateDemoItem(item.id, { productCount: Number.parseInt(e.target.value) || 0 })}
+                  />
+                </DemoItemRowShell>
+              ))}
             </div>
             {demoCategories.length === 0 && (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 py-8 text-center dark:border-slate-700">
@@ -238,9 +290,8 @@ export const ProductCategoriesForm = ({
             )}
           </div>
         )}
-      </CardContent>
-      )}
-    </Card>
+    </SubSection>
+  </div>
   </>
   );
 };

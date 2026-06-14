@@ -1,5 +1,9 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -8,10 +12,13 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, Input, Label } from '../../../../components/ui';
+import { Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { HomeComponentDisplaySettingsSection } from '../../../_shared/components/HomeComponentDisplaySettingsSection';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
@@ -27,6 +34,7 @@ import {
 } from '../../_lib/colors';
 import type {
   TestimonialsConfig,
+  TestimonialsCornerRadius,
   TestimonialsDesktopColumns,
   TestimonialsItem,
   TestimonialsStyle,
@@ -34,20 +42,48 @@ import type {
 } from '../../_types';
 import {
   normalizeTestimonialsDesktopColumns,
+  normalizeTestimonialsCornerRadius,
+  normalizeTestimonialsSpacing,
   normalizeTestimonialsItem,
   normalizeTestimonialsStyle,
   toTestimonialsPersistItem,
 } from '../../_types';
 
 const COMPONENT_TYPE = 'Testimonials';
+
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type TestimonialsEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
 const normalizeSplitOverlayOpacity = (value: unknown) => {
   const opacity = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(opacity)) {return DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundOverlayOpacity ?? 62;}
   return Math.max(0, Math.min(90, Math.round(opacity)));
 };
 
-export default function TestimonialsEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function TestimonialsEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: TestimonialsEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
@@ -55,16 +91,26 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
 
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
-  const [items, setItems] = useState<TestimonialsItem[]>([]);
+  const {
+    state: items,
+    set: setItems,
+    undo: undoitems,
+    redo: redoitems,
+    canUndo: canUndoitems,
+    canRedo: canRedoitems,
+    reset: resetitems,
+  } = useUndoRedo<TestimonialsItem[]>([], { maxHistory: 15 });
   const [style, setStyle] = useState<TestimonialsStyle>('cards');
   const [desktopColumns, setDesktopColumns] = useState<TestimonialsDesktopColumns>(DEFAULT_TESTIMONIALS_CONFIG.desktopColumns ?? 3);
   const [splitBackgroundImage, setSplitBackgroundImage] = useState(DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundImage ?? '');
   const [splitBackgroundOverlayOpacity, setSplitBackgroundOverlayOpacity] = useState(DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundOverlayOpacity ?? 62);
+  const [cornerRadius, setCornerRadius] = useState<TestimonialsCornerRadius>(DEFAULT_TESTIMONIALS_CONFIG.cornerRadius ?? 'lg');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
@@ -80,14 +126,15 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
   const [badgeText, setBadgeText] = useState('');
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_TESTIMONIALS_CONFIG.spacing ?? DEFAULT_SECTION_SPACING);
+  const { openSections, toggleSection } = useFormSectionsState(['header', 'display'], false);
 
   const resolvedSecondary = resolveSecondaryForMode(effectiveColors.primary, effectiveColors.secondary, brandMode);
 
   useEffect(() => {
     if (!component) {return;}
 
-    if (component.type !== 'Testimonials') {
+    if (!snapshotComponent && component.type !== 'Testimonials') {
       router.replace(`/admin/home-components/${id}/edit`);
       return;
     }
@@ -105,12 +152,16 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
       ? rawConfig.splitBackgroundImage
       : DEFAULT_TESTIMONIALS_CONFIG.splitBackgroundImage ?? '';
     const loadedSplitBackgroundOverlayOpacity = normalizeSplitOverlayOpacity(rawConfig.splitBackgroundOverlayOpacity);
+    const loadedSpacing = normalizeTestimonialsSpacing(rawConfig.spacing, rawConfig.noVerticalMargin);
+    const loadedCornerRadius = normalizeTestimonialsCornerRadius(rawConfig.cornerRadius, rawConfig.noBorderRadius);
 
-    setItems(loadedItems);
+    resetitems(loadedItems);
     setStyle(loadedStyle);
     setDesktopColumns(loadedDesktopColumns);
     setSplitBackgroundImage(loadedSplitBackgroundImage);
     setSplitBackgroundOverlayOpacity(loadedSplitBackgroundOverlayOpacity);
+    setSpacing(loadedSpacing);
+    setCornerRadius(loadedCornerRadius);
 
     // Load header config
     const headerConfig = extractSectionHeaderConfig(rawConfig);
@@ -132,6 +183,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
       desktopColumns: loadedDesktopColumns,
       splitBackgroundImage: loadedSplitBackgroundImage,
       splitBackgroundOverlayOpacity: loadedSplitBackgroundOverlayOpacity,
+      cornerRadius: loadedCornerRadius,
       title: component.title,
       type: component.type,
       // Header fields
@@ -145,6 +197,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
       uppercaseText: headerConfig.uppercaseText,
       showBadge: headerConfig.showBadge,
       badgeText: headerConfig.badgeText,
+      spacing: loadedSpacing,
     });
 
     setInitialSnapshot(snapshot);
@@ -161,6 +214,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
       desktopColumns,
       splitBackgroundImage,
       splitBackgroundOverlayOpacity,
+      cornerRadius,
       title,
       type: component.type,
       // Header fields
@@ -174,21 +228,22 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
       uppercaseText,
       showBadge,
       badgeText,
+      spacing,
     });
     const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-    const customChanged = showCustomBlock
+    const customChanged = enableTypeOverrides && showCustomBlock
       ? customState.enabled !== initialCustom.enabled
         || customState.mode !== initialCustom.mode
         || customState.primary !== initialCustom.primary
         || resolvedCustomSecondary !== initialCustom.secondary
       : false;
-    const customFontChanged = showFontCustomBlock
+    const customFontChanged = enableTypeOverrides && showFontCustomBlock
       ? customFontState.enabled !== initialFontCustom.enabled
         || customFontState.fontKey !== initialFontCustom.fontKey
       : false;
 
     setHasChanges(snapshot !== initialSnapshot || customChanged || customFontChanged);
-  }, [title, active, items, style, desktopColumns, splitBackgroundImage, splitBackgroundOverlayOpacity, component, initialSnapshot, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock, hideHeader, showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText]);
+  }, [title, active, items, style, desktopColumns, splitBackgroundImage, splitBackgroundOverlayOpacity, cornerRadius, component, initialSnapshot, customState, initialCustom, enableTypeOverrides, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock, hideHeader, showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing]);
 
   useEffect(() => {
     if (!component || component.type !== 'Testimonials') {return;}
@@ -201,6 +256,8 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
     });
 
   }, [component, effectiveColors.primary, resolvedSecondary, brandMode, style]);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -215,30 +272,36 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
 
     setIsSubmitting(true);
     try {
-      await updateMutation({
-        active,
-        config: {
-          items: items.map(toTestimonialsPersistItem),
-          style,
-          desktopColumns,
-          splitBackgroundImage,
-          splitBackgroundOverlayOpacity,
-          // Header fields
-          hideHeader,
-          showTitle: showTitleHeader,
-          showSubtitle,
-          subtitle,
-          headerAlign,
-          titleColorPrimary,
-          subtitleAboveTitle,
-          uppercaseText,
-          showBadge,
-          badgeText,
-        },
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      const persistConfig = {
+        items: items.map(toTestimonialsPersistItem),
+        style,
+        desktopColumns,
+        splitBackgroundImage,
+        splitBackgroundOverlayOpacity,
+        cornerRadius,
+        hideHeader,
+        showTitle: showTitleHeader,
+        showSubtitle,
+        subtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
+        spacing,
+      };
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: persistConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: persistConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -248,7 +311,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -265,6 +328,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
         desktopColumns,
         splitBackgroundImage,
         splitBackgroundOverlayOpacity,
+        cornerRadius,
         title,
         type: component?.type,
         // Header fields
@@ -278,10 +342,11 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
         uppercaseText,
         showBadge,
         badgeText,
+        spacing,
       });
 
       setInitialSnapshot(snapshot);
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -289,7 +354,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -322,22 +387,11 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Testimonials</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardContent className="pt-4 space-y-2">
-            <Label>Tên hiển thị <span className="text-red-500">*</span></Label>
-            <Input
-              value={title}
-              onChange={(event) => { setTitle(event.target.value); }}
-              required
-              placeholder="Nhập tiêu đề component..."
-            />
-          </CardContent>
-        </Card>
-
         <HeaderConfigSection
           hideHeader={hideHeader}
           title={title}
@@ -361,16 +415,55 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={openSections.header}
+          onExpandedChange={(open) => toggleSection('header', open)}
+          className="mb-3"
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
         />
+
+        <div className="mb-3">
+          <HomeComponentDisplaySettingsSection
+            open={openSections.display}
+            onOpenChange={(open) => toggleSection('display', open)}
+            cornerRadius={cornerRadius}
+            onCornerRadiusChange={setCornerRadius}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+          >
+              <div className="space-y-2">
+                <Label>Số cột desktop</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([3, 4] as const).map((option) => {
+                    const selected = desktopColumns === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setDesktopColumns(option)}
+                        className={cn(
+                          'h-9 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                        )}
+                      >
+                        {option} cột
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-500">3 cột: tablet 3, mobile 1. 4 cột: tablet/mobile 2.</p>
+              </div>
+          </HomeComponentDisplaySettingsSection>
+        </div>
 
         <TestimonialsForm
           items={items}
           setItems={setItems}
           defaultExpanded={false}
           desktopColumns={desktopColumns}
-          onDesktopColumnsChange={setDesktopColumns}
           selectedStyle={style}
           splitBackgroundImage={splitBackgroundImage}
           onSplitBackgroundImageChange={setSplitBackgroundImage}
@@ -379,7 +472,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
         />
 
         <div className="space-y-4">
-          {showCustomBlock && (
+          {enableTypeOverrides && showCustomBlock && (
             <TypeColorOverrideCard
               title="Màu custom cho Testimonials"
               enabled={customState.enabled}
@@ -407,7 +500,7 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
               }))}
             />
           )}
-          {showFontCustomBlock && (
+          {enableTypeOverrides && showFontCustomBlock && (
             <TypeFontOverrideCard
               title="Font custom cho Testimonials"
               enabled={customFontState.enabled}
@@ -444,6 +537,8 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
               uppercaseText={uppercaseText}
               showBadge={showBadge}
               badgeText={badgeText}
+              spacing={spacing}
+              cornerRadius={cornerRadius}
               desktopColumns={desktopColumns}
               splitBackgroundImage={splitBackgroundImage}
               splitBackgroundOverlayOpacity={splitBackgroundOverlayOpacity}
@@ -457,10 +552,17 @@ export default function TestimonialsEditPage({ params }: { params: Promise<{ id:
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() => { router.push('/admin/home-components'); }}
+          onCancel={() => { router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndoitems,
+          canRedo: canRedoitems,
+          onUndo: undoitems,
+          onRedo: redoitems,
+        }}
         />
       </form>
     </div>

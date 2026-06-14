@@ -1,67 +1,34 @@
 'use client';
 
 import React from 'react';
-import { Bot, ChevronDown, Database, GripVertical, Image, ImagePlus, Layers2, Plus, Trash2, X } from 'lucide-react';
-import { Button, Card, CardContent, Input, Label, cn } from '../../../components/ui';
+import { AiDirectGeneratePanel } from '@/app/admin/components/AiDirectGenerateButton';
+import { Bot, Check, ChevronDown, Copy, Database, FileText, GripVertical, Image, ImagePlus, Layers2, Plus, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button, Card, CardContent, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Label, cn } from '../../../components/ui';
 import { MultiImageUploader } from '../../../components/MultiImageUploader';
-import { DEMO_CATEGORIES_DATA } from '../_lib/constants';
+import { DEMO_CATEGORIES_DATA, getHomepageCategoryHeroCropAspectRatio } from '../_lib/constants';
 import { HOMEPAGE_CATEGORY_HERO_ICON_OPTIONS, getHomepageCategoryHeroIcon } from '../_lib/icon-options';
-import { AiDemoProductCategoriesImport } from '../../product-list/_components/AiDemoProductsImport';
 import type {
   HomepageCategoryHeroAutoGenerateConfig,
   HomepageCategoryHeroAutoGenerateMeta,
   HomepageCategoryHeroCategoryItem,
   HomepageCategoryHeroCategoryImageSize,
   HomepageCategoryHeroCategoryImageShape,
+  HomepageCategoryHeroCornerRadius,
   HomepageCategoryHeroCategoryVisualMode,
   HomepageCategoryHeroMenuGroup,
   HomepageCategoryHeroMenuLink,
   HomepageCategoryHeroSelectionMode,
   HomepageCategoryHeroSlide,
+  HomepageCategoryHeroStyle,
 } from '../_types';
-
-/* ------------------------------------------------------------------ */
-/*  Collapsible sub-section                                            */
-/* ------------------------------------------------------------------ */
-
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <Icon size={15} className="text-slate-400 shrink-0" />
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          size={15}
-          className={cn(
-            'text-slate-400 transition-transform duration-200',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && (
-        <div className="p-3 space-y-3 bg-white dark:bg-slate-900">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
+import { useTypeAiImportEnabled } from '../../_shared/hooks/useTypeAiImportEnabled';
+import { HomeComponentFooterActionPortal } from '../../_shared/components/HomeComponentFooterActions';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 
 /* ------------------------------------------------------------------ */
 /*  Clearable text input                                               */
@@ -99,9 +66,250 @@ export function ClearableInput({
 
 export type DemoCategoryDataItem = { _id: string; name: string; image?: string };
 
+const cleanJsonInput = (raw: string) => {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenced?.[1]?.trim() ?? trimmed;
+};
+
+const trimText = (value: unknown, maxLength = 200) => {
+  if (typeof value !== 'string' && typeof value !== 'number') { return ''; }
+  return String(value).trim().slice(0, maxLength);
+};
+
+const AI_FULL_PROMPT = `Hãy tạo cấu hình đầy đủ cho home-component "Hero khám phá danh mục" của website ecommerce tiếng Việt.
+
+Chỉ trả về JSON hợp lệ, không dùng markdown fence, không giải thích.
+
+Schema:
+{
+  "heroSlides": [
+    { "url": "URL ảnh banner http/https hoặc /path", "link": "/products" }
+  ],
+  "categories": [
+    {
+      "name": "Tên danh mục chính",
+      "image": "URL ảnh đại diện danh mục",
+      "iconName": "ShoppingBag | Laptop | Home | Heart | Utensils",
+      "groups": [
+        {
+          "title": "Tên nhóm menu",
+          "items": [
+            { "label": "Tên mục con/sản phẩm gợi ý", "image": "URL ảnh optional" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+Yêu cầu:
+- Tạo 2-4 heroSlides đúng tỉ lệ banner 16:9, riêng nếu người dùng chọn top-nav thì ưu tiên 21:9.
+- Tạo 5-8 categories chính, mỗi category có 1-3 groups, mỗi group có 3-6 items.
+- Tên tự nhiên, dễ hiểu với người mua Việt Nam.
+- Link ảnh dùng URL hợp lệ, không dùng base64.
+- Không tạo field ngoài schema.`;
+
+const AI_FULL_SAMPLE = `{
+  "heroSlides": [
+    {
+      "url": "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d",
+      "link": "/products"
+    }
+  ],
+  "categories": [
+    {
+      "name": "Chăm sóc tóc",
+      "image": "https://images.unsplash.com/photo-1522338242992-e1a54906a8da",
+      "iconName": "Heart",
+      "groups": [
+        {
+          "title": "Sản phẩm nổi bật",
+          "items": [
+            {
+              "label": "Dầu gội phục hồi tóc",
+              "image": "https://images.unsplash.com/photo-1526947425960-945c6e72858f"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}`;
+
+type FullAiImportResult = {
+  categories: HomepageCategoryHeroCategoryItem[];
+  demoCategoriesData: DemoCategoryDataItem[];
+  errors: string[];
+  heroSlides: HomepageCategoryHeroSlide[];
+};
+
+const parseFullAiImport = (raw: string): FullAiImportResult => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleanJsonInput(raw));
+  } catch {
+    return { categories: [], demoCategoriesData: [], errors: ['JSON chưa hợp lệ.'], heroSlides: [] };
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { categories: [], demoCategoriesData: [], errors: ['Root JSON phải là object.'], heroSlides: [] };
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const rawSlides = Array.isArray(record.heroSlides) ? record.heroSlides : Array.isArray(record.slides) ? record.slides : [];
+  const rawCategories = Array.isArray(record.categories) ? record.categories : [];
+  const demoCategoriesData: DemoCategoryDataItem[] = [];
+  const heroSlides = rawSlides.slice(0, 6).reduce<HomepageCategoryHeroSlide[]>((acc, item, index) => {
+    if (typeof item !== 'object' || item === null) { return acc; }
+    const slide = item as Record<string, unknown>;
+    const url = trimText(slide.url ?? slide.image, 500);
+    if (!url) { return acc; }
+    acc.push({ id: `ai-slide-${Date.now()}-${index}`, link: trimText(slide.link, 500), url });
+    return acc;
+  }, []);
+
+  const categories = rawCategories.slice(0, 10).reduce<HomepageCategoryHeroCategoryItem[]>((acc, item, categoryIndex) => {
+    if (typeof item !== 'object' || item === null) { return acc; }
+    const category = item as Record<string, unknown>;
+    const name = trimText(category.name ?? category.label, 100);
+    if (!name) { return acc; }
+    const categoryId = trimText(category.categoryId ?? category._id, 80) || `ai-cat-${categoryIndex + 1}`;
+    demoCategoriesData.push({ _id: categoryId, image: trimText(category.image, 500) || undefined, name });
+    const groupsSource = Array.isArray(category.groups) ? category.groups : [];
+    const groups = groupsSource.slice(0, 4).reduce<HomepageCategoryHeroMenuGroup[]>((groupAcc, group, groupIndex) => {
+      if (typeof group !== 'object' || group === null) { return groupAcc; }
+      const groupRecord = group as Record<string, unknown>;
+      const itemsSource = Array.isArray(groupRecord.items) ? groupRecord.items : [];
+      const items = itemsSource.slice(0, 8).reduce<HomepageCategoryHeroMenuLink[]>((itemAcc, link, linkIndex) => {
+        if (typeof link !== 'object' || link === null) { return itemAcc; }
+        const linkRecord = link as Record<string, unknown>;
+        const label = trimText(linkRecord.label ?? linkRecord.name, 100);
+        if (!label) { return itemAcc; }
+        const childCategoryId = `ai-cat-${categoryIndex + 1}-${groupIndex + 1}-${linkIndex + 1}`;
+        const image = trimText(linkRecord.image, 500) || undefined;
+        demoCategoriesData.push({ _id: childCategoryId, image, name: label });
+        itemAcc.push({
+          categoryId: childCategoryId,
+          id: ((categoryIndex + 1) * 10000) + ((groupIndex + 1) * 100) + (linkIndex + 1),
+          image,
+          label,
+          targetType: 'category',
+        });
+        return itemAcc;
+      }, []);
+      if (items.length > 0) {
+        groupAcc.push({ id: ((categoryIndex + 1) * 100) + (groupIndex + 1), items, title: trimText(groupRecord.title, 100) || 'Gợi ý' });
+      }
+      return groupAcc;
+    }, []);
+    acc.push({ categoryId, groups, iconName: trimText(category.iconName, 80) || undefined, id: categoryIndex + 1, imageOverride: trimText(category.imageOverride, 500) || undefined });
+    return acc;
+  }, []);
+
+  const errors: string[] = [];
+  if (heroSlides.length === 0) { errors.push('Thiếu heroSlides hợp lệ.'); }
+  if (categories.length === 0) { errors.push('Thiếu categories hợp lệ.'); }
+
+  return { categories, demoCategoriesData, errors, heroSlides };
+};
+
+function FullAiImportButton({
+  onApply,
+}: {
+  onApply: (result: Omit<FullAiImportResult, 'errors'>) => void;
+}) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
+  const [open, setOpen] = React.useState(false);
+  const [rawInput, setRawInput] = React.useState('');
+  const [lastCopied, setLastCopied] = React.useState<'prompt' | 'sample' | null>(null);
+  const result = React.useMemo(() => parseFullAiImport(rawInput), [rawInput]);
+  const canApply = rawInput.trim().length > 0 && result.errors.length === 0;
+
+  if (!isAiImportEnabled) { return null; }
+
+  const copyText = async (value: string, type: 'prompt' | 'sample') => {
+    await navigator.clipboard.writeText(value);
+    setLastCopied(type);
+    toast.success(type === 'prompt' ? 'Đã copy prompt' : 'Đã copy JSON mẫu');
+    window.setTimeout(() => setLastCopied(null), 1500);
+  };
+
+  const apply = () => {
+    if (!canApply) { return; }
+    onApply({ categories: result.categories, demoCategoriesData: result.demoCategoriesData, heroSlides: result.heroSlides });
+    toast.success('Đã import đầy đủ banner, danh mục và menu');
+    setRawInput('');
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> Import AI
+        </Button>
+      </HomeComponentFooterActionPortal>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="w-[94vw] max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import AI Hero danh mục</DialogTitle>
+            <DialogDescription>Copy prompt, nhờ AI tạo JSON đầy đủ rồi dán vào đây để áp dụng banner, danh mục demo và menu cùng lúc.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="space-y-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Label className="flex items-center gap-1.5"><FileText size={14} /> Prompt chuẩn</Label>
+                  <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => void copyText(AI_FULL_PROMPT, 'prompt')}>
+                    {lastCopied === 'prompt' ? <Check size={12} /> : <Copy size={12} />} Copy
+                  </Button>
+                </div>
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-white p-2 text-[11px] leading-5 text-slate-600">{AI_FULL_PROMPT}</pre>
+              </div>
+              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 text-xs" onClick={() => void copyText(AI_FULL_SAMPLE, 'sample')}>
+                {lastCopied === 'sample' ? <Check size={12} /> : <Copy size={12} />} Copy JSON mẫu
+              </Button>
+            </div>
+            <div className="space-y-3">
+              <Label>Dán JSON AI trả về</Label>
+              <AiDirectGeneratePanel
+                prompt={AI_FULL_PROMPT}
+                sessionId="admin-homepage-category-hero-import"
+                onGenerated={setRawInput}
+                placeholder="Ví dụ: Tạo hero danh mục cho website bán phụ kiện tủ bếp, nhóm sản phẩm theo công năng, 3 banner và menu sidebar rõ ràng."
+              />
+              <textarea
+                value={rawInput}
+                onChange={(event) => setRawInput(event.target.value)}
+                className="min-h-[320px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs leading-5"
+                placeholder={AI_FULL_SAMPLE}
+              />
+              {rawInput.trim() && (
+                <div className={cn('rounded-lg border px-3 py-2 text-xs', result.errors.length > 0 ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700')}>
+                  {result.errors.length > 0
+                    ? result.errors.join(' ')
+                    : `Sẵn sàng import ${result.heroSlides.length} banner, ${result.categories.length} danh mục, ${result.demoCategoriesData.length} mục demo.`}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
+            <Button type="button" disabled={!canApply} onClick={apply}>Áp dụng toàn bộ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+const activeSections = ['settings', 'source', 'banner', 'categories'];
+
 export function HomepageCategoryHeroForm({
   heroSlides,
   setHeroSlides,
+  style,
   categoryItems,
   setCategoryItems,
   categoriesData,
@@ -124,15 +332,18 @@ export function HomepageCategoryHeroForm({
   defaultExpanded = true,
   demoCategoriesData,
   setDemoCategoriesData,
-  noBorderRadius,
+  cornerRadius,
+  setCornerRadius,
   setNoBorderRadius,
-  noVerticalMargin,
   setNoVerticalMargin,
+  spacing,
+  setSpacing,
   bannerImageFit,
   setBannerImageFit,
 }: {
   heroSlides: HomepageCategoryHeroSlide[];
   setHeroSlides: (value: HomepageCategoryHeroSlide[]) => void;
+  style: HomepageCategoryHeroStyle;
   categoryItems: HomepageCategoryHeroCategoryItem[];
   setCategoryItems: (value: HomepageCategoryHeroCategoryItem[]) => void;
   categoriesData: { _id: string; name: string; image?: string }[];
@@ -155,13 +366,18 @@ export function HomepageCategoryHeroForm({
   defaultExpanded?: boolean;
   demoCategoriesData?: DemoCategoryDataItem[];
   setDemoCategoriesData?: React.Dispatch<React.SetStateAction<DemoCategoryDataItem[]>>;
+  cornerRadius: HomepageCategoryHeroCornerRadius;
+  setCornerRadius: (value: HomepageCategoryHeroCornerRadius) => void;
   noBorderRadius?: boolean;
   setNoBorderRadius?: (value: boolean) => void;
   noVerticalMargin?: boolean;
   setNoVerticalMargin?: (value: boolean) => void;
+  spacing?: SectionSpacing;
+  setSpacing?: (value: SectionSpacing) => void;
   bannerImageFit?: 'cover' | 'contain';
   setBannerImageFit?: (value: 'cover' | 'contain') => void;
 }) {
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(activeSections, defaultExpanded);
   const isDemo = selectionMode === 'demo';
   const resolvedCategoriesData = isDemo ? (demoCategoriesData ?? DEMO_CATEGORIES_DATA) : categoriesData;
   const [expandedCategoryIds, setExpandedCategoryIds] = React.useState<number[]>([]);
@@ -301,10 +517,71 @@ export function HomepageCategoryHeroForm({
   ];
 
   return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        {/* ── Nguồn dữ liệu ───────────────────────── */}
-        <SubSection icon={Database} title="Nguồn dữ liệu" defaultOpen={defaultExpanded}>
+    <>
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+      <FullAiImportButton
+        onApply={(result) => {
+          setHeroSlides(result.heroSlides);
+          setCategoryItems(result.categories);
+          setExpandedCategoryIds(result.categories.map((item) => item.id));
+          setDemoCategoriesData?.(result.demoCategoriesData);
+          onSelectionModeChange?.('demo');
+        }}
+      />
+      <Card>
+        <CardContent className="p-4 space-y-3">
+        {/* ── Cấu hình hiển thị ───────────────────── */}
+        <HomeComponentDisplaySettingsSection
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={(value) => {
+            setCornerRadius(value);
+            setNoBorderRadius?.(value === 'none');
+          }}
+          spacing={spacing ?? 'normal'}
+          onSpacingChange={(value) => {
+            setSpacing?.(value);
+            setNoVerticalMargin?.(value === 'none');
+          }}
+        >
+          <div className="space-y-2">
+            <Label className="text-sm">Dấu hiệu cạnh danh mục</Label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant={categoryVisualMode === 'image' ? 'default' : 'outline'} onClick={() => setCategoryVisualMode('image')}>Ảnh</Button>
+              <Button type="button" size="sm" variant={categoryVisualMode === 'icon' ? 'default' : 'outline'} onClick={() => setCategoryVisualMode('icon')}>Icon</Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Kích thước</Label>
+            <select value={categoryImageSize} onChange={(e) => setCategoryImageSize(e.target.value as HomepageCategoryHeroCategoryImageSize)} className="h-10 w-full rounded-md border border-slate-200 bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 px-3 text-sm">
+              {avatarSizeOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Hình dạng</Label>
+            <select value={categoryImageShape} onChange={(e) => setCategoryImageShape(e.target.value as HomepageCategoryHeroCategoryImageShape)} className="h-10 w-full rounded-md border border-slate-200 bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 px-3 text-sm">
+              {avatarShapeOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </div>
+          {setBannerImageFit && (
+            <div className="space-y-2">
+              <Label className="text-sm">Cách đặt ảnh banner</Label>
+              <div className="flex gap-1.5">
+                <Button type="button" size="sm" variant={bannerImageFit === 'cover' ? 'default' : 'outline'} onClick={() => setBannerImageFit('cover')} className="h-10 flex-1 px-3 text-xs">Lấp đầy khung</Button>
+                <Button type="button" size="sm" variant={bannerImageFit === 'contain' ? 'default' : 'outline'} onClick={() => setBannerImageFit('contain')} className="h-10 flex-1 px-3 text-xs">Hiện đủ ảnh</Button>
+              </div>
+            </div>
+          )}
+        </HomeComponentDisplaySettingsSection>
+
+          {/* ── Nguồn dữ liệu ───────────────────────── */}
+          <SubSection
+            icon={Database}
+            title="Nguồn dữ liệu"
+            open={openSections.source}
+            onOpenChange={(open) => toggleSection('source', open)}
+          >
           {/* Mode toggle */}
           {onSelectionModeChange && (
             <div className="flex gap-2">
@@ -327,23 +604,16 @@ export function HomepageCategoryHeroForm({
               ))}
             </div>
           )}
-          <p className="text-xs text-slate-500">
+          <p className="text-xs leading-relaxed text-slate-500">
             {isDemo
-              ? 'Dữ liệu mẫu gắn theo component — không cần danh mục thật'
-              : 'Lấy danh mục và sản phẩm từ database thật'}
+              ? 'Tạo nhanh giao diện bằng dữ liệu mẫu. Phù hợp khi chưa có sản phẩm thật hoặc cần demo cho khách.'
+              : 'Dùng danh mục và sản phẩm thật để AI dựng menu ban đầu, sau đó bạn chỉnh lại nếu cần.'}
           </p>
-
           {/* Real data controls */}
           {!isDemo && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                onClick={onAutoGenerate}
-                className="gap-2"
-                size="sm"
-                disabled={!autoGenerateReady || autoGenerateLoading}
-              >
-                <Bot size={14} /> {autoGenerateLoading ? 'Đang tải...' : 'Sinh từ dữ liệu thật'}
+              <Button type="button" onClick={onAutoGenerate} className="gap-2" size="sm" disabled={!autoGenerateReady || autoGenerateLoading}>
+                <Bot size={14} /> {autoGenerateLoading ? 'Đang tải...' : 'AI tạo menu từ dữ liệu thật'}
               </Button>
               <label className="ml-auto inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
                 <input
@@ -360,7 +630,7 @@ export function HomepageCategoryHeroForm({
           {/* Demo data controls */}
           {isDemo && onLoadDemo && (
             <Button type="button" variant="outline" size="sm" className="gap-2" onClick={onLoadDemo}>
-              <Bot size={14} /> Tải mẫu mặc định
+              <Bot size={14} /> Dùng mẫu demo
             </Button>
           )}
 
@@ -378,13 +648,6 @@ export function HomepageCategoryHeroForm({
                   >
                     <Bot size={11} /> Mẫu mặc định
                   </Button>
-                  <AiDemoProductCategoriesImport
-                    onApply={(items) => setDemoCategoriesData(items.map((item) => ({
-                      _id: item.id,
-                      image: item.image,
-                      name: item.name,
-                    })))}
-                  />
                   <Button
                     type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
                     onClick={() => {
@@ -437,25 +700,19 @@ export function HomepageCategoryHeroForm({
             </div>
           )}
 
-          {/* Summary stats */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-              <p className="text-[11px] text-slate-400">Danh mục</p>
-              <p className="text-lg font-semibold text-slate-900">{categoryItems.length}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-              <p className="text-[11px] text-slate-400">Nhóm</p>
-              <p className="text-lg font-semibold text-slate-900">{totalGroups}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-              <p className="text-[11px] text-slate-400">Link</p>
-              <p className="text-lg font-semibold text-slate-900">{totalLinks}</p>
-            </div>
-          </div>
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Đang có {categoryItems.length} danh mục, {totalGroups} nhóm, {totalLinks} link.
+          </p>
         </SubSection>
 
-        {/* ── Banner hero + Hiển thị danh mục ─────── */}
-        <SubSection icon={Image} title="Banner & hiển thị" defaultOpen={defaultExpanded}>
+        {/* ── Banner hero ─────────────────────────── */}
+        <SubSection
+          icon={Image}
+          title="Banner hero"
+          open={openSections.banner}
+          onOpenChange={(open) => toggleSection('banner', open)}
+        >
+          <p className="text-xs leading-relaxed text-slate-500">Banner là một phần của “Import AI” ở mục Nguồn dữ liệu. Bạn vẫn có thể chỉnh hoặc thêm thủ công tại đây.</p>
           <MultiImageUploader<HomepageCategoryHeroSlide>
             items={heroSlides}
             onChange={setHeroSlides}
@@ -467,75 +724,25 @@ export function HomepageCategoryHeroForm({
             aspectRatio="banner"
             columns={1}
             showReorder={true}
+            enableCrop
+            cropOnUpload={false}
+            cropAspectRatio={() => getHomepageCategoryHeroCropAspectRatio(style)}
+            imageAspectRatio={getHomepageCategoryHeroCropAspectRatio(style)}
+            deleteMode="defer"
             addButtonText="Thêm banner"
             emptyText="Chưa có banner hero"
           />
-          <p className="text-xs text-slate-500">Ưu tiên 1-3 banner chính.</p>
+          <p className="text-xs text-slate-500">Ưu tiên 1-3 banner rõ chủ thể, ít chữ trên ảnh.</p>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_200px] pt-2 border-t border-slate-100">
-            <div className="space-y-2">
-              <Label className="text-sm">Chế độ hiển thị</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant={categoryVisualMode === 'image' ? 'default' : 'outline'} onClick={() => setCategoryVisualMode('image')}>Ảnh</Button>
-                <Button type="button" size="sm" variant={categoryVisualMode === 'icon' ? 'default' : 'outline'} onClick={() => setCategoryVisualMode('icon')}>Icon</Button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">Kích thước avatar</Label>
-              <select value={categoryImageSize} onChange={(e) => setCategoryImageSize(e.target.value as HomepageCategoryHeroCategoryImageSize)} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm">
-                {avatarSizeOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">Hình dạng avatar</Label>
-              <select value={categoryImageShape} onChange={(e) => setCategoryImageShape(e.target.value as HomepageCategoryHeroCategoryImageShape)} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm">
-                {avatarShapeOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Tùy chọn bố cục */}
-          {(setNoBorderRadius || setNoVerticalMargin) && (
-            <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t border-slate-100">
-              {setNoBorderRadius && (
-                <label className="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(noBorderRadius)}
-                    onChange={(e) => setNoBorderRadius(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-slate-300"
-                  />
-                  Bỏ bo góc
-                </label>
-              )}
-              {setNoVerticalMargin && (
-                <label className="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(noVerticalMargin)}
-                    onChange={(e) => setNoVerticalMargin(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-slate-300"
-                  />
-                  Bỏ margin trên/dưới
-                </label>
-              )}
-            </div>
-          )}
-
-          {/* Chế độ ảnh banner */}
-          {setBannerImageFit && (
-            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-              <Label className="text-sm shrink-0">Ảnh banner</Label>
-              <div className="flex gap-1.5">
-                <Button type="button" size="sm" variant={bannerImageFit === 'cover' ? 'default' : 'outline'} onClick={() => setBannerImageFit('cover')} className="h-7 text-xs px-3">Cover (cắt vừa)</Button>
-                <Button type="button" size="sm" variant={bannerImageFit === 'contain' ? 'default' : 'outline'} onClick={() => setBannerImageFit('contain')} className="h-7 text-xs px-3">Contain (hiện đủ)</Button>
-              </div>
-            </div>
-          )}
         </SubSection>
 
         {/* ── Menu danh mục ────────────────────────── */}
-        <SubSection icon={Layers2} title={`Menu danh mục (${categoryItems.length})`} defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={Layers2}
+          title={`Menu danh mục (${categoryItems.length})`}
+          open={openSections.categories}
+          onOpenChange={(open) => toggleSection('categories', open)}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 lg:self-center">
             <Button
@@ -614,13 +821,13 @@ export function HomepageCategoryHeroForm({
                             value={item.categoryId}
                             onChange={(e) => updateCategory(item.id, { categoryId: e.target.value })}
                             className={cn(
-                              'h-10 w-full rounded-md border bg-white px-3 text-sm',
+                              'h-10 w-full rounded-md border bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 px-3 text-sm',
                               isDuplicate ? 'border-amber-400' : 'border-slate-200'
                             )}
                           >
-                            <option value="">-- Chọn danh mục --</option>
+                            <option value="" className="text-slate-500 dark:text-slate-400">-- Chọn danh mục --</option>
                             {resolvedCategoriesData.map((cat) => (
-                              <option key={cat._id} value={cat._id}>{cat.name}</option>
+                              <option key={cat._id} value={cat._id} className="text-slate-900 dark:text-slate-100">{cat.name}</option>
                             ))}
                           </select>
                           {isDuplicate && <p className="text-xs text-amber-700">Danh mục này đang bị trùng.</p>}
@@ -764,11 +971,11 @@ export function HomepageCategoryHeroForm({
                                             <select
                                               value={link.categoryId}
                                               onChange={(e) => updateGroupItem(item.id, group.id, link.id, { targetType: 'category', categoryId: e.target.value })}
-                                              className="h-7 flex-1 min-w-0 rounded border border-slate-200 bg-white px-2 text-[11px]"
+                                              className="h-7 flex-1 min-w-0 rounded border border-slate-200 bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 px-2 text-[11px]"
                                             >
-                                              <option value="">-- Danh mục --</option>
+                                              <option value="" className="text-slate-500 dark:text-slate-400">-- Danh mục --</option>
                                               {resolvedCategoriesData.map((cat) => (
-                                                <option key={cat._id} value={cat._id}>{cat.name}</option>
+                                                <option key={cat._id} value={cat._id} className="text-slate-900 dark:text-slate-100">{cat.name}</option>
                                               ))}
                                             </select>
                                           )}
@@ -823,5 +1030,6 @@ export function HomepageCategoryHeroForm({
         </SubSection>
       </CardContent>
     </Card>
+    </>
   );
 }

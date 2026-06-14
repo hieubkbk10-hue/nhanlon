@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Download, GripVertical, LayoutGrid, Loader2, Plus, Share2, Trash2 } from 'lucide-react';
+import { Download, GripVertical, LayoutGrid, Loader2, Plus, Share2, Trash2 } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { toast } from 'sonner';
@@ -19,10 +19,15 @@ import {
 } from '../../../components/ui';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
 import { InputWithClear } from '../../stats/_components/InputWithClear';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 import { getFooterLayoutColors } from '../_lib/colors';
 import { generateFooterConfigFromData } from '../_lib/auto-generate';
 import type { FooterBrandMode, FooterConfig, FooterColumn, FooterLogoBackgroundStyle, FooterSocialLink } from '../_types';
 import { AiDemoFooterImport } from '../../product-list/_components/AiDemoProductsImport';
+import { buildCategoryPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 
 interface FooterFormProps {
   value: FooterConfig;
@@ -32,54 +37,6 @@ interface FooterFormProps {
   mode: FooterBrandMode;
   /** create = mở hết, edit = đóng hết */
   defaultExpanded?: boolean;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Collapsible sub-section                                            */
-/* ------------------------------------------------------------------ */
-
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  badge,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  badge?: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <Icon size={15} className="text-slate-400 shrink-0" />
-        <span className="flex-1 text-left">{title}</span>
-        {badge && (
-          <span className="text-xs text-slate-400 font-normal">{badge}</span>
-        )}
-        <ChevronDown
-          size={15}
-          className={cn(
-            'text-slate-400 transition-transform duration-200',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && (
-        <div className="p-3 space-y-3 bg-white dark:bg-slate-900">
-          {children}
-        </div>
-      )}
-    </div>
-  );
 }
 
 type QuickRouteGroup = 'Trang cơ bản' | 'Module' | 'Danh mục';
@@ -104,9 +61,41 @@ const SOCIAL_PLATFORMS = [
   { icon: 'youtube', key: 'youtube', label: 'Youtube' },
   { icon: 'tiktok', key: 'tiktok', label: 'TikTok' },
   { icon: 'zalo', key: 'zalo', label: 'Zalo' },
+  { icon: 'messenger', key: 'messenger', label: 'Messenger' },
   { icon: 'x', key: 'x', label: 'X (Twitter)' },
+  { icon: 'telegram', key: 'telegram', label: 'Telegram' },
+  { icon: 'shopee', key: 'shopee', label: 'Shopee' },
+  { icon: 'lazada', key: 'lazada', label: 'Lazada' },
+  { icon: 'tiki', key: 'tiki', label: 'Tiki' },
   { icon: 'pinterest', key: 'pinterest', label: 'Pinterest' },
+  { icon: 'linkedin', key: 'linkedin', label: 'LinkedIn' },
+  { icon: 'github', key: 'github', label: 'GitHub' },
+  { icon: 'phone', key: 'phone', label: 'Điện thoại' },
+  { icon: 'mail', key: 'mail', label: 'Email' },
+  { icon: 'map-pin', key: 'map-pin', label: 'Địa chỉ' },
 ];
+
+const normalizePhoneUrl = (value: string) => value.startsWith('tel:') ? value : `tel:${value.replace(/\s+/g, '')}`;
+const normalizeEmailUrl = (value: string) => value.startsWith('mailto:') ? value : `mailto:${value}`;
+const normalizeMapUrl = (value: string) =>
+  /^https?:\/\//.test(value) ? value : `https://maps.google.com/?q=${encodeURIComponent(value)}`;
+const normalizeZaloUrl = (value: string) => {
+  if (/^https?:\/\//.test(value)) return value;
+  return `https://zalo.me/${value.replace(/\s+/g, '')}`;
+};
+const getSocialPlaceholder = (platform: string) => {
+  switch (platform) {
+    case 'phone': return 'tel:0123456789';
+    case 'mail': return 'mailto:contact@example.com';
+    case 'zalo': return 'https://zalo.me/...';
+    case 'messenger': return 'https://m.me/...';
+    case 'map-pin': return 'https://maps.google.com/...';
+    case 'shopee': return 'https://shopee.vn/...';
+    case 'lazada': return 'https://lazada.vn/...';
+    case 'tiki': return 'https://tiki.vn/...';
+    default: return 'https://...';
+  }
+};
 
 const MAX_WIDTH_OPTIONS = [
   { value: '6xl', label: '6xl' },
@@ -196,15 +185,34 @@ const buildSuggestedColumns = (quickRouteOptions: QuickRouteOption[], columnCoun
   }));
 };
 
+const activeSections = ['settings', 'basicInfo', 'bct', 'columns', 'socials'];
+
 export function FooterForm({ value, onChange, primary, secondary, mode, defaultExpanded = true }: FooterFormProps) {
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(activeSections, defaultExpanded);
   const footerSettings = useQuery(api.settings.getMultiple, {
-    keys: [...IA_SETTINGS_KEYS, 'contact_zalo', 'site_logo', 'site_name', 'site_tagline', 'social_facebook', 'social_instagram', 'social_tiktok', 'social_youtube'],
+    keys: [
+      ...IA_SETTINGS_KEYS,
+      'contact_zalo',
+      'site_logo',
+      'site_name',
+      'site_tagline',
+      'social_facebook',
+      'social_instagram',
+      'social_tiktok',
+      'social_youtube',
+      'contact_phone',
+      'contact_email',
+      'contact_address',
+      'contact_messenger',
+    ],
   });
   const enabledModules = useQuery(api.admin.modules.listEnabledModules);
   const trustPagesFeature = useQuery(api.admin.modules.getModuleFeature, { moduleKey: 'settings', featureKey: 'enableTrustPages' });
   const productCategories = useQuery(api.productCategories.listActive);
   const postCategories = useQuery(api.postCategories.listActive, { limit: 100 });
   const serviceCategories = useQuery(api.serviceCategories.listActive, { limit: 100 });
+  const routeModeSetting = useQuery(api.settings.getValue, { key: 'ia_route_mode', defaultValue: 'unified' });
+  const routeMode = useMemo(() => normalizeRouteMode(routeModeSetting), [routeModeSetting]);
 
   const columnsWithId = useMemo<FooterColumn[]>(() => value.columns.map((column, index) => ({
     ...column,
@@ -272,7 +280,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
           group: 'Danh mục',
           label: category.name,
           source: 'products',
-          url: `/products?category=${category.slug}`,
+          url: buildCategoryPath({ categorySlug: category.slug, mode: routeMode, moduleKey: 'products' }),
         });
       });
     }
@@ -283,7 +291,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
           group: 'Danh mục',
           label: category.name,
           source: 'posts',
-          url: `/posts?catpost=${category.slug}`,
+          url: buildCategoryPath({ categorySlug: category.slug, mode: routeMode, moduleKey: 'posts' }),
         });
       });
     }
@@ -294,7 +302,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
           group: 'Danh mục',
           label: category.name,
           source: 'services',
-          url: `/services?category=${category.slug}`,
+          url: buildCategoryPath({ categorySlug: category.slug, mode: routeMode, moduleKey: 'services' }),
         });
       });
     }
@@ -334,19 +342,31 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
     let idCounter = 1;
 
     if (typeof footerSettings?.social_facebook === 'string' && footerSettings.social_facebook) {
-      newSocialLinks.push({ icon: 'facebook', id: idCounter++, platform: 'facebook', url: footerSettings.social_facebook });
+      newSocialLinks.push({ icon: 'facebook', id: idCounter++, platform: 'facebook', url: footerSettings.social_facebook.trim() });
     }
     if (typeof footerSettings?.social_instagram === 'string' && footerSettings.social_instagram) {
-      newSocialLinks.push({ icon: 'instagram', id: idCounter++, platform: 'instagram', url: footerSettings.social_instagram });
+      newSocialLinks.push({ icon: 'instagram', id: idCounter++, platform: 'instagram', url: footerSettings.social_instagram.trim() });
     }
     if (typeof footerSettings?.social_youtube === 'string' && footerSettings.social_youtube) {
-      newSocialLinks.push({ icon: 'youtube', id: idCounter++, platform: 'youtube', url: footerSettings.social_youtube });
+      newSocialLinks.push({ icon: 'youtube', id: idCounter++, platform: 'youtube', url: footerSettings.social_youtube.trim() });
     }
     if (typeof footerSettings?.social_tiktok === 'string' && footerSettings.social_tiktok) {
-      newSocialLinks.push({ icon: 'tiktok', id: idCounter++, platform: 'tiktok', url: footerSettings.social_tiktok });
+      newSocialLinks.push({ icon: 'tiktok', id: idCounter++, platform: 'tiktok', url: footerSettings.social_tiktok.trim() });
     }
     if (typeof footerSettings?.contact_zalo === 'string' && footerSettings.contact_zalo) {
-      newSocialLinks.push({ icon: 'zalo', id: idCounter++, platform: 'zalo', url: footerSettings.contact_zalo });
+      newSocialLinks.push({ icon: 'zalo', id: idCounter++, platform: 'zalo', url: normalizeZaloUrl(footerSettings.contact_zalo) });
+    }
+    if (typeof footerSettings?.contact_messenger === 'string' && footerSettings.contact_messenger) {
+      newSocialLinks.push({ icon: 'messenger', id: idCounter++, platform: 'messenger', url: footerSettings.contact_messenger.trim() });
+    }
+    if (typeof footerSettings?.contact_phone === 'string' && footerSettings.contact_phone) {
+      newSocialLinks.push({ icon: 'phone', id: idCounter++, platform: 'phone', url: normalizePhoneUrl(footerSettings.contact_phone) });
+    }
+    if (typeof footerSettings?.contact_email === 'string' && footerSettings.contact_email) {
+      newSocialLinks.push({ icon: 'mail', id: idCounter++, platform: 'mail', url: normalizeEmailUrl(footerSettings.contact_email) });
+    }
+    if (typeof footerSettings?.contact_address === 'string' && footerSettings.contact_address) {
+      newSocialLinks.push({ icon: 'map-pin', id: idCounter++, platform: 'map-pin', url: normalizeMapUrl(footerSettings.contact_address) });
     }
 
     updateConfig({
@@ -605,6 +625,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
 
   return (
     <>
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
       <div className="mb-4 flex justify-end">
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={handleGenerateFooter}>
@@ -620,7 +641,34 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
       {/* ── Card 1: Cài đặt & Hiển thị ──────────────────── */}
       <Card className="mb-6">
         <CardContent className="p-4 space-y-3">
-          <SubSection icon={LayoutGrid} title="Thông tin cơ bản" defaultOpen={defaultExpanded}>
+          <HomeComponentDisplaySettingsSection
+            open={openSections.settings}
+            onOpenChange={(open) => toggleSection('settings', open)}
+            cornerRadius={value.cornerRadius ?? 'lg'}
+            onCornerRadiusChange={(cornerRadius) => updateConfig({ cornerRadius, noBorderRadius: cornerRadius === 'none' })}
+            spacing={value.spacing ?? 'normal'}
+            onSpacingChange={(spacing) => updateConfig({ spacing, noVerticalMargin: spacing === 'none' })}
+          >
+              <div className="space-y-2">
+                <Label>Độ rộng tối đa</Label>
+                <select
+                  value={maxWidth}
+                  onChange={(event) =>{  updateConfig({ maxWidth: event.target.value as FooterConfig['maxWidth'] }); }}
+                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+                >
+                  {MAX_WIDTH_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+          </HomeComponentDisplaySettingsSection>
+
+          <SubSection
+            icon={LayoutGrid}
+            title="Thông tin cơ bản"
+            open={openSections.basicInfo}
+            onOpenChange={(open) => toggleSection('basicInfo', open)}
+          >
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Tên logo hiển thị</Label>
@@ -653,32 +701,18 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                 </select>
                 <p className="text-xs text-slate-500">Dùng khi logo hòa vào nền footer. Chỉ dùng nền phẳng và viền mảnh, không shadow/3D.</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Kích thước logo</Label>
-                  <input
-                    type="range"
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={logoSizeLevel}
-                    onChange={(event) =>{  updateConfig({ logoSizeLevel: Number(event.target.value) as FooterConfig['logoSizeLevel'] }); }}
-                    className="w-full"
-                  />
-                  <div className="text-xs font-medium text-slate-600">Nấc {logoSizeLevel}/10</div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Độ rộng tối đa</Label>
-                  <select
-                    value={maxWidth}
-                    onChange={(event) =>{  updateConfig({ maxWidth: event.target.value as FooterConfig['maxWidth'] }); }}
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
-                  >
-                    {MAX_WIDTH_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="space-y-2">
+                <Label>Kích thước logo</Label>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={logoSizeLevel}
+                  onChange={(event) =>{  updateConfig({ logoSizeLevel: Number(event.target.value) as FooterConfig['logoSizeLevel'] }); }}
+                  className="w-full"
+                />
+                <div className="text-xs font-medium text-slate-600">Nấc {logoSizeLevel}/10</div>
               </div>
               <div className="space-y-2">
                 <Label>Slogan</Label>
@@ -735,7 +769,12 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
             </div>
           </SubSection>
 
-          <SubSection icon={Share2} title="Bộ Công Thương" defaultOpen={false}>
+          <SubSection
+            icon={Share2}
+            title="Bộ Công Thương"
+            open={openSections.bct}
+            onOpenChange={(open) => toggleSection('bct', open)}
+          >
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <input
@@ -797,7 +836,12 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
       {/* ── Card 2: Cột menu & Mạng xã hội ──────────────── */}
       <Card className="mb-6">
         <CardContent className="p-4 space-y-3">
-          <SubSection icon={LayoutGrid} title={`Cột menu (${columnsWithId.length}/4)`} defaultOpen={defaultExpanded}>
+          <SubSection
+            icon={LayoutGrid}
+            title={`Cột menu (${columnsWithId.length}/4)`}
+            open={openSections.columns}
+            onOpenChange={(open) => toggleSection('columns', open)}
+          >
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() =>{  applySuggestedColumns(2); }}>
@@ -940,7 +984,12 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
             </div>
           </SubSection>
 
-          <SubSection icon={Share2} title={`Mạng xã hội (${socialsWithId.length}/${SOCIAL_PLATFORMS.length})`} defaultOpen={defaultExpanded}>
+          <SubSection
+            icon={Share2}
+            title={`Mạng xã hội (${socialsWithId.length}/${SOCIAL_PLATFORMS.length})`}
+            open={openSections.socials}
+            onOpenChange={(open) => toggleSection('socials', open)}
+          >
             <div className="space-y-3">
               <div className="flex justify-end">
                 <Button
@@ -1007,7 +1056,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                     <InputWithClear
                       value={social.url}
                       onChange={(v) =>{  updateSocialLink(social.id ?? 0, 'url', v); }}
-                      placeholder="https://facebook.com/yourpage"
+                      placeholder={getSocialPlaceholder(social.platform)}
                       className="flex-1"
                     />
                     <Button
@@ -1141,10 +1190,10 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                             className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                           >
                             <div className="min-w-0">
-                              <div className="truncate font-semibold text-slate-700 dark:text-slate-200">
+                              <div className="break-words font-semibold text-slate-700 dark:text-slate-200">
                                 {option.label}
                               </div>
-                              <div className="truncate font-mono text-xs text-slate-500">{option.url}</div>
+                              <div className="break-all font-mono text-xs text-slate-500">{option.url}</div>
                             </div>
                           </button>
                         ))}
@@ -1196,7 +1245,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                             onClick={() => {
                               handleSelectQuickRoute({
                                 label: post.title,
-                                url: `/posts/${post.slug}`,
+                                url: `/${post.categorySlug || 'chua-phan-loai'}/${post.slug}`,
                                 source: 'posts',
                                 group: 'Module',
                               });
@@ -1204,8 +1253,8 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                             className="flex w-full items-center gap-3 rounded px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                           >
                             <div className="min-w-0 flex-1">
-                              <div className="truncate font-semibold text-slate-700 dark:text-slate-200">{post.title}</div>
-                              <div className="truncate font-mono text-xs text-slate-500">/posts/{post.slug}</div>
+                              <div className="break-words font-semibold text-slate-700 dark:text-slate-200">{post.title}</div>
+                              <div className="break-all font-mono text-xs text-slate-500">{`/${post.categorySlug || 'chua-phan-loai'}/${post.slug}`}</div>
                             </div>
                           </button>
                         ))}
@@ -1221,7 +1270,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                             onClick={() => {
                               handleSelectQuickRoute({
                                 label: product.name,
-                                url: `/products/${product.slug}`,
+                                url: `/${product.categorySlug || 'chua-phan-loai'}/${product.slug}`,
                                 source: 'products',
                                 group: 'Module',
                               });
@@ -1229,8 +1278,8 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                             className="flex w-full items-center gap-3 rounded px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                           >
                             <div className="min-w-0 flex-1">
-                              <div className="truncate font-semibold text-slate-700 dark:text-slate-200">{product.name}</div>
-                              <div className="truncate font-mono text-xs text-slate-500">/products/{product.slug}</div>
+                              <div className="break-words font-semibold text-slate-700 dark:text-slate-200">{product.name}</div>
+                              <div className="break-all font-mono text-xs text-slate-500">{`/${product.categorySlug || 'chua-phan-loai'}/${product.slug}`}</div>
                             </div>
                           </button>
                         ))}
@@ -1246,7 +1295,7 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                             onClick={() => {
                               handleSelectQuickRoute({
                                 label: service.title,
-                                url: `/services/${service.slug}`,
+                                url: `/${service.categorySlug || 'chua-phan-loai'}/${service.slug}`,
                                 source: 'services',
                                 group: 'Module',
                               });
@@ -1254,8 +1303,8 @@ export function FooterForm({ value, onChange, primary, secondary, mode, defaultE
                             className="flex w-full items-center gap-3 rounded px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                           >
                             <div className="min-w-0 flex-1">
-                              <div className="truncate font-semibold text-slate-700 dark:text-slate-200">{service.title}</div>
-                              <div className="truncate font-mono text-xs text-slate-500">/services/{service.slug}</div>
+                              <div className="break-words font-semibold text-slate-700 dark:text-slate-200">{service.title}</div>
+                              <div className="break-all font-mono text-xs text-slate-500">{`/${service.categorySlug || 'chua-phan-loai'}/${service.slug}`}</div>
                             </div>
                           </button>
                         ))}

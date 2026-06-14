@@ -1,19 +1,21 @@
 'use client';
 
+import type { CustomImageAspectRatio } from '@/lib/products/image-aspect-ratio';
 import type {
   HomepageCategoryHeroAutoGenerateConfig,
   HomepageCategoryHeroCategoryItem,
   HomepageCategoryHeroConfig,
   HomepageCategoryHeroStyle,
 } from '../_types';
+import { DEFAULT_SECTION_SPACING } from '../../_shared/types/sectionSpacing';
 
 export const HOMEPAGE_CATEGORY_HERO_STYLES: Array<{ id: HomepageCategoryHeroStyle; label: string }> = [
-  { id: 'sidebar', label: 'Sidebar' },
-  { id: 'classic', label: 'Classic' },
-  { id: 'flush', label: 'Flush' },
-  { id: 'minimal', label: 'Minimal' },
-  { id: 'soft', label: 'Soft' },
-  { id: 'top-nav', label: 'Top Nav' },
+  { id: 'sidebar', label: '(1) Thanh bên' },
+  { id: 'classic', label: '(2) Cổ điển' },
+  { id: 'flush', label: '(3) Tràn viền' },
+  { id: 'minimal', label: '(4) Tối giản' },
+  { id: 'soft', label: '(5) Bo mềm' },
+  { id: 'top-nav', label: '(6) Thanh trên' },
 ];
 
 const HOMEPAGE_CATEGORY_HERO_STYLE_SET = new Set<HomepageCategoryHeroStyle>(
@@ -53,6 +55,19 @@ export const normalizeHomepageCategoryHeroCategories = (
   categories?: HomepageCategoryHeroCategoryItem[]
 ): HomepageCategoryHeroCategoryItem[] => (categories ?? []).map(normalizeCategoryItem);
 
+export const HOMEPAGE_CATEGORY_HERO_CROP_ASPECT_RATIOS: Record<HomepageCategoryHeroStyle, CustomImageAspectRatio> = {
+  classic: { cssValue: '16 / 9', label: '16:9', value: 16 / 9 },
+  flush: { cssValue: '16 / 9', label: '16:9', value: 16 / 9 },
+  minimal: { cssValue: '16 / 9', label: '16:9', value: 16 / 9 },
+  sidebar: { cssValue: '16 / 9', label: '16:9', value: 16 / 9 },
+  soft: { cssValue: '16 / 9', label: '16:9', value: 16 / 9 },
+  'top-nav': { cssValue: '21 / 9', label: '21:9', value: 21 / 9 },
+};
+
+export const getHomepageCategoryHeroCropAspectRatio = (style: HomepageCategoryHeroStyle): CustomImageAspectRatio => (
+  HOMEPAGE_CATEGORY_HERO_CROP_ASPECT_RATIOS[style] ?? HOMEPAGE_CATEGORY_HERO_CROP_ASPECT_RATIOS.sidebar
+);
+
 export const DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG: HomepageCategoryHeroConfig = {
   style: 'sidebar',
   heading: 'Khám phá danh mục sản phẩm',
@@ -81,6 +96,11 @@ export const DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG: HomepageCategoryHeroConfig =
   maxCategoriesMobile: 6,
   attachToHeader: true,
   tabletBehavior: 'drawer',
+  cornerRadius: 'lg',
+  noBorderRadius: false,
+  noVerticalMargin: false,
+  spacing: DEFAULT_SECTION_SPACING,
+  bannerImageFit: 'cover',
 };
 
 /* ── Demo data ────────────────────────────────────────────────────── */

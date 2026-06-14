@@ -9,6 +9,7 @@ import { Briefcase, Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAdminMutationErrorMessage } from '@/app/admin/lib/mutation-error';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../components/ui';
+import { CopyableInput } from '../../components/CopyTextButton';
 import { LexicalEditor } from '../../components/LexicalEditor';
 import { ImageUploader } from '../../components/ImageUploader';
 import { QuickCreateServiceCategoryModal } from '../../components/QuickCreateServiceCategoryModal';
@@ -19,6 +20,7 @@ import {
 } from '@/lib/bookings/slotTemplate';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { AiEntityImportDialog, type AiEntityImportPayload } from '@/app/admin/components/AiEntityImportDialog';
+import { CategoryTagsInput } from '@/app/admin/components/AdditionalCategoriesSelect';
 
 const MODULE_KEY = 'services';
 
@@ -43,6 +45,7 @@ export default function ServiceCreatePage() {
   const [thumbnail, setThumbnail] = useState<string | undefined>();
   const [thumbnailStorageId, setThumbnailStorageId] = useState<Id<'_storage'> | undefined>();
   const [categoryId, setCategoryId] = useState('');
+  const [additionalCategoryIds, setAdditionalCategoryIds] = useState<string[]>([]);
   const [price, setPrice] = useState<number | undefined>();
   const [duration, setDuration] = useState('');
   const [bookingEnabled, setBookingEnabled] = useState(true);
@@ -72,9 +75,14 @@ export default function ServiceCreatePage() {
     return fields;
   }, [fieldsData]);
 
+  const categoryData = categoriesData?.find((c) => c._id === categoryId);
+  const categorySlugPreview = categoryData?.slug || 'chua-phan-loai';
+
+
   const hasMarkdownRender = enabledFields.has('markdownRender');
   const hasHtmlRender = enabledFields.has('htmlRender');
   const showAdvancedRenderCard = hasMarkdownRender || hasHtmlRender;
+  const multiCategoryEnabled = Boolean(settingsData?.find(s => s.settingKey === 'enableMultipleCategories')?.value);
 
   const generateSlugFromTitle = (value: string) => value.toLowerCase()
       .normalize("NFD").replaceAll(/[\u0300-\u036F]/g, "")
@@ -94,12 +102,16 @@ export default function ServiceCreatePage() {
 
     setTitle(nextTitle);
     setSlug(item.slug?.trim() || generateSlugFromTitle(nextTitle));
-    const nextContent = item.content || item.description || '';
+    const nextContent = item.content || item.description || item.htmlRender || item.markdownRender || '';
     setContent(nextContent);
-    if (item.htmlRender) {
+    if (item.content) {
+      setRenderType('content');
+      setHtmlRender(item.htmlRender || '');
+      setMarkdownRender(item.markdownRender || '');
+    } else if (item.htmlRender) {
       setRenderType('html');
       setHtmlRender(item.htmlRender);
-      setMarkdownRender('');
+      setMarkdownRender(item.markdownRender || '');
     } else if (item.markdownRender) {
       setRenderType('markdown');
       setMarkdownRender(item.markdownRender);
@@ -128,6 +140,9 @@ export default function ServiceCreatePage() {
       const resolvedBookingEnabled = isBookingsModuleEnabled ? bookingEnabled : false;
       await createService({
         categoryId: categoryId as Id<"serviceCategories">,
+        additionalCategoryIds: multiCategoryEnabled
+          ? additionalCategoryIds.filter((id) => id !== categoryId) as Id<"serviceCategories">[]
+          : undefined,
         content,
         renderType,
         markdownRender: markdownRender.trim() || undefined,
@@ -189,7 +204,7 @@ export default function ServiceCreatePage() {
             <CardContent className="p-6 space-y-4">
               <div className="space-y-2">
                  <Label>Tiêu đề <span className="text-red-500">*</span></Label>
-                <Input value={title} onChange={handleTitleChange} required placeholder="Nhập tiêu đề dịch vụ..." />
+                <CopyableInput value={title} onChange={handleTitleChange} required placeholder="Nhập tiêu đề dịch vụ..." copyLabel="tiêu đề" />
               </div>
               <div className="space-y-2">
                 <Label>Slug</Label>
@@ -342,7 +357,7 @@ export default function ServiceCreatePage() {
                     {metaTitle.trim() || title || 'Tên dịch vụ'}
                   </div>
                   <div className="text-emerald-600 text-xs">
-                    /services/{slug || 'dich-vu'}
+                    /{categorySlugPreview}/{slug || 'dich-vu'}
                   </div>
                   <div className="text-slate-600 text-xs mt-1 line-clamp-2">
                     {metaDescription.trim() || excerpt || 'Mô tả ngắn sẽ hiển thị tại đây.'}
@@ -370,7 +385,21 @@ export default function ServiceCreatePage() {
               </div>
               <div className="space-y-2">
                 <Label>Danh mục <span className="text-red-500">*</span></Label>
-                <div className="flex gap-2">
+                {multiCategoryEnabled ? (
+                  <>
+                  <CategoryTagsInput
+                    categories={categoriesData}
+                    value={[categoryId, ...additionalCategoryIds].filter(Boolean)}
+                    onQuickCreate={() =>{  setShowCategoryModal(true); }}
+                    onChange={(ids) => {
+                      setCategoryId(ids[0] ?? '');
+                      setAdditionalCategoryIds(ids.slice(1));
+                    }}
+                  />
+                  <p className="text-xs text-slate-500">Thẻ đầu tiên là danh mục chính/canonical, các thẻ sau là danh mục phụ.</p>
+                  </>
+                ) : (
+                  <div className="flex gap-2">
                   <select 
                     value={categoryId} 
                     onChange={(e) =>{  setCategoryId(e.target.value); }}
@@ -391,7 +420,8 @@ export default function ServiceCreatePage() {
                   >
                     <Plus size={16} />
                   </Button>
-                </div>
+                  </div>
+                )}
               </div>
               {enabledFields.has('featured') && (
                 <div className="flex items-center gap-2">

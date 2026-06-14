@@ -1,11 +1,11 @@
 "use client";
 
 import React from 'react';
-import { ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { cn } from '@/app/admin/components/ui';
 import { getPartnersColors, type PartnersBrandMode } from '../_lib/colors';
-import type { PartnersAlign, PartnersDisplayMode } from '../_types';
+import { getPartnersContentTopSpacingClassName, getPartnersCornerRadiusClassName, getPartnersHeaderSpacingClassName, getPartnersItemGapClassName, getPartnersLogoBoxClassName, getPartnersLogoCardClassName, getPartnersLogoFallbackSize, getPartnersSectionSpacingClassName, type PartnersAlign, type PartnersCornerRadius, type PartnersDisplayMode, type PartnersLogoSize, type PartnersSpacing } from '../_types';
 import { PartnersSectionHeader } from './PartnersSectionHeader';
 
 type PartnersCarouselItem = {
@@ -24,6 +24,10 @@ const PartnersCarouselInner = ({
   subheading,
   align = 'center',
   displayMode = 'withName',
+  cornerRadius = 'lg',
+  logoSize = 'normal',
+  showBorder = true,
+  spacing = 'normal',
   openInNewTab = false,
   skipHeader = false,
   renderImage,
@@ -37,6 +41,10 @@ const PartnersCarouselInner = ({
   subheading?: React.ReactNode;
   align?: PartnersAlign;
   displayMode?: PartnersDisplayMode;
+  cornerRadius?: PartnersCornerRadius;
+  logoSize?: PartnersLogoSize;
+  showBorder?: boolean;
+  spacing?: PartnersSpacing;
   openInNewTab?: boolean;
   skipHeader?: boolean;
   renderImage?: (item: PartnersCarouselItem, className: string) => React.ReactNode;
@@ -44,6 +52,14 @@ const PartnersCarouselInner = ({
 }) => {
   const colors = React.useMemo(() => getPartnersColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
   const showName = displayMode === 'withName';
+  const radiusClassName = getPartnersCornerRadiusClassName(cornerRadius);
+  const logoBoxClassName = getPartnersLogoBoxClassName('compact', logoSize, showName);
+  const logoCardClassName = getPartnersLogoCardClassName('compact', logoSize, showName);
+  const fallbackIconSize = getPartnersLogoFallbackSize('compact', logoSize, showName);
+  const sectionSpacingClassName = getPartnersSectionSpacingClassName(spacing, 'default', skipHeader);
+  const contentTopSpacingClassName = getPartnersContentTopSpacingClassName(spacing);
+  const itemGapClassName = getPartnersItemGapClassName(spacing, 'track');
+  const headerSpacingClassName = getPartnersHeaderSpacingClassName(spacing);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: 'start',
@@ -68,8 +84,8 @@ const PartnersCarouselInner = ({
 
   if (items.length === 0) {
     return (
-      <section className={cn('w-full py-6 bg-white dark:bg-slate-900', className)}>
-        <div className="flex flex-col items-center justify-center py-8 text-center">
+      <section className={cn('w-full bg-white dark:bg-slate-900', getPartnersSectionSpacingClassName(spacing, 'empty'), className)}>
+        <div className={cn('flex flex-col items-center justify-center text-center', getPartnersSectionSpacingClassName(spacing, 'empty'))}>
           <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: colors.iconBg }}>
             <ImageIcon size={28} style={{ color: colors.iconColor }} />
           </div>
@@ -80,13 +96,15 @@ const PartnersCarouselInner = ({
     );
   }
 
-  const showNav = canScrollPrev || canScrollNext;
-
   return (
-    <section className={cn('w-full bg-white', skipHeader ? 'pb-6 md:pb-10' : 'py-6 md:py-10', className)}>
+    <section
+      className={cn('w-full bg-white', sectionSpacingClassName, className)}
+      data-can-scroll-prev={canScrollPrev}
+      data-can-scroll-next={canScrollNext}
+    >
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         {!skipHeader && (
-          <div className="flex items-end justify-between gap-3 mb-5 md:mb-8">
+          <div className={cn('mb-5 md:mb-8', spacing === 'compact' && 'mb-3 md:mb-4', spacing === 'none' && 'mb-0 md:mb-0')}>
             <div className="flex-1 min-w-0">
               <PartnersSectionHeader
                 title={title ?? 'Đối tác'}
@@ -95,46 +113,15 @@ const PartnersCarouselInner = ({
                 brandColor={brandColor}
                 secondary={secondary}
                 mode={mode}
+                className={headerSpacingClassName}
               />
             </div>
-            {showNav && (
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  aria-label="Trước"
-                  disabled={!canScrollPrev}
-                  onClick={() => emblaApi?.scrollPrev()}
-                  className={cn(
-                    'inline-flex h-8 w-8 items-center justify-center rounded-full border transition-all',
-                    canScrollPrev
-                      ? 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
-                      : 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed',
-                  )}
-                >
-                  <ChevronLeft size={15} />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Tiếp"
-                  disabled={!canScrollNext}
-                  onClick={() => emblaApi?.scrollNext()}
-                  className={cn(
-                    'inline-flex h-8 w-8 items-center justify-center rounded-full border transition-all',
-                    canScrollNext
-                      ? 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
-                      : 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed',
-                  )}
-                >
-                  <ChevronRight size={15} />
-                </button>
-              </div>
-            )}
           </div>
         )}
 
         {/* Embla viewport */}
-        <div className={cn('overflow-hidden', skipHeader && 'mt-5 md:mt-8')} ref={emblaRef}>
-          <div className="flex gap-3 md:gap-4">
+        <div className={cn('overflow-hidden', skipHeader && contentTopSpacingClassName)} ref={emblaRef}>
+          <div className={cn('flex', itemGapClassName)}>
             {items.map((item, index) => {
               const key = item.id ?? item.link ?? index;
               return (
@@ -144,24 +131,24 @@ const PartnersCarouselInner = ({
                   target={openInNewTab ? '_blank' : undefined}
                   rel={openInNewTab ? 'noopener noreferrer' : undefined}
                   className={cn(
-                    'group flex shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-white transition-all duration-200 hover:shadow-md select-none',
-                    showName
-                      ? 'w-[150px] flex-col gap-2 p-4 md:w-[170px] md:p-5'
-                      : 'w-[120px] p-4 md:w-[140px] md:p-5',
+                    'group flex shrink-0 select-none items-center justify-center bg-white transition-all duration-200 hover:shadow-md',
+                    showBorder ? 'border border-slate-100' : 'border border-transparent',
+                    radiusClassName,
+                    logoCardClassName,
                   )}
-                  onMouseEnter={(event) => { event.currentTarget.style.borderColor = colors.primary; }}
+                  onMouseEnter={(event) => { event.currentTarget.style.borderColor = showBorder ? colors.secondary : 'transparent'; }}
                   onMouseLeave={(event) => { event.currentTarget.style.borderColor = ''; }}
                   draggable={false}
                 >
                   <div className={cn(
                     'flex w-full items-center justify-center pointer-events-none',
-                    showName ? 'h-10 md:h-12' : 'h-12 md:h-14',
+                    logoBoxClassName,
                   )}>
                     {item.url
                       ? (renderImage
                           ? renderImage(item, 'h-full w-auto max-w-full object-contain pointer-events-none')
-                          : <ImageIcon size={28} className="text-slate-300" />)
-                      : <ImageIcon size={showName ? 24 : 36} className="text-slate-300" />}
+                          : <ImageIcon size={fallbackIconSize} className="text-slate-300" />)
+                      : <ImageIcon size={fallbackIconSize} className="text-slate-300" />}
                   </div>
                   {showName && (
                     <span className="w-full truncate text-center text-xs font-medium text-slate-500 md:text-sm pointer-events-none">
@@ -173,40 +160,6 @@ const PartnersCarouselInner = ({
             })}
           </div>
         </div>
-
-        {/* Nav buttons khi skipHeader (site mode) */}
-        {skipHeader && showNav && (
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <button
-              type="button"
-              aria-label="Trước"
-              disabled={!canScrollPrev}
-              onClick={() => emblaApi?.scrollPrev()}
-              className={cn(
-                'inline-flex h-8 w-8 items-center justify-center rounded-full border transition-all',
-                canScrollPrev
-                  ? 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
-                  : 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed',
-              )}
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <button
-              type="button"
-              aria-label="Tiếp"
-              disabled={!canScrollNext}
-              onClick={() => emblaApi?.scrollNext()}
-              className={cn(
-                'inline-flex h-8 w-8 items-center justify-center rounded-full border transition-all',
-                canScrollNext
-                  ? 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
-                  : 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed',
-              )}
-            >
-              <ChevronRight size={15} />
-            </button>
-          </div>
-        )}
       </div>
     </section>
   );

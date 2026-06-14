@@ -6,12 +6,12 @@ import { PublicImage as Image } from '@/components/shared/PublicImage';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useBrandColors, useSiteSettings, useSocialLinks } from './hooks';
-import { getFooterLayoutColors } from '@/app/admin/home-components/footer/_lib/colors';
-import { getFooterLogoBackgroundClassName, getFooterLogoBackgroundStyle, getFooterLogoSize, getFooterMaxWidthClass } from '@/app/admin/home-components/footer/_lib/constants';
-import type { FooterBrandMode, FooterLogoBackgroundStyle, FooterStyle } from '@/app/admin/home-components/footer/_types';
+import { getFooterThemeColors } from '@/app/admin/home-components/footer/_lib/colors';
+import { getFooterCornerRadiusClassName, getFooterLogoBackgroundClassName, getFooterLogoBackgroundStyle, getFooterLogoSize, getFooterMaxWidthClass, getFooterSectionSpacingClassName } from '@/app/admin/home-components/footer/_lib/constants';
+import type { FooterBrandMode, FooterCornerRadius, FooterLogoBackgroundStyle, FooterStyle } from '@/app/admin/home-components/footer/_types';
 import { resolveTypeOverrideColors } from '@/app/admin/home-components/_shared/lib/typeColorOverride';
 import { resolveTypeOverrideFont } from '@/app/admin/home-components/_shared/lib/typeFontOverride';
-import { Facebook, Github, Globe, Instagram, Linkedin, Twitter, X, Youtube } from 'lucide-react';
+import { getIconNode } from '@/app/admin/home-components/speed-dial/_components/SpeedDialSectionShared';
 import { useSnapshotDemoContext } from '@/components/modules/homepage/SnapshotDemoProvider';
 
 interface SocialLinkItem { id: number; platform: string; url: string; icon: string }
@@ -22,6 +22,9 @@ interface FooterConfig {
   maxWidth?: '6xl' | '7xl' | '8xl' | '9xl';
   logoSizeLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   logoBackgroundStyle?: FooterLogoBackgroundStyle;
+  cornerRadius?: FooterCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
   columns?: { id: number; title: string; links: { label: string; url: string }[] }[];
   socialLinks?: SocialLinkItem[];
   copyright?: string;
@@ -31,55 +34,13 @@ interface FooterConfig {
   bctLogoLink?: string;
   showSocialLinks?: boolean;
   useOriginalSocialIconColors?: boolean;
+  spacing?: 'normal' | 'compact' | 'none';
   style?: 'classic' | 'modern' | 'corporate' | 'minimal' | 'centered' | 'stacked';
 }
 
-// Custom TikTok icon (Lucide không có)
-const TikTokIcon = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
-  </svg>
-);
-
-// Custom Zalo icon (Simple Icons - monochrome)
-const ZaloIcon = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12.49 10.2722v-.4496h1.3467v6.3218h-.7704a.576.576 0 01-.5763-.5729l-.0006.0005a3.273 3.273 0 01-1.9372.6321c-1.8138 0-3.2844-1.4697-3.2844-3.2823 0-1.8125 1.4706-3.2822 3.2844-3.2822a3.273 3.273 0 011.9372.6321l.0006.0005zM6.9188 7.7896v.205c0 .3823-.051.6944-.2995 1.0605l-.03.0343c-.0542.0615-.1815.206-.2421.2843L2.024 14.8h4.8948v.7682a.5764.5764 0 01-.5767.5761H0v-.3622c0-.4436.1102-.6414.2495-.8476L4.8582 9.23H.1922V7.7896h6.7266zm8.5513 8.3548a.4805.4805 0 01-.4803-.4798v-7.875h1.4416v8.3548H15.47zM20.6934 9.6C22.52 9.6 24 11.0807 24 12.9044c0 1.8252-1.4801 3.306-3.3066 3.306-1.8264 0-3.3066-1.4808-3.3066-3.306 0-1.8237 1.4802-3.3044 3.3066-3.3044zm-10.1412 5.253c1.0675 0 1.9324-.8645 1.9324-1.9312 0-1.065-.865-1.9295-1.9324-1.9295s-1.9324.8644-1.9324 1.9295c0 1.0667.865 1.9312 1.9324 1.9312zm10.1412-.0033c1.0737 0 1.945-.8707 1.945-1.9453 0-1.073-.8713-1.9436-1.945-1.9436-1.0753 0-1.945.8706-1.945 1.9436 0 1.0746.8697 1.9453 1.945 1.9453z"/>
-  </svg>
-);
-
-const PinterestIcon = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
-  </svg>
-);
-
 // Social icons based on platform
 const SocialIcon = ({ platform, size = 18 }: { platform: string; size?: number }) => {
-  switch (platform) {
-    case 'facebook': { return <Facebook size={size} />;
-    }
-    case 'instagram': { return <Instagram size={size} />;
-    }
-    case 'youtube': { return <Youtube size={size} />;
-    }
-    case 'tiktok': { return <TikTokIcon size={size} />;
-    }
-    case 'zalo': { return <ZaloIcon size={size} />;
-    }
-    case 'twitter': { return <Twitter size={size} />;
-    }
-    case 'x': { return <X size={size} />;
-    }
-    case 'pinterest': { return <PinterestIcon size={size} />;
-    }
-    case 'linkedin': { return <Linkedin size={size} />;
-    }
-    case 'github': { return <Github size={size} />;
-    }
-    default: { return <Globe size={size} />;
-    }
-  }
+  return getIconNode(platform, size);
 };
 
 const SOCIAL_ORIGINAL_COLORS: Record<string, { bg: string; icon: string }> = {
@@ -88,11 +49,19 @@ const SOCIAL_ORIGINAL_COLORS: Record<string, { bg: string; icon: string }> = {
   youtube: { bg: '#ff0000', icon: '#ffffff' },
   tiktok: { bg: '#000000', icon: '#ffffff' },
   zalo: { bg: '#0084ff', icon: '#ffffff' },
+  messenger: { bg: '#0084ff', icon: '#ffffff' },
+  telegram: { bg: '#26a5e4', icon: '#ffffff' },
+  shopee: { bg: '#ee4d2d', icon: '#ffffff' },
+  lazada: { bg: '#0f1689', icon: '#ffffff' },
+  tiki: { bg: '#1a94ff', icon: '#ffffff' },
   twitter: { bg: '#1da1f2', icon: '#ffffff' },
   x: { bg: '#000000', icon: '#ffffff' },
   pinterest: { bg: '#E60023', icon: '#ffffff' },
   linkedin: { bg: '#0a66c2', icon: '#ffffff' },
   github: { bg: '#0f172a', icon: '#ffffff' },
+  phone: { bg: '#ef4444', icon: '#ffffff' },
+  mail: { bg: '#ea580c', icon: '#ffffff' },
+  'map-pin': { bg: '#f97316', icon: '#ffffff' },
 };
 
 export function DynamicFooter() {
@@ -114,7 +83,7 @@ export function DynamicFooter() {
     <div className="font-active" style={fontStyle}>{node}</div>
   );
   const { primary: brandColor, secondary, mode } = resolvedColors;
-  const { siteName, logo: siteLogo } = useSiteSettings();
+  const { siteName, logo: siteLogo, isDark } = useSiteSettings();
   const socialLinks = useSocialLinks();
   const components = useQuery(api.homeComponents.listActive);
   
@@ -140,6 +109,8 @@ export function DynamicFooter() {
     if (socialLinks.youtube) {settingSocials.push({ icon: 'youtube', id: 3, platform: 'youtube', url: socialLinks.youtube });}
     if (socialLinks.tiktok) {settingSocials.push({ icon: 'tiktok', id: 4, platform: 'tiktok', url: socialLinks.tiktok });}
     if (socialLinks.zalo) {settingSocials.push({ icon: 'zalo', id: 5, platform: 'zalo', url: socialLinks.zalo });}
+    if (socialLinks.twitter) {settingSocials.push({ icon: 'x', id: 6, platform: 'x', url: socialLinks.twitter });}
+    if (socialLinks.pinterest) {settingSocials.push({ icon: 'pinterest', id: 7, platform: 'pinterest', url: socialLinks.pinterest });}
     return settingSocials.length > 0 ? settingSocials : [
       { icon: 'facebook', id: 1, platform: 'facebook', url: '#' },
       { icon: 'instagram', id: 2, platform: 'instagram', url: '#' },
@@ -159,7 +130,7 @@ export function DynamicFooter() {
   };
 
   // Fallback footer nếu không có Footer component
-  const fallbackBgDark = getFooterLayoutColors('classic', brandColor, secondary, mode as FooterBrandMode).bg;
+  const fallbackBgDark = getFooterThemeColors('classic', brandColor, secondary, mode as FooterBrandMode, isDark).bg;
   if (!footerComponent && !snapshotDemo) {
     return wrapWithFont(
       <footer className="text-white" style={{ backgroundColor: fallbackBgDark }}>
@@ -182,11 +153,14 @@ export function DynamicFooter() {
   const resolveLogoSize = (baseSize: number) => getFooterLogoSize(baseSize, logoSizeLevel);
   const socials = getSocials(config);
   const columns = getColumns(config);
-  const colors = getFooterLayoutColors(style, brandColor, secondary, mode as FooterBrandMode);
+  const colors = getFooterThemeColors(style, brandColor, secondary, mode as FooterBrandMode, isDark);
   const useOriginalSocialIconColors = config.useOriginalSocialIconColors !== false;
-  const maxWidthClass = getFooterMaxWidthClass(config.maxWidth);
+  const maxWidthClass = `${getFooterMaxWidthClass(config.maxWidth)} tv:max-w-[1600px]`;
   const waveMaxWidthClass = maxWidthClass === 'max-w-6xl' || maxWidthClass === 'max-w-7xl' ? 'max-w-8xl' : maxWidthClass;
   const logoBackgroundStyle = config.logoBackgroundStyle ?? 'none';
+  const sectionSpacingClassName = getFooterSectionSpacingClassName(config.spacing, config.noVerticalMargin);
+  const cornerRadius = config.noBorderRadius === true ? 'none' : config.cornerRadius;
+  const socialRadiusClassName = getFooterCornerRadiusClassName(cornerRadius, 'icon');
   const showBctLogo = config.showBctLogo === true;
   const bctLogoType = config.bctLogoType ?? 'thong-bao';
   const bctLogoLink = typeof config.bctLogoLink === 'string' ? config.bctLogoLink.trim() : '';
@@ -233,7 +207,7 @@ export function DynamicFooter() {
 
     return (
       <span
-        className={getFooterLogoBackgroundClassName(logoBackgroundStyle)}
+        className={getFooterLogoBackgroundClassName(logoBackgroundStyle, cornerRadius)}
         style={getFooterLogoBackgroundStyle(logoBackgroundStyle, colors.primary)}
       >
         {image}
@@ -264,7 +238,7 @@ export function DynamicFooter() {
     return wrapWithFont(
       <footer className="w-full" style={{ backgroundColor: colors.classicBg }}>
         {/* Main Grid Content */}
-        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 py-10 md:py-14`}>
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 ${sectionSpacingClassName}`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10">
             {/* Brand + Description Column */}
             <div className="lg:col-span-4 space-y-4">
@@ -306,7 +280,7 @@ export function DynamicFooter() {
                     const socialStyles = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
                     return (
                       <a key={s.id || `social-${idx}`} href={s.url || '#'} target="_blank" rel="noopener noreferrer"
-                        className="h-10 w-10 flex items-center justify-center rounded-full transition-all hover:scale-110"
+                        className={`h-10 w-10 flex items-center justify-center ${socialRadiusClassName} transition-all hover:scale-110`}
                         style={{ backgroundColor: socialStyles.bg, color: socialStyles.color, transition: 'transform 0.3s ease', ...(socialStyles.border ? { border: socialStyles.border } : {}) }}>
                         <SocialIcon platform={s.platform} size={20} />
                       </a>
@@ -347,13 +321,14 @@ export function DynamicFooter() {
         {/* Seigaiha wave pattern overlay */}
         <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: seigaihaUrl, backgroundSize: '56px 28px' }} />
 
-        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 py-10 md:py-14 relative`}>
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 ${sectionSpacingClassName} relative`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10">
             {/* Brand Zone */}
             <div className="lg:col-span-4 space-y-5">
               <Link href="/" className="inline-block">
                 {renderLogoMark(48)}
               </Link>
+              {logoName && <h3 className="text-base font-bold tracking-tight" style={{ color: colors.heading }}>{logoName}</h3>}
               {config.description && (
                 <p className="text-sm leading-relaxed" style={{ color: colors.textMuted }}>{config.description}</p>
               )}
@@ -363,7 +338,7 @@ export function DynamicFooter() {
                     const socialStyles = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
                     return (
                       <a key={s.id || `social-${idx}`} href={s.url || '#'} target="_blank" rel="noopener noreferrer"
-                        className="h-10 w-10 flex items-center justify-center rounded-full transition-all hover:scale-110"
+                        className={`h-10 w-10 flex items-center justify-center ${socialRadiusClassName} transition-all hover:scale-110`}
                         style={{ backgroundColor: socialStyles.bg, color: socialStyles.color, transition: 'transform 0.3s ease', ...(socialStyles.border ? { border: socialStyles.border } : {}) }}>
                         <SocialIcon platform={s.platform} size={20} />
                       </a>
@@ -378,7 +353,7 @@ export function DynamicFooter() {
             <div className="lg:col-span-8 grid grid-cols-2 md:grid-cols-4 gap-6">
               {columns.slice(0, 4).map((col, colIdx) => (
                 <div key={col.id || `col-${colIdx}`}>
-                  <h3 className="font-bold text-sm uppercase tracking-wider mb-4 pb-2 flex items-center gap-2" style={{ color: colors.heading, borderBottom: `2px solid ${colors.accent}` }}>
+                  <h3 className="font-bold text-sm uppercase tracking-wider mb-4 pb-2 flex items-center gap-2" style={{ color: colors.heading, borderBottom: `2px solid ${colors.borderSoft}` }}>
                     <span style={{ color: colors.accent, fontSize: '10px' }}>◆</span> {col.title}
                   </h3>
                   <ul className="space-y-2.5">
@@ -416,7 +391,7 @@ export function DynamicFooter() {
   // Zone 1: brand+desc | social icons (horizontal) → Zone 2: 4 link columns
   if (style === 'corporate') {
     return wrapWithFont(
-      <footer className="w-full py-6 md:py-8" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
+      <footer className={`w-full ${sectionSpacingClassName}`} style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
         <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6`}>
           {/* Zone 1: Brand Identity + Social */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pb-4" style={{ borderBottom: `1px solid ${colors.border}` }}>
@@ -441,7 +416,7 @@ export function DynamicFooter() {
                       const socialStyles = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
                       return (
                         <a key={s.id || `social-${idx}`} href={s.url || '#'} target="_blank" rel="noopener noreferrer"
-                          className="h-10 w-10 flex items-center justify-center rounded-lg transition-colors"
+                          className={`h-10 w-10 flex items-center justify-center ${socialRadiusClassName} transition-colors`}
                           style={{ backgroundColor: socialStyles.bg, color: socialStyles.color, ...(socialStyles.border ? { border: socialStyles.border } : {}) }}>
                           <SocialIcon platform={s.platform} size={20} />
                         </a>
@@ -498,13 +473,14 @@ export function DynamicFooter() {
         {/* Diagonal stripe pattern overlay */}
         <div className="absolute inset-0 pointer-events-none opacity-40" style={{ backgroundImage: stripeBg }} />
 
-        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 py-8 md:py-12 relative`}>
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 ${sectionSpacingClassName} relative`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10">
             {/* Brand + Social */}
             <div className="lg:col-span-4 space-y-4">
               <Link href="/" className="inline-block">
                 {renderLogoMark(44)}
               </Link>
+              {logoName && <h3 className="text-base font-bold tracking-tight" style={{ color: colors.heading }}>{logoName}</h3>}
               {config.description && (
                 <p className="text-sm leading-relaxed" style={{ color: colors.textMuted }}>{config.description}</p>
               )}
@@ -514,7 +490,7 @@ export function DynamicFooter() {
                     const socialStyles = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
                     return (
                       <a key={s.id || `social-${idx}`} href={s.url || '#'} target="_blank" rel="noopener noreferrer"
-                        className="h-10 w-10 flex items-center justify-center rounded-full transition-all hover:scale-110"
+                        className={`h-10 w-10 flex items-center justify-center ${socialRadiusClassName} transition-all hover:scale-110`}
                         style={{ backgroundColor: socialStyles.bg, color: socialStyles.color, transition: 'transform 0.3s ease', ...(socialStyles.border ? { border: socialStyles.border } : {}) }}>
                         <SocialIcon platform={s.platform} size={20} />
                       </a>
@@ -566,13 +542,14 @@ export function DynamicFooter() {
   if (style === 'centered') {
     return wrapWithFont(
       <footer className="w-full" style={{ backgroundColor: colors.magazineBg }}>
-        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 py-10 md:py-14`}>
+        <div className={`container ${maxWidthClass} mx-auto px-4 md:px-6 ${sectionSpacingClassName}`}>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-8 lg:gap-10">
             {/* Brand + Social */}
             <div className="space-y-4">
               <Link href="/" className="inline-block">
                 {renderLogoMark(44)}
               </Link>
+              {logoName && <h3 className="text-base font-bold tracking-tight" style={{ color: colors.magazineHeading }}>{logoName}</h3>}
               {config.description && (
                 <p className="text-sm leading-relaxed" style={{ color: colors.magazineTextMuted }}>{config.description}</p>
               )}
@@ -582,7 +559,7 @@ export function DynamicFooter() {
                     const socialStyles = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
                     return (
                       <a key={s.id || `social-${idx}`} href={s.url || '#'} target="_blank" rel="noopener noreferrer"
-                        className="h-10 w-10 flex items-center justify-center rounded-full transition-all hover:scale-110"
+                        className={`h-10 w-10 flex items-center justify-center ${socialRadiusClassName} transition-all hover:scale-110`}
                         style={{ backgroundColor: socialStyles.bg, color: socialStyles.color, transition: 'transform 0.3s ease', ...(socialStyles.border ? { border: socialStyles.border } : {}) }}>
                         <SocialIcon platform={s.platform} size={20} />
                       </a>
@@ -681,7 +658,7 @@ export function DynamicFooter() {
           backgroundSize: '400px 400px',
         }} />
 
-        <div className={`container ${waveMaxWidthClass} mx-auto px-4 md:px-5 py-8 md:py-10 relative z-10`}>
+        <div className={`container ${waveMaxWidthClass} mx-auto px-4 md:px-5 ${sectionSpacingClassName} relative z-10`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5 lg:gap-6">
             {/* Brand + Description Column */}
             <div className="lg:col-span-3 space-y-3">
@@ -722,7 +699,7 @@ export function DynamicFooter() {
                       const socialStyles = resolveSocialStyles(s.platform, colors.stackedSocialBg, colors.stackedSocialText);
                       return (
                         <a key={s.id || `social-${idx}`} href={s.url || '#'} target="_blank" rel="noopener noreferrer"
-                          className="h-9 w-9 flex items-center justify-center rounded-lg transition-transform hover:scale-105"
+                          className={`h-9 w-9 flex items-center justify-center ${socialRadiusClassName} transition-transform hover:scale-105`}
                           style={{ backgroundColor: socialStyles.bg, color: socialStyles.color, ...(socialStyles.border ? { border: socialStyles.border } : {}) }}>
                           <SocialIcon platform={s.platform} size={18} />
                         </a>

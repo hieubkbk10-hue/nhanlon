@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search } from 'lucide-react';
 import { Input, cn } from '../../../components/ui';
 
@@ -27,12 +28,21 @@ interface IconPopoverPickerProps {
 export function IconPopoverPicker({ value, onChange, options, brandColor = '#3b82f6', compact }: IconPopoverPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [position, setPosition] = useState<React.CSSProperties | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        ref.current &&
+        !ref.current.contains(target) &&
+        !popoverRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -40,6 +50,37 @@ export function IconPopoverPicker({ value, onChange, options, brandColor = '#3b8
 
   useEffect(() => {
     if (open) setQuery('');
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const trigger = ref.current;
+      if (!trigger) return;
+
+      const rect = trigger.getBoundingClientRect();
+      const width = Math.min(320, window.innerWidth - 16);
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const belowTop = rect.bottom + 4;
+      const popoverHeight = popoverRef.current?.offsetHeight ?? 320;
+      const top = belowTop + popoverHeight > window.innerHeight - 8
+        ? Math.max(8, rect.top - popoverHeight - 4)
+        : belowTop;
+
+      setPosition({ left, top, width });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -61,6 +102,7 @@ export function IconPopoverPicker({ value, onChange, options, brandColor = '#3b8
         className={cn(
           'flex items-center justify-between gap-2 rounded-md border border-input bg-background text-left text-sm transition-colors hover:bg-slate-50',
           compact ? 'h-8 px-2' : 'h-10 w-full px-3',
+          brandColor.toLowerCase() === '#ffffff' && 'bg-slate-950 text-white border-slate-800 hover:bg-slate-900',
         )}
       >
         <span className="flex min-w-0 items-center gap-2">
@@ -70,10 +112,11 @@ export function IconPopoverPicker({ value, onChange, options, brandColor = '#3b8
         <Search size={12} className="shrink-0 text-slate-400" />
       </button>
 
-      {open && (
+      {open && typeof document !== 'undefined' && createPortal(
         <div
-          className="absolute left-0 top-full z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in-0 zoom-in-95"
-          style={{ width: '320px' }}
+          ref={popoverRef}
+          className="fixed z-[1000] rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in-0 zoom-in-95"
+          style={position ?? { left: 0, top: 0, width: 320, visibility: 'hidden' }}
         >
           {/* Search */}
           <div className="border-b border-slate-200 p-2 dark:border-slate-700">
@@ -120,7 +163,7 @@ export function IconPopoverPicker({ value, onChange, options, brandColor = '#3b8
             )}
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

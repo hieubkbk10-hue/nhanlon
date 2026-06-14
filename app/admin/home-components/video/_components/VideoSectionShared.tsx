@@ -5,9 +5,11 @@ import { Play, Video as VideoIcon } from 'lucide-react';
 import { cn } from '@/app/admin/components/ui';
 import { SectionHeader } from '../../_shared/components/SectionHeader';
 import { getPreviewAwareClass } from '../../_shared/lib/previewResponsive';
+import { getSectionSpacingClassName, normalizeSectionSpacing, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import type { VideoColorTokens } from '../_lib/colors';
 import { getVideoInfo, getYouTubeThumbnail } from '../_lib/colors';
 import type { VideoConfig, VideoProvider, VideoStyle } from '../_types';
+import { normalizeVideoCornerRadius, normalizeVideoPlayButtonSize } from '../_lib/constants';
 
 export type VideoSectionDevice = 'desktop' | 'tablet' | 'mobile';
 
@@ -31,6 +33,7 @@ interface VideoSectionSharedProps {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
 }
 
 const isExternalUrl = (url: string) => /^https?:\/\//i.test(url);
@@ -69,7 +72,7 @@ function VideoSurface({
   isPlaying,
   onPlay,
   ratioClass = 'aspect-video',
-  playSize = 'lg',
+  playSize = 'large',
   roundedClass = 'rounded-xl',
 }: {
   videoUrl: string;
@@ -80,7 +83,7 @@ function VideoSurface({
   isPlaying: boolean;
   onPlay: () => void;
   ratioClass?: string;
-  playSize?: 'sm' | 'lg';
+  playSize?: 'small' | 'medium' | 'large';
   roundedClass?: string;
 }) {
   if (!videoUrl) {
@@ -123,7 +126,7 @@ function VideoSurface({
             <span
               className={cn(
                 'inline-flex items-center justify-center rounded-full transition-colors',
-                playSize === 'lg' ? 'h-16 w-16 md:h-20 md:w-20' : 'h-12 w-12',
+                playSize === 'large' ? 'h-16 w-16 md:h-20 md:w-20' : playSize === 'medium' ? 'h-14 w-14 md:h-16 md:w-16' : 'h-12 w-12',
               )}
               style={{ 
                 backgroundColor: tokens.playButtonBackground, 
@@ -131,7 +134,7 @@ function VideoSurface({
                 '--hover-bg': tokens.playButtonHover,
               } as React.CSSProperties}
             >
-              <Play className={cn(playSize === 'lg' ? 'h-8 w-8' : 'h-5 w-5', 'translate-x-[1px]')} fill="currentColor" />
+              <Play className={cn(playSize === 'large' ? 'h-8 w-8' : playSize === 'medium' ? 'h-6 w-6' : 'h-5 w-5', 'translate-x-[1px]')} fill="currentColor" />
             </span>
           </button>
         </>
@@ -225,6 +228,7 @@ export function VideoSectionShared({
   uppercaseText: uppercaseTextProp,
   showBadge: showBadgeProp,
   badgeText: badgeTextProp,
+  spacing: spacingProp,
 }: VideoSectionSharedProps) {
   const [isPlaying, setIsPlaying] = React.useState(false);
 
@@ -239,7 +243,7 @@ export function VideoSectionShared({
     style,
   ]);
 
-  const heading = toText(config.heading, toText(title));
+  const heading = toText(title, toText(config.heading));
   const description = toText(config.description);
   const _badge = toText(config.badge);
   const buttonText = toText(config.buttonText);
@@ -249,21 +253,35 @@ export function VideoSectionShared({
   const fallbackThumbnail = info.type === 'youtube' && info.id ? getYouTubeThumbnail(info.id) : '';
   const thumbnail = toText(config.thumbnailUrl) || fallbackThumbnail;
   const provider = info.type;
+  const isPortraitVideo = config.videoAspect === 'portrait';
+  const cornerRadius = normalizeVideoCornerRadius(config.cornerRadius, config.noBorderRadius);
+  const playButtonSize = normalizeVideoPlayButtonSize(config.playButtonSize);
+  const sectionClassName = cn(getSectionSpacingClassName(config.noVerticalMargin === true ? 'none' : normalizeSectionSpacing(spacingProp ?? config.spacing)), 'px-3');
+  const hideHeader = hideHeaderProp ?? config.hideHeader;
+  const showTitle = showTitleProp ?? config.showTitle;
+  const showSubtitle = showSubtitleProp ?? config.showSubtitle;
+  const subtitle = subtitleProp ?? config.subtitle ?? description;
+  const headerAlign = headerAlignProp ?? config.headerAlign;
+  const titleColorPrimary = titleColorPrimaryProp ?? config.titleColorPrimary;
+  const subtitleAboveTitle = subtitleAboveTitleProp ?? config.subtitleAboveTitle;
+  const uppercaseText = uppercaseTextProp ?? config.uppercaseText;
+  const showBadge = showBadgeProp ?? config.showBadge;
+  const badgeText = badgeTextProp ?? config.badgeText;
 
   // Shared SectionHeader for standard layout styles
   const sharedHeader = (
     <SectionHeader
       title={heading}
-      subtitle={subtitleProp ?? description}
-      badgeText={badgeTextProp}
-      hideHeader={hideHeaderProp}
-      showTitle={showTitleProp}
-      showSubtitle={showSubtitleProp}
-      showBadge={showBadgeProp}
-      headerAlign={headerAlignProp}
-      titleColorPrimary={titleColorPrimaryProp}
-      subtitleAboveTitle={subtitleAboveTitleProp}
-      uppercaseText={uppercaseTextProp}
+      subtitle={subtitle}
+      badgeText={badgeText}
+      hideHeader={hideHeader}
+      showTitle={showTitle}
+      showSubtitle={showSubtitle}
+      showBadge={showBadge}
+      headerAlign={headerAlign}
+      titleColorPrimary={titleColorPrimary}
+      subtitleAboveTitle={subtitleAboveTitle}
+      uppercaseText={uppercaseText}
       brandColor={brandColor ?? tokens.primary}
     />
   );
@@ -299,6 +317,16 @@ export function VideoSectionShared({
 
   const ContainerTag = context === 'site' ? 'section' : 'div';
   const videoTitle = heading || title || 'Video';
+  const defaultRatioClass = isPortraitVideo ? 'aspect-[9/16]' : 'aspect-video';
+  const fullwidthRatioClass = isPortraitVideo ? 'aspect-[9/16]' : (isPreview ? 'aspect-video' : 'aspect-video md:aspect-[21/9]');
+  const cinemaRatioClass = isPortraitVideo ? 'aspect-[9/16]' : 'aspect-[21/9]';
+  const parallaxRatioClass = isPortraitVideo ? 'aspect-[9/16]' : (isPreview ? 'aspect-video' : 'aspect-video md:aspect-[2/1]');
+  const surfaceWrapClassName = isPortraitVideo ? 'mx-auto w-full max-w-[360px]' : 'w-full';
+  const roundedClassName = cornerRadius === 'none'
+    ? 'rounded-none'
+    : cornerRadius === 'sm'
+      ? 'rounded-lg'
+      : 'rounded-2xl';
 
   const splitGridClassName = getPreviewAwareClass({
     isPreview,
@@ -314,29 +342,10 @@ export function VideoSectionShared({
   /* ── Centered ──────────────────────────────────────────── */
   if (style === 'centered') {
     return (
-      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+      <ContainerTag className={sectionClassName} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="mx-auto max-w-5xl space-y-5">
           {sharedHeader}
-          <VideoSurface
-            videoUrl={safeVideoUrl}
-            thumbnailUrl={thumbnail}
-            provider={provider}
-            title={videoTitle}
-            tokens={tokens}
-            isPlaying={isPlaying}
-            onPlay={() => setIsPlaying(true)}
-          />
-        </div>
-      </ContainerTag>
-    );
-  }
-
-  /* ── Split ─────────────────────────────────────────────── */
-  if (style === 'split') {
-    return (
-      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
-        <div className="mx-auto max-w-6xl">
-          <div className={splitGridClassName}>
+          <div className={surfaceWrapClassName}>
             <VideoSurface
               videoUrl={safeVideoUrl}
               thumbnailUrl={thumbnail}
@@ -345,8 +354,36 @@ export function VideoSectionShared({
               tokens={tokens}
               isPlaying={isPlaying}
               onPlay={() => setIsPlaying(true)}
-              playSize="sm"
+              ratioClass={defaultRatioClass}
+              playSize={playButtonSize}
+              roundedClass={roundedClassName}
             />
+          </div>
+        </div>
+      </ContainerTag>
+    );
+  }
+
+  /* ── Split ─────────────────────────────────────────────── */
+  if (style === 'split') {
+    return (
+      <ContainerTag className={sectionClassName} style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-6xl tv:max-w-[1400px]">
+          <div className={splitGridClassName}>
+            <div className={surfaceWrapClassName}>
+              <VideoSurface
+                videoUrl={safeVideoUrl}
+                thumbnailUrl={thumbnail}
+                provider={provider}
+                title={videoTitle}
+                tokens={tokens}
+                isPlaying={isPlaying}
+                onPlay={() => setIsPlaying(true)}
+                playSize={playButtonSize}
+                ratioClass={defaultRatioClass}
+                roundedClass={roundedClassName}
+              />
+            </div>
             <div className="flex flex-col justify-center space-y-4">
               {sharedHeader}
               {renderButton()}
@@ -360,19 +397,23 @@ export function VideoSectionShared({
   /* ── Fullwidth ─────────────────────────────────────────── */
   if (style === 'fullwidth') {
     return (
-      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
-        <div className="mx-auto max-w-7xl space-y-5">
+      <ContainerTag className={sectionClassName} style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-7xl tv:max-w-[1400px] space-y-5">
           {sharedHeader}
-          <VideoSurface
-            videoUrl={safeVideoUrl}
-            thumbnailUrl={thumbnail}
-            provider={provider}
-            title={videoTitle}
-            tokens={tokens}
-            isPlaying={isPlaying}
-            onPlay={() => setIsPlaying(true)}
-            ratioClass={isPreview ? 'aspect-video' : 'aspect-video md:aspect-[21/9]'}
-          />
+          <div className={surfaceWrapClassName}>
+            <VideoSurface
+              videoUrl={safeVideoUrl}
+              thumbnailUrl={thumbnail}
+              provider={provider}
+              title={videoTitle}
+              tokens={tokens}
+              isPlaying={isPlaying}
+              onPlay={() => setIsPlaying(true)}
+              ratioClass={fullwidthRatioClass}
+              playSize={playButtonSize}
+              roundedClass={roundedClassName}
+            />
+          </div>
           {buttonText ? <div>{renderButton()}</div> : null}
         </div>
       </ContainerTag>
@@ -382,10 +423,10 @@ export function VideoSectionShared({
   /* ── Cinema ────────────────────────────────────────────── */
   if (style === 'cinema') {
     return (
-      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
-        <div className="mx-auto max-w-6xl space-y-5">
+      <ContainerTag className={sectionClassName} style={{ backgroundColor: tokens.neutralBackground }}>
+        <div className="mx-auto max-w-6xl tv:max-w-[1400px] space-y-5">
           {sharedHeader}
-          <div className="rounded-2xl p-1" style={{ backgroundColor: tokens.frameBackground }}>
+          <div className={cn('p-1', roundedClassName, surfaceWrapClassName)} style={{ backgroundColor: tokens.frameBackground }}>
             <VideoSurface
               videoUrl={safeVideoUrl}
               thumbnailUrl={thumbnail}
@@ -394,8 +435,9 @@ export function VideoSectionShared({
               tokens={tokens}
               isPlaying={isPlaying}
               onPlay={() => setIsPlaying(true)}
-              ratioClass="aspect-[21/9]"
-              roundedClass="rounded-xl"
+              ratioClass={cinemaRatioClass}
+              playSize={playButtonSize}
+              roundedClass={roundedClassName}
             />
           </div>
           {buttonText ? <div className="text-center">{renderButton()}</div> : null}
@@ -407,20 +449,24 @@ export function VideoSectionShared({
   /* ── Minimal ───────────────────────────────────────────── */
   if (style === 'minimal') {
     return (
-      <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
+      <ContainerTag className={sectionClassName} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="mx-auto max-w-5xl space-y-5">
           {sharedHeader}
-          <div className="overflow-hidden rounded-2xl border" style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}>
-            <VideoSurface
-              videoUrl={safeVideoUrl}
-              thumbnailUrl={thumbnail}
-              provider={provider}
-              title={videoTitle}
-              tokens={tokens}
-              isPlaying={isPlaying}
-              onPlay={() => setIsPlaying(true)}
-              roundedClass="rounded-none"
-            />
+          <div className={cn('overflow-hidden border', roundedClassName)} style={{ backgroundColor: tokens.cardBackground, borderColor: '#111827' }}>
+            <div className={surfaceWrapClassName}>
+              <VideoSurface
+                videoUrl={safeVideoUrl}
+                thumbnailUrl={thumbnail}
+                provider={provider}
+                title={videoTitle}
+                tokens={tokens}
+                isPlaying={isPlaying}
+                onPlay={() => setIsPlaying(true)}
+                ratioClass={defaultRatioClass}
+                playSize={playButtonSize}
+                roundedClass={roundedClassName}
+              />
+            </div>
             {buttonText ? (
               <div className="border-t px-4 py-3" style={{ borderColor: tokens.cardBorder }}>
                 {renderButton(true)}
@@ -434,10 +480,10 @@ export function VideoSectionShared({
 
   /* ── Parallax (default) ────────────────────────────────── */
   return (
-    <ContainerTag className="py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }}>
-      <div className="mx-auto max-w-7xl space-y-5">
+    <ContainerTag className={sectionClassName} style={{ backgroundColor: tokens.neutralBackground }}>
+      <div className="mx-auto max-w-7xl tv:max-w-[1400px] space-y-5">
         {sharedHeader}
-        <div className="relative overflow-hidden rounded-2xl shadow-lg">
+        <div className={cn('relative overflow-hidden shadow-lg', roundedClassName, surfaceWrapClassName)}>
           <VideoSurface
             videoUrl={safeVideoUrl}
             thumbnailUrl={thumbnail}
@@ -446,8 +492,9 @@ export function VideoSectionShared({
             tokens={tokens}
             isPlaying={isPlaying}
             onPlay={() => setIsPlaying(true)}
-            ratioClass={isPreview ? 'aspect-video' : 'aspect-video md:aspect-[2/1]'}
-            roundedClass="rounded-none"
+            ratioClass={parallaxRatioClass}
+            playSize={playButtonSize}
+            roundedClass={roundedClassName}
           />
         </div>
         {buttonText ? <div>{renderButton()}</div> : null}

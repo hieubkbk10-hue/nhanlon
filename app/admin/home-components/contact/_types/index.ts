@@ -1,3 +1,4 @@
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 export interface ContactInfoItem {
   id: number;
   icon: string;
@@ -14,9 +15,12 @@ export interface ContactSocialLink {
   url: string;
 }
 
-export type ContactStyle = 'modern' | 'floating' | 'grid' | 'elegant' | 'minimal' | 'centered';
+export type ContactStyle = 'modern' | 'floating' | 'grid' | 'elegant' | 'minimal' | 'centered' | 'kanban';
 
 export type ContactBrandMode = 'single' | 'dual';
+export type ContactCornerRadius = 'none' | 'sm' | 'lg';
+export type ContactDesktopColumns = 3 | 4;
+export type ContactSpacing = SectionSpacing;
 
 export interface ContactConfig {
   showMap: boolean;
@@ -46,6 +50,11 @@ export interface ContactConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: ContactSpacing;
+  cornerRadius?: ContactCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
+  desktopColumns?: ContactDesktopColumns;
 }
 
 export interface ContactConfigState extends ContactConfig {

@@ -1,25 +1,27 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, Image as ImageIcon } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../components/ui';
+import { Image as ImageIcon } from 'lucide-react';
+import { Button, Label, cn } from '../../../components/ui';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { GalleryForm } from '../../gallery/_components/GalleryForm';
 import { GalleryPreview } from '../../gallery/_components/GalleryPreview';
-import type { GalleryStyle } from '../../gallery/_types';
+import type { GalleryItem, GalleryStyle, GalleryCornerRadius, GalleryDesktopColumns } from '../../gallery/_types';
+import { DEFAULT_GALLERY_CONFIG } from '../../gallery/_types';
 import { normalizeGalleryHarmony } from '../../gallery/_lib/colors';
-import type { ImageItem } from '../../../components/MultiImageUploader';
-import { MultiImageUploader } from '../../../components/MultiImageUploader';
 import { AiDemoGalleryImport } from '../../product-list/_components/AiDemoProductsImport';
+import { ToggleSwitch } from '@/components/modules/shared';
 
-interface GalleryItem extends ImageItem {
-  id: string | number;
-  url: string;
-  link: string;
-}
+const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
+  { id: 'item-1', link: '', name: '', url: '' },
+  { id: 'item-2', link: '', name: '', url: '' },
+];
 
 export default function GalleryCreatePage() {
   const COMPONENT_TYPE = 'Gallery';
@@ -42,36 +44,30 @@ export default function GalleryCreatePage() {
     badgeText: '',
   });
 
-  const [headerExpanded, setHeaderExpanded] = useState(true);
-  const [galleryExpanded, setGalleryExpanded] = useState(true);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header', 'display'], true);
 
-  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([
-    { id: 'item-1', link: '', url: '' },
-    { id: 'item-2', link: '', url: '' }
-  ]);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(DEFAULT_GALLERY_ITEMS);
   const [galleryStyle, setGalleryStyle] = useState<GalleryStyle>('spotlight');
-  const [fullWidthDesktop, setFullWidthDesktop] = useState(false);
+  const [fullWidthDesktop, setFullWidthDesktop] = useState(DEFAULT_GALLERY_CONFIG.fullWidthDesktop ?? DEFAULT_GALLERY_CONFIG.fullWidth ?? false);
+  const [desktopColumns, setDesktopColumns] = useState<GalleryDesktopColumns>(DEFAULT_GALLERY_CONFIG.desktopColumns ?? 4);
+  const [cornerRadius, setCornerRadius] = useState<GalleryCornerRadius>(DEFAULT_GALLERY_CONFIG.cornerRadius ?? 'lg');
 
   const harmony = normalizeGalleryHarmony(undefined);
 
   const DEMO_GALLERY_ITEMS: GalleryItem[] = [
-    { id: 'demo-1', link: '', url: '/demo/gallery/gallery-1.png' },
-    { id: 'demo-2', link: '', url: '/demo/gallery/gallery-2.png' },
-    { id: 'demo-3', link: '', url: '/demo/gallery/gallery-3.png' },
-    { id: 'demo-4', link: '', url: '/demo/gallery/gallery-4.png' },
-    { id: 'demo-5', link: '', url: '/demo/gallery/gallery-5.png' },
-    { id: 'demo-6', link: '', url: '/demo/gallery/gallery-6.png' },
+    { id: 'demo-1', link: '', name: '', url: '/demo/gallery/gallery-1.png' },
+    { id: 'demo-2', link: '', name: '', url: '/demo/gallery/gallery-2.png' },
+    { id: 'demo-3', link: '', name: '', url: '/demo/gallery/gallery-3.png' },
+    { id: 'demo-4', link: '', name: '', url: '/demo/gallery/gallery-4.png' },
+    { id: 'demo-5', link: '', name: '', url: '/demo/gallery/gallery-5.png' },
+    { id: 'demo-6', link: '', name: '', url: '/demo/gallery/gallery-6.png' },
   ];
-
-  const handleUseDemoImages = () => {
-    setGalleryItems(DEMO_GALLERY_ITEMS);
-  };
 
 
   const onSubmit = (e: React.FormEvent) => {
     void handleSubmit(e, {
       harmony,
-      items: galleryItems.map((item) => ({ link: item.link, name: '', url: item.url })),
+      items: galleryItems.map((item) => ({ link: item.link, name: item.name, url: item.url, storageId: item.storageId })),
       style: galleryStyle,
       hideHeader: headerState.hideHeader,
       showTitle: headerState.showTitle,
@@ -83,7 +79,12 @@ export default function GalleryCreatePage() {
       uppercaseText: headerState.uppercaseText,
       showBadge: headerState.showBadge,
       badgeText: headerState.badgeText,
+      spacing: headerState.spacing,
+      noVerticalMargin: headerState.spacing === 'none',
       fullWidthDesktop,
+      desktopColumns,
+      cornerRadius,
+      noBorderRadius: cornerRadius === 'none',
     });
   };
 
@@ -128,70 +129,75 @@ export default function GalleryCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={headerOpenSections.header}
+        onExpandedChange={(open) => toggleHeaderSection('header', open)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <Card className="mb-6">
-        <CardHeader
-          className="cursor-pointer select-none"
-          onClick={() => setGalleryExpanded((prev) => !prev)}
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={headerOpenSections.display}
+          onOpenChange={(open) => toggleHeaderSection('display', open)}
+          spacing={headerState.spacing}
+          onSpacingChange={headerState.setSpacing}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={setCornerRadius}
         >
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Thư viện ảnh</CardTitle>
-            <ChevronDown
-              size={18}
-              className={cn('transition-transform text-slate-400', galleryExpanded && 'rotate-180')}
-            />
-          </div>
-        </CardHeader>
-        {galleryExpanded && (
-          <CardContent>
-            <MultiImageUploader<GalleryItem>
-              items={galleryItems}
-              onChange={setGalleryItems}
-              folder="gallery"
-              imageKey="url"
-              minItems={1}
-              maxItems={20}
-              aspectRatio="video"
-              columns={2}
-              showReorder={true}
-              addButtonText="Thêm ảnh"
-              emptyText="Chưa có ảnh nào"
-              layout="vertical"
-            />
-
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={handleUseDemoImages}>
-                  Dùng ảnh demo
-                </Button>
-                <AiDemoGalleryImport buttonClassName="h-10" onApply={setGalleryItems} />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm text-slate-600 dark:text-slate-400">Full width desktop</Label>
-                <div
-                  className={cn(
-                    'cursor-pointer inline-flex items-center justify-center rounded-full w-10 h-5 transition-colors',
-                    fullWidthDesktop ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                  )}
-                  onClick={() => setFullWidthDesktop(!fullWidthDesktop)}
-                >
-                  <div className={cn(
-                    'w-4 h-4 bg-white rounded-full transition-transform shadow',
-                    fullWidthDesktop ? 'translate-x-2' : '-translate-x-2'
-                  )} />
-                </div>
-                <span className="text-xs text-slate-400">{fullWidthDesktop ? 'Toàn màn hình' : 'Giới hạn'}</span>
-              </div>
+          <div className="space-y-2">
+            <Label>Số cột desktop</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {[3, 4, 6].map((option) => {
+                const selected = desktopColumns === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setDesktopColumns(option as GalleryDesktopColumns)}
+                    className={cn(
+                      'h-9 rounded-md border text-xs transition-colors',
+                      selected
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                        : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                    )}
+                  >
+                    {option} cột
+                  </button>
+                );
+              })}
             </div>
-          </CardContent>
-        )}
-      </Card>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Full width desktop</Label>
+              <p className="text-xs text-slate-500">Bật để mở rộng toàn màn hình</p>
+            </div>
+            <ToggleSwitch enabled={fullWidthDesktop} onChange={() => setFullWidthDesktop((current) => !current)} />
+          </div>
+        </HomeComponentDisplaySettingsSection>
+      </div>
+
+      <div className="mb-6">
+        <GalleryForm
+          galleryItems={galleryItems}
+          setGalleryItems={setGalleryItems}
+          componentType="Gallery"
+          style={galleryStyle}
+          headerPrimary={primary}
+          headerSecondary={secondary}
+        />
+
+        <div className="mt-3 flex items-center justify-between">
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => setGalleryItems(DEMO_GALLERY_ITEMS)}>
+              Dùng ảnh demo
+            </Button>
+            <AiDemoGalleryImport buttonClassName="h-10" onApply={setGalleryItems} />
+          </div>
+        </div>
+      </div>
 
       <GalleryPreview
         items={galleryItems.map((item, idx) => ({ id: idx + 1, link: item.link, name: '', url: item.url }))}
@@ -214,7 +220,10 @@ export default function GalleryCreatePage() {
         uppercaseText={headerState.uppercaseText}
         showBadge={headerState.showBadge}
         badgeText={headerState.badgeText}
+        spacing={headerState.spacing}
         fullWidthDesktop={fullWidthDesktop}
+        desktopColumns={desktopColumns}
+        cornerRadius={cornerRadius}
       />
 
       <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -228,7 +237,7 @@ export default function GalleryCreatePage() {
               {galleryStyle === 'spotlight' && (
                 <div className="space-y-1">
                   <p><strong className="text-blue-900 dark:text-blue-100">Tiêu điểm (Spotlight)</strong></p>
-                  <p>• Ảnh chính: <strong>1200×800px</strong> (tỷ lệ 3:2)</p>
+                  <p>• Ảnh chính: <strong>1200×900px</strong> (tỷ lệ 4:3)</p>
                   <p>• Ảnh phụ: <strong>600×600px</strong> (tỷ lệ 1:1, vuông)</p>
                   <p className="text-blue-500 dark:text-blue-400 italic">Layout: 1 ảnh lớn bên trái + 3 ảnh vuông bên phải</p>
                 </div>
@@ -265,8 +274,8 @@ export default function GalleryCreatePage() {
               {galleryStyle === 'masonry' && (
                 <div className="space-y-1">
                   <p><strong className="text-blue-900 dark:text-blue-100">Masonry</strong></p>
-                  <p>• Ảnh ngang: <strong>600×400px</strong> (tỷ lệ 3:2)</p>
-                  <p>• Ảnh dọc: <strong>600×900px</strong> (tỷ lệ 2:3)</p>
+                  <p>• Ảnh ngang: <strong>800×600px</strong> (tỷ lệ 4:3)</p>
+                  <p>• Ảnh dọc: <strong>600×800px</strong> (tỷ lệ 3:4)</p>
                   <p>• Ảnh vuông: <strong>600×600px</strong> (tỷ lệ 1:1)</p>
                   <p className="text-blue-500 dark:text-blue-400 italic">Layout: Pinterest-like - ảnh cao/thấp khác nhau. 4 cột desktop, 2 cột mobile.</p>
                 </div>

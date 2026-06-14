@@ -1,17 +1,25 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ChevronDown, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../../components/ui';
+import { Button, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { HomeComponentDisplaySettingsSection } from '../../../_shared/components/HomeComponentDisplaySettingsSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { CollapsibleSubSection as SubSection } from '../../../_shared/components/CollapsibleSubSection';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
@@ -21,7 +29,9 @@ import { GalleryPreview } from '../../_components/GalleryPreview';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { DEFAULT_GALLERY_ITEMS } from '../../_lib/constants';
 import { getGalleryPersistSafeColors, normalizeGalleryHarmony } from '../../_lib/colors';
-import type { GalleryItem, GalleryStyle } from '../../_types';
+import type { GalleryItem, GalleryStyle, GalleryCornerRadius, GalleryDesktopColumns } from '../../_types';
+import { DEFAULT_GALLERY_CONFIG, normalizeGalleryCornerRadius, normalizeGalleryDesktopColumns } from '../../_types';
+import { ToggleSwitch } from '@/components/modules/shared';
 import { AiDemoGalleryImport } from '../../../product-list/_components/AiDemoProductsImport';
 
 const DEMO_GALLERY_ITEMS: GalleryItem[] = [
@@ -35,21 +45,57 @@ const DEMO_GALLERY_ITEMS: GalleryItem[] = [
 
 const COMPONENT_TYPE = 'Gallery';
 
-export default function GalleryEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type GalleryEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function GalleryEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: GalleryEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
-  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(DEFAULT_GALLERY_ITEMS);
+  const {
+    state: galleryItems,
+    set: setGalleryItems,
+    undo: undogalleryItems,
+    redo: redogalleryItems,
+    canUndo: canUndogalleryItems,
+    canRedo: canRedogalleryItems,
+    reset: resetgalleryItems,
+  } = useUndoRedo<GalleryItem[]>(DEFAULT_GALLERY_ITEMS, { maxHistory: 15 });
   const [galleryStyle, setGalleryStyle] = useState<GalleryStyle>('grid');
   const [fullWidthDesktop, setFullWidthDesktop] = useState(false);
+  const [desktopColumns, setDesktopColumns] = useState<GalleryDesktopColumns>(DEFAULT_GALLERY_CONFIG.desktopColumns ?? 4);
+  const [cornerRadius, setCornerRadius] = useState<GalleryCornerRadius>(DEFAULT_GALLERY_CONFIG.cornerRadius ?? 'lg');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
@@ -65,8 +111,8 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
   const [badgeText, setBadgeText] = useState('');
-  const [headerExpanded, setHeaderExpanded] = useState(false);
-  const [galleryExpanded, setGalleryExpanded] = useState(false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header', 'display'], false);
 
   const harmony = normalizeGalleryHarmony((component?.config as { harmony?: string } | undefined)?.harmony);
 
@@ -74,17 +120,17 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     if (!component) {return;}
 
-    if (component.type === 'Partners') {
+    if (!snapshotComponent && component.type === 'Partners') {
       router.replace(`/admin/home-components/partners/${id}/edit`);
       return;
     }
 
-    if (component.type === 'TrustBadges') {
+    if (!snapshotComponent && component.type === 'TrustBadges') {
       router.replace(`/admin/home-components/trust-badges/${id}/edit`);
       return;
     }
 
-    if (component.type !== 'Gallery') {
+    if (!snapshotComponent && component.type !== 'Gallery') {
       router.replace(`/admin/home-components/${id}/edit`);
       return;
     }
@@ -93,9 +139,9 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
     setActive(component.active);
 
     const config = component.config ?? {};
-    const items = (config.items as { url: string; link: string; name?: string }[] | undefined) ?? DEFAULT_GALLERY_ITEMS;
-    const normalizedItems = items.map((item, idx) => ({ id: `item-${idx + 1}`, link: item.link || '', name: item.name ?? '', url: item.url }));
-    setGalleryItems(normalizedItems);
+    const items = (config.items as { url: string; link: string; name?: string; storageId?: string }[] | undefined) ?? DEFAULT_GALLERY_ITEMS;
+    const normalizedItems = items.map((item, idx) => ({ id: `item-${idx + 1}`, link: item.link || '', name: item.name ?? '', url: item.url, storageId: item.storageId as Id<'_storage'> | undefined }));
+    resetgalleryItems(normalizedItems);
 
     const nextGalleryStyle = (config.style as GalleryStyle) || 'grid';
     setGalleryStyle(nextGalleryStyle);
@@ -112,8 +158,14 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
     setUppercaseText(headerConfig.uppercaseText ?? false);
     setShowBadge(headerConfig.showBadge ?? true);
     setBadgeText(headerConfig.badgeText ?? '');
-    const nextFullWidthDesktop = (config.fullWidthDesktop as boolean) ?? false;
+    const nextSpacing = config.noVerticalMargin === true ? 'none' : (headerConfig.spacing ?? DEFAULT_SECTION_SPACING);
+    setSpacing(nextSpacing);
+    const nextFullWidthDesktop = ((config.fullWidthDesktop ?? config.fullWidth) as boolean) ?? false;
     setFullWidthDesktop(nextFullWidthDesktop);
+    const nextDesktopColumns = normalizeGalleryDesktopColumns(config.desktopColumns);
+    setDesktopColumns(nextDesktopColumns);
+    const nextCornerRadius = normalizeGalleryCornerRadius(config.cornerRadius, config.noBorderRadius);
+    setCornerRadius(nextCornerRadius);
 
     setInitialSnapshot(JSON.stringify({
       title: component.title,
@@ -132,18 +184,21 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
       uppercaseText: headerConfig.uppercaseText,
       showBadge: headerConfig.showBadge,
       badgeText: headerConfig.badgeText,
+      spacing: nextSpacing,
       fullWidthDesktop: nextFullWidthDesktop,
+      desktopColumns: nextDesktopColumns,
+      cornerRadius: nextCornerRadius,
     }));
   }, [component, id, router]);
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
@@ -167,10 +222,15 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
       uppercaseText,
       showBadge,
       badgeText,
+      spacing,
       fullWidthDesktop,
+      desktopColumns,
+      cornerRadius,
     });
     setHasChanges(snapshot !== initialSnapshot || customChanged || customFontChanged);
-  }, [title, active, galleryItems, galleryStyle, harmony, component, initialSnapshot, customChanged, customFontChanged, hideHeader, showTitle, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, fullWidthDesktop]);
+  }, [title, active, galleryItems, galleryStyle, harmony, component, initialSnapshot, customChanged, customFontChanged, hideHeader, showTitle, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing, fullWidthDesktop, desktopColumns, cornerRadius]);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,11 +259,9 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
 
     setIsSubmitting(true);
     try {
-      await updateMutation({
-        active,
-        config: {
+      const nextConfig = {
           harmony,
-          items: galleryItems.map((item) => ({ link: item.link, name: item.name, url: item.url })),
+          items: galleryItems.map((item) => ({ link: item.link, name: item.name, url: item.url, storageId: item.storageId })),
           style: galleryStyle,
           hideHeader,
           showTitle,
@@ -215,12 +273,24 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
           uppercaseText,
           showBadge,
           badgeText,
+          spacing,
+          noVerticalMargin: spacing === 'none',
           fullWidthDesktop,
-        },
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+          desktopColumns,
+          cornerRadius,
+          noBorderRadius: cornerRadius === 'none',
+      };
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: nextConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -230,7 +300,7 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -255,9 +325,12 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
         uppercaseText,
         showBadge,
         badgeText,
+        spacing,
         fullWidthDesktop,
+        desktopColumns,
+        cornerRadius,
       }));
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -265,7 +338,7 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -298,7 +371,8 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Thư viện ảnh</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -325,31 +399,59 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
           titlePlaceholder="Nhập tiêu đề component..."
         />
 
-        <Card className="mb-6">
-          <CardHeader
-            className="cursor-pointer select-none"
-            onClick={() => setGalleryExpanded((prev) => !prev)}
+        <div className="mb-3">
+          <HomeComponentDisplaySettingsSection
+            open={headerOpenSections.display}
+            onOpenChange={(open) => toggleHeaderSection('display', open)}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+            cornerRadius={cornerRadius}
+            onCornerRadiusChange={setCornerRadius}
           >
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <ImageIcon size={20} />
-                Thư viện ảnh
-              </CardTitle>
-              <ChevronDown
-                size={18}
-                className={cn('transition-transform text-slate-400', galleryExpanded && 'rotate-180')}
-              />
+            <div className="space-y-2">
+              <Label>Số cột desktop</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[3, 4, 6].map((option) => {
+                  const selected = desktopColumns === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setDesktopColumns(option as GalleryDesktopColumns); }}
+                      className={cn(
+                        'h-9 rounded-md border text-xs transition-colors',
+                        selected
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      )}
+                    >
+                      {option} cột
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </CardHeader>
-          {galleryExpanded && (
-            <CardContent className="space-y-4">
+
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
+              <div className="space-y-0.5">
+                <Label className="text-sm">Full width desktop</Label>
+                <p className="text-xs text-slate-500">Bật để mở rộng toàn màn hình</p>
+              </div>
+              <ToggleSwitch enabled={fullWidthDesktop} onChange={() => setFullWidthDesktop((current) => !current)} />
+            </div>
+          </HomeComponentDisplaySettingsSection>
+        </div>
+
+        <div className="mb-6">
+          <SubSection icon={ImageIcon} title="Thư viện ảnh" defaultOpen={true}>
+            <div className="space-y-4">
 <GalleryForm
                 galleryItems={galleryItems}
                 setGalleryItems={setGalleryItems}
@@ -365,31 +467,14 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
                 </Button>
                 <AiDemoGalleryImport buttonClassName="h-10" onApply={setGalleryItems} />
               </div>
-
-              <div className="flex items-center gap-2 pt-2 border-t">
-                <Label className="text-sm text-slate-600 dark:text-slate-400">Full width desktop</Label>
-                <div
-                  className={cn(
-                    'cursor-pointer inline-flex items-center justify-center rounded-full w-10 h-5 transition-colors',
-                    fullWidthDesktop ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                  )}
-                  onClick={(e) => { e.stopPropagation(); setFullWidthDesktop(!fullWidthDesktop); }}
-                >
-                  <div className={cn(
-                    'w-4 h-4 bg-white rounded-full transition-transform shadow',
-                    fullWidthDesktop ? 'translate-x-2' : '-translate-x-2'
-                  )} />
-                </div>
-                <span className="text-xs text-slate-400">{fullWidthDesktop ? 'Toàn màn hình' : 'Giới hạn'}</span>
-              </div>
-            </CardContent>
-          )}
-        </Card>
+            </div>
+          </SubSection>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Thư viện ảnh"
                 enabled={customState.enabled}
@@ -417,7 +502,7 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
               }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Thư viện ảnh"
                 enabled={customFontState.enabled}
@@ -450,7 +535,10 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
               uppercaseText={uppercaseText}
               showBadge={showBadge}
               badgeText={badgeText}
+              spacing={spacing}
               fullWidthDesktop={fullWidthDesktop}
+              desktopColumns={desktopColumns}
+              cornerRadius={cornerRadius}
             />
           </div>
         </div>
@@ -458,10 +546,17 @@ export default function GalleryEditPage({ params }: { params: Promise<{ id: stri
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndogalleryItems,
+          canRedo: canRedogalleryItems,
+          onUndo: undogalleryItems,
+          onRedo: redogalleryItems,
+        }}
         />
       </form>
     </div>

@@ -1,18 +1,23 @@
 'use client';
 
 import React from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
 import Link from 'next/link';
 import { ArrowRight, Image as ImageIcon, Phone } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import type { PreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import { DEFAULT_ABOUT_CORNER_RADIUS, getAboutCornerRadiusClassName } from '../_lib/constants';
 import { getAboutIconComponent } from '../_lib/iconRegistry';
-import type { AboutBrandMode, AboutPersistFeature, AboutPersistStat, AboutStyle } from '../_types';
+import type { AboutBrandMode, AboutCornerRadius, AboutPersistFeature, AboutPersistStat, AboutStyle } from '../_types';
 import type { AboutColorTokens } from '../_lib/colors';
+import { adaptColorForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 type AboutSectionContext = 'preview' | 'site';
 
 export interface AboutSectionSharedProps {
   context: AboutSectionContext;
+  isDark?: boolean;
   mode: AboutBrandMode;
   style: AboutStyle;
   title: string;
@@ -31,6 +36,7 @@ export interface AboutSectionSharedProps {
   tokens: AboutColorTokens;
   device?: PreviewDevice;
   imagePriority?: boolean;
+  cornerRadius?: AboutCornerRadius;
 }
 
 const sanitizeText = (value?: string) => (typeof value === 'string' ? value : '').trim();
@@ -100,6 +106,7 @@ const AboutButton = ({
 
 export function AboutSectionShared({
   context,
+  isDark = false,
   mode,
   style,
   title,
@@ -118,10 +125,31 @@ export function AboutSectionShared({
   tokens,
   device = 'desktop',
   imagePriority = false,
+  cornerRadius = DEFAULT_ABOUT_CORNER_RADIUS,
 }: AboutSectionSharedProps) {
   const isPreview = context === 'preview';
   const isMobilePreview = isPreview && device === 'mobile';
-  const _isTabletPreview = isPreview && device === 'tablet';
+  const isTabletPreview = isPreview && device === 'tablet';
+  const isNarrowPreview = isPreview && device !== 'desktop';
+
+  const systemConfig = useQuery(api.homeComponentSystemConfig.getConfig);
+
+  const isDarkBg = React.useMemo(() => {
+    if (!systemConfig?.homePageBackground) {return false;}
+    const { type, customColor } = systemConfig.homePageBackground;
+    if (type === 'black') {return true;}
+    if (type === 'custom' && customColor) {
+      const color = customColor.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+        const r = Number.parseInt(color.slice(1, 3), 16);
+        const g = Number.parseInt(color.slice(3, 5), 16);
+        const b = Number.parseInt(color.slice(5, 7), 16);
+        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return luma < 128;
+      }
+    }
+    return false;
+  }, [systemConfig?.homePageBackground]);
 
   const resolvedHeading = sanitizeText(heading) || sanitizeText(title) || 'Về chúng tôi';
   const resolvedDescription = sanitizeText(description);
@@ -141,6 +169,15 @@ export function AboutSectionShared({
   const solarStatLabel = sanitizeText(solarStat?.label) || 'năm kinh nghiệm';
 
   const brandInfo = mode === 'single' ? '1 màu (single)' : '2 màu (dual)';
+  const cornerRadiusClass = getAboutCornerRadiusClassName(cornerRadius);
+  const cornerRadiusSoftClass = cornerRadius === 'none' ? 'rounded-none' : cornerRadius === 'sm' ? 'rounded' : 'rounded-xl';
+  const cornerRadiusButtonClass = cornerRadius === 'none' ? 'rounded-none' : cornerRadius === 'sm' ? 'rounded-md' : 'rounded-full';
+  const headingLgClass = isMobilePreview ? 'text-2xl' : isTabletPreview ? 'text-3xl' : 'text-3xl lg:text-5xl';
+  const sectionXClass = isPreview ? (isMobilePreview ? 'px-3' : 'px-4') : 'px-4 md:px-8';
+  const gridTwoColClass = isNarrowPreview ? 'grid-cols-1' : 'lg:grid-cols-2';
+  const flexRowClass = isNarrowPreview ? 'flex-col' : 'flex-col lg:flex-row';
+  const flexRowReverseClass = isNarrowPreview ? 'flex-col-reverse' : 'flex-col-reverse lg:flex-row';
+  const halfWidthClass = isNarrowPreview ? 'w-full' : 'w-full lg:w-1/2';
 
   const renderEmptyImage = (size = 44) => (
     <div
@@ -187,22 +224,22 @@ export function AboutSectionShared({
   );
 
   const renderClassic = () => (
-    <section className={cn('py-8', isPreview ? (isMobilePreview ? 'px-3' : 'px-4 md:px-6') : 'px-4 md:px-8')}>
-      <div className="max-w-7xl mx-auto rounded-[2rem] overflow-hidden border relative font-[family-name:var(--font-be-vietnam-pro)]" style={{ backgroundColor: '#f9f7f4', borderColor: tokens.neutralBorder }}>
+    <section className={cn('py-8', sectionXClass)}>
+      <div className={cn('max-w-7xl tv:max-w-[1536px] mx-auto overflow-hidden border relative font-[family-name:var(--font-be-vietnam-pro)]', cornerRadiusClass)} style={{ backgroundColor: adaptColorForDarkMode('#f9f7f4', isDark, 'bg'), borderColor: tokens.neutralBorder }}>
         <div className="absolute top-0 right-0 w-48 h-48 -translate-y-8 translate-x-8 opacity-[0.03] pointer-events-none">
           <svg viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
             <path d="M50 0 C70 0 100 20 100 50 C100 80 80 100 50 100 C20 100 0 70 0 50 C0 20 30 0 50 0 Z" />
           </svg>
         </div>
-        <div className="grid lg:grid-cols-2 gap-4 md:gap-8 items-center relative z-10 p-4 md:p-8">
+        <div className={cn('grid gap-4 items-center relative z-10 p-4', gridTwoColClass, !isNarrowPreview && 'md:gap-8 md:p-8')}>
           <div className="flex justify-center w-full">
-            <div className="relative w-full aspect-video md:aspect-[4/3] rounded-[2rem] overflow-hidden shadow-lg">
+            <div className={cn('relative w-full overflow-hidden shadow-lg', isNarrowPreview ? 'aspect-video' : 'aspect-video md:aspect-[4/3]', cornerRadiusClass)}>
               {primaryImage
                 ? <AboutImage src={primaryImage} alt={resolvedHeading} className="w-full h-full object-cover" context={context} imagePriority={imagePriority} />
                 : renderEmptyImage(48)}
               {resolvedPhone ? (
-                <div className="absolute bottom-4 left-4 rounded-xl flex items-center p-1.5 shadow-xl w-max" style={{ backgroundColor: tokens.primary, opacity: 0.95 }}>
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: tokens.secondary }}>
+                <div className={cn('absolute bottom-4 left-4 flex items-center p-1.5 shadow-xl w-max', cornerRadiusSoftClass)} style={{ backgroundColor: tokens.primary, opacity: 0.95 }}>
+                  <div className={cn('w-8 h-8 flex items-center justify-center shrink-0', cornerRadius === 'none' ? 'rounded-none' : 'rounded-md')} style={{ backgroundColor: tokens.secondary }}>
                     <Phone className="w-4 h-4" style={{ color: tokens.ctaSolidText }} />
                   </div>
                   <div className="px-2.5" style={{ color: tokens.ctaSolidText }}>
@@ -215,14 +252,30 @@ export function AboutSectionShared({
           </div>
 
           <div className="flex flex-col w-full">
-            <div className="inline-block bg-white px-4 py-1.5 rounded-full text-xs font-black tracking-wider mb-3 self-start shadow-sm text-gray-900">
+            <div 
+              className="inline-block px-4 py-1.5 rounded-full text-xs font-black tracking-wider mb-3 self-start shadow-sm"
+              style={{
+                backgroundColor: adaptColorForDarkMode('#ffffff', isDark, 'bg'),
+                color: adaptColorForDarkMode('#111827', isDark, 'text')
+              }}
+            >
               {resolvedSubHeading || 'VỀ CHÚNG TÔI'}
             </div>
-            <h2 className="text-3xl lg:text-5xl font-black mb-3 text-gray-950 tracking-tight">
+            <h2 
+              className={cn('font-black mb-3 tracking-tight', headingLgClass)}
+              style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+            >
               {resolvedHeading} {resolvedHighlightText ? <span style={{ color: tokens.primary }}>{resolvedHighlightText}</span> : null}
             </h2>
             {resolvedDescription ? (
-              <p className="text-gray-900 font-medium leading-relaxed mb-6 text-sm bg-white/80 shadow-sm p-4 rounded-xl border border-white">
+              <p 
+                className={cn('font-medium leading-relaxed mb-6 text-sm shadow-sm p-4 border', cornerRadiusSoftClass)}
+                style={{
+                  backgroundColor: adaptColorForDarkMode('rgba(255, 255, 255, 0.8)', isDark, 'bg'),
+                  color: adaptColorForDarkMode('#111827', isDark, 'text'),
+                  borderColor: adaptColorForDarkMode('rgba(255, 255, 255, 1)', isDark, 'border')
+                }}
+              >
                 {resolvedDescription}
               </p>
             ) : null}
@@ -230,11 +283,29 @@ export function AboutSectionShared({
             {visibleFeatures.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {visibleFeatures.slice(0, 4).map((feature) => (
-                  <div key={feature.title} className="flex items-center gap-3 bg-white/60 p-2 rounded-lg border border-white/50">
-                    <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm overflow-hidden" style={{ color: tokens.primary }}>
+                  <div 
+                    key={feature.title} 
+                    className={cn('flex items-center gap-3 p-2 border', cornerRadiusSoftClass)}
+                    style={{
+                      backgroundColor: adaptColorForDarkMode('rgba(255, 255, 255, 0.6)', isDark, 'bg'),
+                      borderColor: adaptColorForDarkMode('rgba(255, 255, 255, 0.5)', isDark, 'border')
+                    }}
+                  >
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm overflow-hidden" 
+                      style={{ 
+                        backgroundColor: adaptColorForDarkMode('#ffffff', isDark, 'bg'),
+                        color: tokens.primary 
+                      }}
+                    >
                       {renderFeatureMedia(feature, 'w-4 h-4 stroke-[2.5]')}
                     </div>
-                    <span className="font-extrabold text-gray-950 text-sm leading-tight">{feature.title}</span>
+                    <span 
+                      className="font-extrabold text-sm leading-tight"
+                      style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+                    >
+                      {feature.title}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -246,7 +317,7 @@ export function AboutSectionShared({
                 href={resolvedButtonLink}
                 text={resolvedButtonText}
                 withArrow
-                className="rounded-full self-start inline-flex items-center gap-2 px-8 py-3 shadow-md font-bold text-sm"
+                className={cn('self-start inline-flex items-center gap-2 px-8 py-3 shadow-md font-bold text-sm', cornerRadiusButtonClass)}
                 style={{ backgroundColor: tokens.primary, color: tokens.ctaSolidText }}
               />
             ) : null}
@@ -258,57 +329,97 @@ export function AboutSectionShared({
 
   const renderBento = () => (
     <section className="py-8 px-0">
-      <div className="max-w-7xl mx-auto w-full rounded-2xl overflow-hidden flex flex-col-reverse lg:flex-row relative" style={{ backgroundColor: '#f9fafb' }}>
-        <div className="w-full lg:w-3/5 p-4 md:p-8 xl:p-10 flex flex-col justify-center z-10 bg-white/80 lg:bg-transparent backdrop-blur-md lg:backdrop-blur-none">
+      <div className={cn('max-w-7xl tv:max-w-[1536px] mx-auto w-full overflow-hidden flex relative', flexRowReverseClass, cornerRadiusClass)} style={{ backgroundColor: adaptColorForDarkMode('#f9fafb', isDark, 'bg') }}>
+        <div className={cn('w-full p-4 flex flex-col justify-center z-10 backdrop-blur-md', isDark ? 'bg-zinc-900/80 text-zinc-100' : 'bg-white/80 text-gray-900', !isNarrowPreview && 'lg:w-3/5 md:p-8 xl:p-10 lg:bg-transparent lg:backdrop-blur-none')}>
           <div className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: tokens.primary }}>
             <span className="w-6 h-px bg-current"></span>
             {resolvedSubHeading || 'VỀ CHÚNG TÔI'}
           </div>
-          <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-5 leading-tight tracking-tight">
+          <h2 
+            className={cn('font-bold mb-5 leading-tight tracking-tight', isNarrowPreview ? 'text-2xl' : 'text-3xl lg:text-4xl')}
+            style={{ color: adaptColorForDarkMode('#111827', isDark, 'text') }}
+          >
             {resolvedHeading} {resolvedHighlightText}
           </h2>
           {visibleFeatures.length > 0 ? (
             <div className="grid grid-cols-2 gap-4 mb-6">
               {visibleFeatures.slice(0, 4).map((feature) => (
-                <div key={feature.title} className="flex items-center gap-3 bg-white/60 p-2 rounded lg:bg-transparent lg:p-0">
-                  <div className="w-6 h-6 rounded flex items-center justify-center shrink-0 overflow-hidden" style={{ backgroundColor: tokens.sectionAltBg, color: tokens.primary }}>
+                <div 
+                  key={feature.title} 
+                  className={cn('flex items-center gap-3 p-2', !isNarrowPreview && 'lg:bg-transparent lg:p-0', cornerRadius === 'none' ? 'rounded-none' : 'rounded')}
+                  style={{
+                    backgroundColor: isNarrowPreview ? adaptColorForDarkMode('rgba(255, 255, 255, 0.6)', isDark, 'bg') : 'transparent'
+                  }}
+                >
+                  <div className={cn('w-6 h-6 flex items-center justify-center shrink-0 overflow-hidden', cornerRadius === 'none' ? 'rounded-none' : 'rounded')} style={{ backgroundColor: tokens.sectionAltBg, color: tokens.primary }}>
                     {renderFeatureMedia(feature, 'w-3.5 h-3.5')}
                   </div>
-                  <span className="font-semibold text-gray-800 text-xs lg:text-sm leading-tight">{feature.title}</span>
+                  <span 
+                    className={cn('font-semibold text-xs leading-tight', !isNarrowPreview && 'lg:text-sm')}
+                    style={{ color: adaptColorForDarkMode('#1f2937', isDark, 'text') }}
+                  >
+                    {feature.title}
+                  </span>
                 </div>
               ))}
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 lg:flex items-center gap-4 lg:gap-6">
+          <div className={cn('grid grid-cols-1 items-center gap-4', !isNarrowPreview && 'lg:flex lg:gap-6')}>
             {resolvedButtonText ? (
               <AboutButton
                 context={context}
                 href={resolvedButtonLink}
                 text={resolvedButtonText}
                 withArrow
-                className="text-white px-6 py-3 rounded text-sm font-bold inline-flex items-center justify-center gap-2 uppercase tracking-wide w-full lg:w-auto"
-                style={{ backgroundColor: '#111827' }}
+                className={cn('text-white px-6 py-3 text-sm font-bold inline-flex items-center justify-center gap-2 uppercase tracking-wide w-full', !isNarrowPreview && 'lg:w-auto', cornerRadiusSoftClass)}
+                style={{ backgroundColor: adaptColorForDarkMode('#111827', isDark, 'bg'), color: adaptColorForDarkMode('#ffffff', isDark, 'text') }}
               />
             ) : null}
             {resolvedPhone ? (
-              <div className="flex items-center justify-center lg:justify-start gap-3 group cursor-pointer bg-white/50 lg:bg-transparent p-2 lg:p-0 rounded-lg">
-                <div className="w-10 h-10 shrink-0 rounded-full border border-gray-300 flex items-center justify-center transition-colors" style={{ color: tokens.primary }}>
+              <div 
+                className={cn('flex items-center justify-center gap-3 group cursor-pointer p-2', !isNarrowPreview && 'lg:justify-start lg:bg-transparent lg:p-0', cornerRadiusSoftClass)}
+                style={{
+                  backgroundColor: isNarrowPreview ? adaptColorForDarkMode('rgba(255, 255, 255, 0.5)', isDark, 'bg') : 'transparent'
+                }}
+              >
+                <div 
+                  className="w-10 h-10 shrink-0 rounded-full border flex items-center justify-center transition-colors" 
+                  style={{ 
+                    borderColor: adaptColorForDarkMode('#d1d5db', isDark, 'border'),
+                    color: tokens.primary 
+                  }}
+                >
                   <Phone className="w-4 h-4" />
                 </div>
-                <div className="min-w-0 flex-1 lg:flex-none">
-                  <p className="text-[10px] text-gray-500 font-medium truncate uppercase tracking-wide">Gọi ngay cho chúng tôi</p>
-                  <p className="font-bold text-gray-900 text-sm truncate">{resolvedPhone}</p>
+                <div className={cn('min-w-0 flex-1', !isNarrowPreview && 'lg:flex-none')}>
+                  <p 
+                    className="text-[10px] font-medium truncate uppercase tracking-wide"
+                    style={{ color: adaptColorForDarkMode('#6b7280', isDark, 'text') }}
+                  >
+                    Gọi ngay cho chúng tôi
+                  </p>
+                  <p 
+                    className="font-bold text-sm truncate"
+                    style={{ color: adaptColorForDarkMode('#111827', isDark, 'text') }}
+                  >
+                    {resolvedPhone}
+                  </p>
                 </div>
               </div>
             ) : null}
           </div>
         </div>
-        <div className="w-full lg:w-2/5 min-h-[250px] lg:min-h-full lg:absolute lg:right-0 top-0 bottom-0 relative">
+        <div className={cn('w-full min-h-[250px] top-0 bottom-0 relative', !isNarrowPreview && 'lg:w-2/5 lg:min-h-full lg:absolute lg:right-0')}>
           {primaryImage
             ? <AboutImage src={primaryImage} alt={resolvedHeading} className="w-full h-full object-cover object-center absolute inset-0" context={context} imagePriority={imagePriority} />
             : renderEmptyImage(48)}
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent lg:bg-gradient-to-r lg:from-[#f9fafb] lg:via-[#f9fafb]/50 lg:to-transparent"></div>
+          <div className={cn(
+            'absolute inset-0',
+            isDark
+              ? 'bg-gradient-to-t from-zinc-950 via-transparent to-transparent lg:bg-gradient-to-r lg:from-zinc-950 lg:via-zinc-950/50 lg:to-transparent'
+              : 'bg-gradient-to-t from-white via-transparent to-transparent lg:bg-gradient-to-r lg:from-[#f9fafb] lg:via-[#f9fafb]/50 lg:to-transparent'
+          )}></div>
         </div>
       </div>
     </section>
@@ -316,26 +427,36 @@ export function AboutSectionShared({
 
   const renderMinimal = () => (
     <section className="py-8 px-0">
-      <div className="max-w-7xl mx-auto w-full bg-[#fdfaf6] rounded-2xl flex flex-col lg:flex-row gap-4 lg:gap-8 p-3 lg:p-8 relative overflow-hidden border" style={{ borderColor: tokens.neutralBorder }}>
+      <div className={cn('max-w-7xl tv:max-w-[1536px] mx-auto w-full flex gap-4 p-3 relative overflow-hidden border', flexRowClass, !isNarrowPreview && 'lg:gap-8 lg:p-8', cornerRadiusClass)} style={{ backgroundColor: adaptColorForDarkMode('#fdfaf6', isDark, 'bg'), borderColor: tokens.neutralBorder }}>
         <div className="absolute inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #d1d5db 1px, transparent 0)', backgroundSize: '16px 16px' }}></div>
-        <div className="w-full lg:w-1/2 relative z-10 grid grid-cols-2 gap-3 shrink-0">
-          <div className="w-full min-h-[220px] lg:min-h-[320px] rounded-xl overflow-hidden shadow-md">
+        <div className={cn(halfWidthClass, 'relative z-10 grid grid-cols-2 gap-3 shrink-0')}>
+          <div className={cn('w-full min-h-[220px] overflow-hidden shadow-md', !isNarrowPreview && 'lg:min-h-[320px]', cornerRadiusSoftClass)}>
             {galleryImages[0] ? <AboutImage src={galleryImages[0]} alt="img1" className="w-full h-full object-cover" context={context} imagePriority={imagePriority} /> : renderEmptyImage(40)}
           </div>
           <div className="flex flex-col gap-3">
-            <div className="w-full h-[120px] lg:h-[150px] rounded-xl overflow-hidden shadow-md">
+            <div className={cn('w-full h-[120px] overflow-hidden shadow-md', !isNarrowPreview && 'lg:h-[150px]', cornerRadiusSoftClass)}>
               {galleryImages[1] ? <AboutImage src={galleryImages[1]} alt="img2" className="w-full h-full object-cover" context={context} imagePriority={imagePriority} /> : renderEmptyImage(32)}
             </div>
-            <div className="w-full flex-1 min-h-[120px] rounded-xl overflow-hidden shadow-md">
+            <div className={cn('w-full flex-1 min-h-[120px] overflow-hidden shadow-md', cornerRadiusSoftClass)}>
               {galleryImages[2] ? <AboutImage src={galleryImages[2]} alt="img3" className="w-full h-full object-cover" context={context} imagePriority={imagePriority} /> : renderEmptyImage(32)}
             </div>
           </div>
         </div>
-        <div className="w-full lg:w-1/2 flex flex-col z-10 justify-center py-2 lg:py-4">
-          <h2 className="text-xl lg:text-3xl font-black mb-3 uppercase tracking-tight text-gray-950" style={{ color: tokens.secondary }}>
-            {resolvedHeading} <br className="hidden lg:block" /> {resolvedHighlightText}
+        <div className={cn(halfWidthClass, 'flex flex-col z-10 justify-center py-2', !isNarrowPreview && 'lg:py-4')}>
+          <h2 
+            className={cn('text-xl font-black mb-3 uppercase tracking-tight', !isNarrowPreview && 'lg:text-3xl')} 
+            style={{ color: tokens.secondary }}
+          >
+            {resolvedHeading} {!isNarrowPreview ? <br className="hidden lg:block" /> : null} {resolvedHighlightText}
           </h2>
-          {resolvedDescription ? <p className="text-gray-900 mb-5 text-xs lg:text-sm leading-relaxed text-justify font-semibold">{resolvedDescription}</p> : null}
+          {resolvedDescription ? (
+            <p 
+              className={cn('mb-5 text-xs leading-relaxed text-justify font-semibold', !isNarrowPreview && 'lg:text-sm')}
+              style={{ color: adaptColorForDarkMode('#111827', isDark, 'text') }}
+            >
+              {resolvedDescription}
+            </p>
+          ) : null}
           {visibleFeatures.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 mb-5">
               {visibleFeatures.slice(0, 4).map((feature) => (
@@ -343,7 +464,12 @@ export function AboutSectionShared({
                   <div className="shrink-0 w-5 h-5 overflow-hidden flex items-center justify-center" style={{ color: tokens.primary }}>
                     {renderFeatureMedia(feature, 'w-5 h-5 stroke-[2.5]')}
                   </div>
-                  <span className="text-gray-950 font-extrabold text-xs xl:text-[13px]">{feature.title}</span>
+                  <span 
+                    className="font-extrabold text-xs xl:text-[13px]"
+                    style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+                  >
+                    {feature.title}
+                  </span>
                 </div>
               ))}
             </div>
@@ -354,7 +480,7 @@ export function AboutSectionShared({
                 context={context}
                 href={resolvedButtonLink}
                 text={resolvedButtonText}
-                className="text-white px-6 py-2.5 rounded font-black shadow-md uppercase text-[11px] tracking-widest self-start inline-flex"
+                className={cn('text-white px-6 py-2.5 font-black shadow-md uppercase text-[11px] tracking-widest self-start inline-flex', cornerRadiusSoftClass)}
                 style={{ backgroundColor: tokens.primary, color: tokens.ctaSolidText }}
               />
             </div>
@@ -366,28 +492,46 @@ export function AboutSectionShared({
 
   const renderSplit = () => (
     <section className="py-8 px-0">
-      <div className="max-w-7xl mx-auto w-full bg-[#fafafa] overflow-hidden flex flex-col lg:flex-row relative items-center shadow-sm border rounded-2xl" style={{ borderColor: tokens.neutralBorder }}>
-        <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.03] pointer-events-none overflow-hidden">
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-[150%] lg:w-[100%] h-auto text-gray-900 -rotate-12 scale-150">
+      <div className={cn('max-w-7xl tv:max-w-[1536px] mx-auto w-full overflow-hidden flex relative items-center shadow-sm border', flexRowClass, cornerRadiusClass)} style={{ backgroundColor: adaptColorForDarkMode('#fafafa', isDark, 'bg'), borderColor: tokens.neutralBorder }}>
+        <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden" style={{ opacity: 0.03 }}>
+          <svg viewBox="0 0 24 24" fill="currentColor" className={cn('w-[150%] h-auto -rotate-12 scale-150', !isNarrowPreview && 'lg:w-[100%]')}>
             <path d="M17,8C8,10 5.9,16.17 3.82,21.34L5.71,22L6.66,19.7C7.14,19.87 7.64,20 8,20C19,20 22,3 22,3C21,5 14,5.25 9,6.25C4,7.25 2,11.5 2,13.5C2,15.5 3.75,17.25 3.75,17.25C7,8 17,8 17,8Z" />
           </svg>
         </div>
-        <div className="w-full lg:w-5/12 relative flex justify-center items-end min-h-[220px] lg:min-h-[350px] pt-6 lg:pt-8">
+        <div className={cn('w-full relative flex justify-center items-end min-h-[220px] pt-6', !isNarrowPreview && 'lg:w-5/12 lg:min-h-[350px] lg:pt-8')}>
           {primaryImage
             ? <AboutImage src={primaryImage} alt="Professional" className="w-auto h-full max-h-[350px] object-contain relative z-10 px-4 drop-shadow-xl" context={context} imagePriority={imagePriority} />
             : renderEmptyImage(48)}
         </div>
-        <div className="w-full lg:w-7/12 p-5 lg:p-10 xl:p-12 flex flex-col justify-center relative z-10">
-          <div className="text-gray-950 font-extrabold mb-2 text-sm tracking-wide">{resolvedSubHeading || 'VỀ CHÚNG TÔI'}</div>
-          <h2 className="text-3xl lg:text-[34px] leading-[1.2] text-[#112338] font-black mb-4 tracking-tight">{resolvedHeading} {resolvedHighlightText}</h2>
-          <div className="flex flex-col gap-3 text-gray-800 text-sm leading-relaxed mb-6 font-medium">
+        <div className={cn('w-full p-5 flex flex-col justify-center relative z-10', !isNarrowPreview && 'lg:w-7/12 lg:p-10 xl:p-12')}>
+          <div 
+            className="font-extrabold mb-2 text-sm tracking-wide"
+            style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+          >
+            {resolvedSubHeading || 'VỀ CHÚNG TÔI'}
+          </div>
+          <h2 
+            className={cn('text-3xl leading-[1.2] font-black mb-4 tracking-tight', !isNarrowPreview && 'lg:text-[34px]')}
+            style={{ color: adaptColorForDarkMode('#112338', isDark, 'text') }}
+          >
+            {resolvedHeading} {resolvedHighlightText}
+          </h2>
+          <div 
+            className="flex flex-col gap-3 text-sm leading-relaxed mb-6 font-medium"
+            style={{ color: adaptColorForDarkMode('#1f2937', isDark, 'text') }}
+          >
             {resolvedDescription ? <p>{resolvedDescription}</p> : null}
             {visibleFeatures.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 mt-2">
                 {visibleFeatures.slice(0, 4).map((feature) => (
                   <div key={feature.title} className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tokens.secondary }}></div>
-                    <span className="text-gray-950 font-bold text-xs">{feature.title}</span>
+                    <span 
+                      className="font-bold text-xs"
+                      style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+                    >
+                      {feature.title}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -398,7 +542,7 @@ export function AboutSectionShared({
               context={context}
               href={resolvedButtonLink}
               text={resolvedButtonText}
-              className="px-6 py-3 font-extrabold text-xs tracking-widest uppercase w-max shadow-md rounded-sm inline-flex"
+              className={cn('px-6 py-3 font-extrabold text-xs tracking-widest uppercase w-max shadow-md inline-flex', cornerRadius === 'none' ? 'rounded-none' : 'rounded-sm')}
               style={{ backgroundColor: tokens.secondary, color: '#ffffff' }}
             />
           ) : null}
@@ -409,17 +553,27 @@ export function AboutSectionShared({
 
   const renderTimeline = () => (
     <section className="py-8 px-0">
-      <div className="max-w-7xl mx-auto w-full bg-white flex flex-col lg:flex-row gap-4 lg:gap-6 relative overflow-hidden lg:overflow-visible py-2 rounded-xl border shadow-sm" style={{ borderColor: tokens.neutralBorder }}>
-        <div className="w-full lg:w-[55%] flex flex-col justify-center pt-3 lg:py-4 pl-3 lg:pl-8 xl:pl-10 pr-3 lg:pr-0 relative z-10">
+      <div className={cn('max-w-7xl tv:max-w-[1536px] mx-auto w-full flex gap-4 relative overflow-hidden py-2 border shadow-sm', flexRowClass, !isNarrowPreview && 'lg:gap-6 lg:overflow-visible', cornerRadiusClass)} style={{ backgroundColor: adaptColorForDarkMode('#ffffff', isDark, 'bg'), borderColor: tokens.neutralBorder }}>
+        <div className={cn('w-full flex flex-col justify-center pt-3 pl-3 pr-3 relative z-10', !isNarrowPreview && 'lg:w-[55%] lg:py-4 lg:pl-8 xl:pl-10 lg:pr-0')}>
           <div className="inline-block mb-2 self-start">
             <span className="font-extrabold tracking-[0.1em] text-[10px] uppercase pb-0.5 border-b-2" style={{ color: tokens.primary, borderBottomColor: tokens.primary }}>
               {resolvedSubHeading || 'VỀ CHÚNG TÔI'}
             </span>
           </div>
-          <h2 className="text-2xl lg:text-[34px] font-black text-gray-950 mb-3 leading-[1.1] tracking-tight">
-            {resolvedHeading} <br className="hidden sm:block" />{resolvedHighlightText}
+          <h2 
+            className={cn('text-2xl font-black mb-3 leading-[1.1] tracking-tight', !isNarrowPreview && 'lg:text-[34px]')}
+            style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+          >
+            {resolvedHeading} {!isNarrowPreview ? <br className="hidden sm:block" /> : ' '}{resolvedHighlightText}
           </h2>
-          {resolvedDescription ? <p className="text-gray-700 mb-4 leading-snug text-[11px] lg:text-xs font-semibold max-w-xl text-justify sm:text-left">{resolvedDescription}</p> : null}
+          {resolvedDescription ? (
+            <p 
+              className={cn('mb-4 leading-snug text-[11px] font-semibold max-w-xl text-justify', !isNarrowPreview && 'lg:text-xs sm:text-left')}
+              style={{ color: adaptColorForDarkMode('#374151', isDark, 'text') }}
+            >
+              {resolvedDescription}
+            </p>
+          ) : null}
           {visibleFeatures.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 mb-4">
               {visibleFeatures.slice(0, 4).map((feature) => (
@@ -427,7 +581,12 @@ export function AboutSectionShared({
                   <div className="shrink-0 w-3.5 h-3.5 overflow-hidden flex items-center justify-center" style={{ color: tokens.primary }}>
                     {renderFeatureMedia(feature, 'w-3.5 h-3.5 stroke-[3]')}
                   </div>
-                  <span className="text-gray-950 font-extrabold text-[10px] uppercase">{feature.title}</span>
+                  <span 
+                    className="font-extrabold text-[10px] uppercase"
+                    style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+                  >
+                    {feature.title}
+                  </span>
                 </div>
               ))}
             </div>
@@ -438,23 +597,29 @@ export function AboutSectionShared({
                 context={context}
                 href={resolvedButtonLink}
                 text={resolvedButtonText}
-                className="px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide inline-flex"
+                className={cn('px-6 py-2.5 font-bold text-xs uppercase tracking-wide inline-flex', cornerRadiusSoftClass)}
                 style={{ backgroundColor: tokens.primary, color: tokens.ctaSolidText }}
               />
             </div>
           ) : null}
         </div>
-        <div className="w-full lg:w-[45%] relative min-h-[200px] lg:min-h-[320px] p-3 lg:py-4 lg:pr-6">
+        <div className={cn('w-full relative min-h-[200px] p-3', !isNarrowPreview && 'lg:w-[45%] lg:min-h-[320px] lg:py-4 lg:pr-6')}>
           <div className="w-full h-full relative">
-            {primaryImage ? <AboutImage src={primaryImage} alt="Interior" className="w-full h-full object-cover rounded-xl shadow-sm" context={context} imagePriority={imagePriority} /> : renderEmptyImage(40)}
+            {primaryImage ? <AboutImage src={primaryImage} alt="Interior" className={cn('w-full h-full object-cover shadow-sm', cornerRadiusSoftClass)} context={context} imagePriority={imagePriority} /> : renderEmptyImage(40)}
             {resolvedButtonText ? (
-              <div className="absolute -left-2 -bottom-2 lg:-left-6 lg:-bottom-2 z-20">
-                <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-full flex items-center justify-center p-1 shadow-sm border border-white" style={{ backgroundColor: tokens.sectionAltBg }}>
+              <div className={cn('absolute -left-2 -bottom-2 z-20', !isNarrowPreview && 'lg:-left-6 lg:-bottom-2')}>
+                <div 
+                  className={cn('w-12 h-12 flex items-center justify-center p-1 shadow-sm border', !isNarrowPreview && 'lg:w-16 lg:h-16', cornerRadiusButtonClass)} 
+                  style={{ 
+                    backgroundColor: tokens.sectionAltBg,
+                    borderColor: adaptColorForDarkMode('#ffffff', isDark, 'border')
+                  }}
+                >
                   <AboutButton
                     context={context}
                     href={resolvedButtonLink}
                     text=""
-                    className="w-full h-full rounded-full border flex items-center justify-center group"
+                    className={cn('w-full h-full border flex items-center justify-center group', cornerRadiusButtonClass)}
                     style={{ backgroundColor: 'transparent', borderColor: tokens.primary, color: tokens.primary }}
                     withArrow
                   />
@@ -469,26 +634,47 @@ export function AboutSectionShared({
 
   const renderShowcase = () => (
     <section className="py-8 px-0">
-      <div className="max-w-7xl mx-auto w-full bg-white overflow-hidden relative flex flex-col lg:flex-row shadow-sm border rounded-xl">
-        <div className="absolute top-0 left-0 w-[150%] lg:w-full flex overflow-hidden pointer-events-none select-none z-0 -ml-8 lg:ml-0">
-          <span className="text-[120px] lg:text-[220px] xl:text-[260px] font-black tracking-tighter leading-none text-gray-50 uppercase">
+      <div className={cn('max-w-7xl tv:max-w-[1536px] mx-auto w-full overflow-hidden relative flex shadow-sm border', flexRowClass, cornerRadiusClass)} style={{ backgroundColor: adaptColorForDarkMode('#ffffff', isDark, 'bg'), borderColor: tokens.neutralBorder }}>
+        <div className={cn('absolute top-0 left-0 w-[150%] flex overflow-hidden pointer-events-none select-none z-0 -ml-8', !isNarrowPreview && 'lg:w-full lg:ml-0')}>
+          <span 
+            className={cn('text-[120px] font-black tracking-tighter leading-none uppercase', !isNarrowPreview && 'lg:text-[220px] xl:text-[260px]')}
+            style={{ color: adaptColorForDarkMode('#f9fafb', isDark, 'text'), opacity: isDark ? 0.05 : 1 }}
+          >
             {resolvedHighlightText || 'ABOUT'}
           </span>
         </div>
-        <div className="w-full lg:w-[45%] xl:w-5/12 flex flex-col justify-center p-4 lg:p-8 xl:p-10 relative z-10 pt-10 lg:pt-10">
-          <div className="text-gray-800 font-bold mb-1.5 text-[10px] lg:text-[11px] tracking-wider uppercase">
+        <div className={cn('w-full flex flex-col justify-center p-4 relative z-10 pt-10', !isNarrowPreview && 'lg:w-[45%] xl:w-5/12 lg:p-8 xl:p-10 lg:pt-10')}>
+          <div 
+            className={cn('font-bold mb-1.5 text-[10px] tracking-wider uppercase', !isNarrowPreview && 'lg:text-[11px]')}
+            style={{ color: adaptColorForDarkMode('#1f2937', isDark, 'text') }}
+          >
             {resolvedSubHeading || 'VỀ CHÚNG TÔI'}
           </div>
-          <h2 className="text-2xl lg:text-[28px] font-black text-gray-950 mb-3 tracking-tight uppercase leading-[1.1]">
+          <h2 
+            className={cn('text-2xl font-black mb-3 tracking-tight uppercase leading-[1.1]', !isNarrowPreview && 'lg:text-[28px]')}
+            style={{ color: adaptColorForDarkMode('#030712', isDark, 'text') }}
+          >
             {resolvedHeading}
           </h2>
-          {resolvedDescription ? <p className="text-gray-700 text-[11px] lg:text-[12px] leading-relaxed mb-4 font-semibold text-justify">{resolvedDescription}</p> : null}
+          {resolvedDescription ? (
+            <p 
+              className={cn('text-[11px] leading-relaxed mb-4 font-semibold text-justify', !isNarrowPreview && 'lg:text-[12px]')}
+              style={{ color: adaptColorForDarkMode('#374151', isDark, 'text') }}
+            >
+              {resolvedDescription}
+            </p>
+          ) : null}
           {visibleFeatures.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 mb-5">
               {visibleFeatures.slice(0, 4).map((feature) => (
                 <div key={feature.title} className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tokens.primary }}></div>
-                  <span className="text-gray-900 text-[10px] lg:text-[11px] font-extrabold">{feature.title}</span>
+                  <span 
+                    className={cn('text-[10px] font-extrabold', !isNarrowPreview && 'lg:text-[11px]')}
+                    style={{ color: adaptColorForDarkMode('#111827', isDark, 'text') }}
+                  >
+                    {feature.title}
+                  </span>
                 </div>
               ))}
             </div>
@@ -498,13 +684,13 @@ export function AboutSectionShared({
               context={context}
               href={resolvedButtonLink}
               text={resolvedButtonText}
-              className="px-6 py-2.5 font-bold text-[10px] hover:bg-opacity-90 transition-all w-max rounded-sm shadow-md inline-flex"
+              className={cn('px-6 py-2.5 font-bold text-[10px] hover:bg-opacity-90 transition-all w-max shadow-md inline-flex', cornerRadius === 'none' ? 'rounded-none' : 'rounded-sm')}
               style={{ backgroundColor: tokens.primary, color: tokens.ctaSolidText }}
             />
           ) : null}
         </div>
-        <div className="w-full lg:w-[55%] xl:w-7/12 relative min-h-[260px] lg:min-h-[330px]">
-          {primaryImage ? <AboutImage src={primaryImage} alt="Garden Nature" className="w-full h-full object-cover lg:object-left object-center" context={context} imagePriority={imagePriority} /> : renderEmptyImage(48)}
+        <div className={cn('w-full relative min-h-[260px]', !isNarrowPreview && 'lg:w-[55%] xl:w-7/12 lg:min-h-[330px]')}>
+          {primaryImage ? <AboutImage src={primaryImage} alt="Garden Nature" className={cn('w-full h-full object-cover object-center', !isNarrowPreview && 'lg:object-left')} context={context} imagePriority={imagePriority} /> : renderEmptyImage(48)}
         </div>
       </div>
     </section>
@@ -514,28 +700,36 @@ export function AboutSectionShared({
     <section className="py-8 px-0">
       <div
         className={cn(
-          'max-w-7xl mx-auto w-full overflow-hidden rounded-[0.875rem] border shadow-sm',
-          'grid grid-cols-1 lg:grid-cols-[0.95fr_2.1fr] gap-4 lg:gap-5 p-4 md:p-5 lg:p-6',
+          'max-w-7xl tv:max-w-[1536px] mx-auto w-full overflow-hidden border shadow-sm',
+          'grid grid-cols-1 gap-4 p-4',
+          !isNarrowPreview && 'lg:grid-cols-[0.95fr_2.1fr] lg:gap-5 md:p-5 lg:p-6',
+          cornerRadiusClass,
         )}
-        style={{ backgroundColor: '#f5ecdc', borderColor: '#eadbc5' }}
+        style={{
+          backgroundColor: adaptColorForDarkMode('#f5ecdc', isDark, 'bg'),
+          borderColor: adaptColorForDarkMode('#eadbc5', isDark, 'border')
+        }}
       >
         <div className="relative z-10 flex flex-col justify-center">
           <div className="mb-2 flex items-center gap-3">
             <span className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: tokens.secondary }}>
               {resolvedSubHeading || 'VỀ CHÚNG TÔI'}
             </span>
-            <span className="h-px w-12 bg-[#c9ad8a]" />
+            <span className="h-px w-12" style={{ backgroundColor: adaptColorForDarkMode('#c9ad8a', isDark, 'border') }} />
           </div>
-          <h2 className="text-2xl md:text-3xl lg:text-[34px] font-black leading-[1.12] tracking-tight text-[#523a2a]">
+          <h2 
+            className={cn('text-2xl font-black leading-[1.12] tracking-tight', !isNarrowPreview && 'md:text-3xl lg:text-[34px]')}
+            style={{ color: adaptColorForDarkMode('#523a2a', isDark, 'text') }}
+          >
             {resolvedHeading}
             {resolvedHighlightText ? (
               <>
-                <span className="hidden sm:inline"> </span>
+                {!isNarrowPreview ? <span className="hidden sm:inline"> </span> : null}
                 <span className="block sm:inline" style={{ color: tokens.secondary }}>{resolvedHighlightText}</span>
               </>
             ) : null}
           </h2>
-          <div className="my-3 text-[#c9a36d]/55" aria-hidden="true">
+          <div className="my-3" style={{ color: adaptColorForDarkMode('#c9a36d', isDark, 'text'), opacity: 0.55 }} aria-hidden="true">
             <svg viewBox="0 0 180 18" className="h-4 w-36" fill="none">
               <path d="M2 9h52" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               <path d="M126 9h52" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -545,7 +739,10 @@ export function AboutSectionShared({
             </svg>
           </div>
           {resolvedDescription ? (
-            <p className="max-w-md text-[13px] md:text-sm font-semibold leading-relaxed text-[#6a5444]">
+            <p 
+              className={cn('max-w-md text-[13px] font-semibold leading-relaxed', !isNarrowPreview && 'md:text-sm')}
+              style={{ color: adaptColorForDarkMode('#6a5444', isDark, 'text') }}
+            >
               {resolvedDescription}
             </p>
           ) : null}
@@ -553,10 +750,21 @@ export function AboutSectionShared({
             <div className="mt-4 space-y-2.5">
               {visibleFeatures.slice(0, 4).map((feature) => (
                 <div key={feature.title} className="flex items-start gap-2.5">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#efe1cc] text-[#8b6a48]">
+                  <span 
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                    style={{
+                      backgroundColor: adaptColorForDarkMode('#efe1cc', isDark, 'bg'),
+                      color: adaptColorForDarkMode('#8b6a48', isDark, 'text')
+                    }}
+                  >
                     {renderFeatureMedia(feature, 'w-3.5 h-3.5 stroke-[2.8]')}
                   </span>
-                  <span className="text-xs md:text-[13px] font-extrabold leading-snug text-[#5f4938]">{feature.title}</span>
+                  <span 
+                    className={cn('text-xs font-extrabold leading-snug', !isNarrowPreview && 'md:text-[13px]')}
+                    style={{ color: adaptColorForDarkMode('#5f4938', isDark, 'text') }}
+                  >
+                    {feature.title}
+                  </span>
                 </div>
               ))}
             </div>
@@ -566,25 +774,34 @@ export function AboutSectionShared({
               context={context}
               href={resolvedButtonLink}
               text={resolvedButtonText}
-              className="mt-5 inline-flex w-max items-center gap-2 rounded-xl px-6 py-3 text-sm font-black shadow-sm transition-colors"
+              className={cn('mt-5 inline-flex w-max items-center gap-2 px-6 py-3 text-sm font-black shadow-sm transition-colors', cornerRadiusSoftClass)}
               style={{ backgroundColor: '#c89f62', color: '#2b1c12' }}
             />
           ) : null}
         </div>
 
-        <div className="grid min-h-[280px] grid-cols-1 gap-3 md:grid-cols-[1.75fr_1fr] lg:min-h-[330px]">
-          <div className="min-h-[240px] overflow-hidden rounded-[0.675rem] border-2 border-[#fff8ed] shadow-md">
+        <div className={cn('grid min-h-[280px] grid-cols-1 gap-3', !isNarrowPreview && 'md:grid-cols-[1.75fr_1fr] lg:min-h-[330px]')}>
+          <div 
+            className={cn('min-h-[240px] overflow-hidden border-2 shadow-md', cornerRadiusSoftClass)}
+            style={{ borderColor: adaptColorForDarkMode('#fff8ed', isDark, 'border') }}
+          >
             {galleryImages[0]
               ? <AboutImage src={galleryImages[0]} alt={resolvedHeading} className="h-full w-full object-cover" context={context} imagePriority={imagePriority} />
               : renderEmptyImage(48)}
           </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
-            <div className="min-h-[130px] overflow-hidden rounded-[0.575rem] border-2 border-[#fff8ed] shadow-md">
+          <div className={cn('grid grid-cols-2 gap-3', !isNarrowPreview && 'md:grid-cols-1')}>
+            <div 
+              className={cn('min-h-[130px] overflow-hidden border-2 shadow-md', cornerRadiusSoftClass)}
+              style={{ borderColor: adaptColorForDarkMode('#fff8ed', isDark, 'border') }}
+            >
               {galleryImages[1]
                 ? <AboutImage src={galleryImages[1]} alt={`${resolvedHeading} 2`} className="h-full w-full object-cover" context={context} imagePriority={imagePriority} />
                 : renderEmptyImage(36)}
             </div>
-            <div className="min-h-[130px] overflow-hidden rounded-[0.575rem] border-2 border-[#fff8ed] shadow-md">
+            <div 
+              className={cn('min-h-[130px] overflow-hidden border-2 shadow-md', cornerRadiusSoftClass)}
+              style={{ borderColor: adaptColorForDarkMode('#fff8ed', isDark, 'border') }}
+            >
               {galleryImages[2]
                 ? <AboutImage src={galleryImages[2]} alt={`${resolvedHeading} 3`} className="h-full w-full object-cover" context={context} imagePriority={imagePriority} />
                 : renderEmptyImage(36)}
@@ -597,44 +814,47 @@ export function AboutSectionShared({
 
   const renderSolarFeature = () => (
     <section className="py-8 px-0 font-[family-name:var(--font-be-vietnam-pro)]">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-7 lg:flex-row lg:gap-0">
-        <div className="relative order-1 w-full px-2.5 lg:w-1/2">
+      <div className={cn('mx-auto flex max-w-7xl tv:max-w-[1536px] flex-col items-center gap-7', !isNarrowPreview && 'lg:flex-row lg:gap-0')}>
+        <div className={cn('relative order-1 w-full px-2.5', !isNarrowPreview && 'lg:w-1/2')}>
           <div className="relative mx-auto text-center">
-            <div className="mx-auto mt-2 w-full max-w-[557px] overflow-hidden rounded-[1.75rem] lg:mt-[30px]">
+            <div className={cn('mx-auto mt-2 w-full max-w-[557px] overflow-hidden', !isNarrowPreview && 'lg:mt-[30px]', cornerRadiusClass)}>
               {primaryImage
                 ? <AboutImage src={primaryImage} alt={resolvedHeading} className="h-auto w-full object-cover" context={context} imagePriority={imagePriority} />
-                : <div className="aspect-[557/476] w-full rounded-[1.75rem]">{renderEmptyImage(48)}</div>}
+                : <div className={cn('aspect-[557/476] w-full', cornerRadiusClass)}>{renderEmptyImage(48)}</div>}
             </div>
             <div
-              className="absolute right-0 top-0 rounded-[5px_30px] border-[2.4px] border-white px-4 py-4 text-center text-white shadow-lg sm:px-6 sm:py-6"
-              style={{ backgroundColor: tokens.secondary }}
+              className={cn('absolute right-0 top-0 border-[2.4px] px-4 py-4 text-center text-white shadow-lg', !isNarrowPreview && 'sm:px-6 sm:py-6', cornerRadiusSoftClass)}
+              style={{ 
+                backgroundColor: tokens.secondary,
+                borderColor: adaptColorForDarkMode('#ffffff', isDark, 'border')
+              }}
             >
-              <div className="text-3xl font-bold leading-tight sm:text-[38px]">{solarStatValue}</div>
-              <div className="max-w-[92px] text-xs font-semibold leading-snug sm:text-sm">{solarStatLabel}</div>
+              <div className={cn('text-3xl font-bold leading-tight', !isNarrowPreview && 'sm:text-[38px]')}>{solarStatValue}</div>
+              <div className={cn('max-w-[92px] text-xs font-semibold leading-snug', !isNarrowPreview && 'sm:text-sm')}>{solarStatLabel}</div>
             </div>
           </div>
         </div>
 
-        <div className="order-2 w-full px-2.5 lg:w-1/2">
-          <div className="lg:pl-[38px]">
-            <h2 className="mb-4 text-3xl font-bold leading-tight lg:text-[38px] lg:leading-[58px]" style={{ color: tokens.primary }}>
+        <div className={cn('order-2 w-full px-2.5', !isNarrowPreview && 'lg:w-1/2')}>
+          <div className={cn(!isNarrowPreview && 'lg:pl-[38px]')}>
+            <h2 className={cn('mb-4 text-3xl font-bold leading-tight', !isNarrowPreview && 'lg:text-[38px] lg:leading-[58px]')} style={{ color: tokens.primary }}>
               {resolvedHeading}
               {resolvedHighlightText ? (
                 <>
-                  <span className="hidden sm:inline"> </span>
+                  {!isNarrowPreview ? <span className="hidden sm:inline"> </span> : null}
                   <span className="block sm:inline">{resolvedHighlightText}</span>
                 </>
               ) : null}
             </h2>
             {resolvedDescription ? (
-              <p className="mb-6 text-sm font-medium leading-relaxed text-justify md:text-[15px]" style={{ color: tokens.bodyText }}>
+              <p className={cn('mb-6 text-sm font-medium leading-relaxed text-justify', !isNarrowPreview && 'md:text-[15px]')} style={{ color: tokens.bodyText }}>
                 {resolvedDescription}
               </p>
             ) : null}
             {visibleFeatures.length > 0 ? (
               <ul className="mb-6 space-y-4">
                 {visibleFeatures.slice(0, 4).map((feature) => (
-                  <li key={feature.title} className="relative pl-[38px] text-sm font-semibold leading-relaxed md:text-[15px]" style={{ color: tokens.primary }}>
+                  <li key={feature.title} className={cn('relative pl-[38px] text-sm font-semibold leading-relaxed', !isNarrowPreview && 'md:text-[15px]')} style={{ color: tokens.primary }}>
                     <span className="absolute left-0 top-0 flex h-[27px] w-[27px] items-center justify-center overflow-hidden">
                       {feature.mediaType === 'image' && sanitizeText(feature.image)
                         ? renderFeatureMedia(feature, 'h-[27px] w-[27px]')
@@ -651,7 +871,7 @@ export function AboutSectionShared({
                 href={resolvedButtonLink}
                 text={resolvedButtonText}
                 withArrow
-                className="inline-flex items-center gap-2 overflow-hidden rounded-[10px] px-5 py-2.5 text-center text-base font-medium capitalize shadow-[0_0_40px_5px_rgba(0,0,0,0.05)] [&>svg]:h-6 [&>svg]:w-6 [&>svg]:-rotate-45"
+                className={cn('inline-flex items-center gap-2 overflow-hidden px-5 py-2.5 text-center text-base font-medium capitalize shadow-[0_0_40px_5px_rgba(0,0,0,0.05)] [&>svg]:h-6 [&>svg]:w-6 [&>svg]:-rotate-45', cornerRadiusSoftClass)}
                 style={{ backgroundColor: tokens.secondary, color: '#ffffff' }}
               />
             ) : null}
@@ -660,6 +880,111 @@ export function AboutSectionShared({
       </div>
     </section>
   );
+
+  const renderKanban = () => {
+    const isDarkTheme = isDark || isDarkBg;
+    return (
+      <section 
+        className={cn('py-8 border-b transition-colors duration-300', sectionXClass)}
+        style={{
+          backgroundColor: isDarkTheme ? 'rgba(9, 9, 11, 0.3)' : 'rgba(244, 244, 245, 0.4)',
+          borderColor: isDarkTheme ? '#27272a' : '#e4e4e7',
+        }}
+      >
+        <div className="max-w-7xl tv:max-w-[1536px] mx-auto">
+          <div className={cn('grid gap-6 tv:gap-16 items-center', gridTwoColClass)}>
+            {/* Cột hình ảnh */}
+            <div className="w-full flex justify-center">
+              <div className={cn('relative w-full overflow-hidden shadow-sm aspect-video md:aspect-[16/10] border', cornerRadiusSoftClass)} style={{ borderColor: isDarkTheme ? '#27272a' : '#e4e4e7' }}>
+                {primaryImage ? (
+                  <AboutImage 
+                    src={primaryImage} 
+                    alt={resolvedHeading} 
+                    className="w-full h-full object-cover transition-transform duration-300 hover:scale-[1.02]" 
+                    context={context} 
+                    imagePriority={imagePriority} 
+                  />
+                ) : renderEmptyImage(40)}
+              </div>
+            </div>
+
+            {/* Cột thông tin */}
+            <div className="flex flex-col w-full justify-center">
+              {resolvedSubHeading ? (
+                <span 
+                  className="text-[10px] font-bold tracking-[0.15em] uppercase mb-2 self-start"
+                  style={{ color: tokens.primary }}
+                >
+                  {resolvedSubHeading}
+                </span>
+              ) : null}
+
+              <h2 
+                className={cn('font-bold tracking-tight mb-3 text-xl md:text-2xl lg:text-3xl tv:text-5xl')}
+                style={{ color: isDarkTheme ? '#f4f4f5' : '#09090b' }}
+              >
+                {resolvedHeading}{' '}
+                {resolvedHighlightText ? (
+                  <span style={{ color: tokens.primary }}>{resolvedHighlightText}</span>
+                ) : null}
+              </h2>
+
+              {resolvedDescription ? (
+                <p 
+                  className="text-xs tv:text-lg leading-relaxed mb-5 text-justify"
+                  style={{ color: isDarkTheme ? '#a1a1aa' : '#71717a' }}
+                >
+                  {resolvedDescription}
+                </p>
+              ) : null}
+
+              {visibleFeatures.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 tv:gap-5 mb-6 tv:mb-8">
+                  {visibleFeatures.slice(0, 4).map((feature) => (
+                    <div 
+                      key={feature.title} 
+                      className={cn('flex items-center gap-2 tv:gap-4 p-2 tv:p-3 border transition-colors duration-200 rounded-sm shadow-[0_1px_2px_rgba(0,0,0,0.03)]')}
+                      style={{
+                        backgroundColor: isDarkTheme ? 'rgba(24, 24, 27, 0.4)' : '#ffffff',
+                        borderColor: isDarkTheme ? '#27272a' : '#e4e4e7',
+                      }}
+                    >
+                      <div className="shrink-0 w-5 h-5 flex items-center justify-center text-xs" style={{ color: tokens.primary }}>
+                        {renderFeatureMedia(feature, 'w-3.5 h-3.5 stroke-[2.5]')}
+                      </div>
+                      <span 
+                        className="font-semibold text-xs tv:text-base leading-tight"
+                        style={{ color: isDarkTheme ? '#e4e4e7' : '#27272a' }}
+                      >
+                        {feature.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {resolvedButtonText ? (
+                <AboutButton
+                  context={context}
+                  href={resolvedButtonLink}
+                  text={resolvedButtonText}
+                  withArrow
+                  className={cn(
+                    'self-start inline-flex items-center gap-1.5 px-5 tv:px-7 py-2.5 tv:py-4 shadow-sm font-semibold text-xs tv:text-sm uppercase tracking-wider transition-all duration-200 group rounded-sm border',
+                  )}
+                  style={{ 
+                    backgroundColor: isDarkTheme ? '#18181b' : '#ffffff', 
+                    color: isDarkTheme ? '#f4f4f5' : '#09090b',
+                    borderColor: isDarkTheme ? '#27272a' : '#e4e4e7'
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  };
 
   const renderEmpty = () => (
     <section className="py-16">
@@ -689,6 +1014,7 @@ export function AboutSectionShared({
             {style === 'showcase' && renderShowcase()}
             {style === 'spaCollage' && renderSpaCollage()}
             {style === 'solarFeature' && renderSolarFeature()}
+            {style === 'kanban' && renderKanban()}
           </>
         )}
     </div>

@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { resolveUniqueSlug } from "./lib/iaSlugs";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -13,7 +13,52 @@ const categoryDoc = v.object({
   order: v.number(),
   parentId: v.optional(v.id("productCategories")),
   slug: v.string(),
+  filterFooterContent: v.optional(v.string()),
+  productDetailSuffixContent: v.optional(v.string()),
+  productDetailFaqItems: v.optional(
+    v.array(
+      v.object({
+        id: v.union(v.string(), v.number()),
+        question: v.string(),
+        answer: v.string(),
+        order: v.number(),
+      })
+    )
+  ),
+  productDetailFaqStyle: v.optional(v.string()),
+  productDetailFaqEnabled: v.optional(v.boolean()),
 });
+
+async function syncCategoryProductTypes(
+  ctx: MutationCtx,
+  categoryId: Id<"productCategories">,
+  productTypeIds: Id<"productTypes">[]
+) {
+  if (productTypeIds.length > 1) {
+    throw new Error("Mỗi danh mục chỉ được gán tối đa 1 kiểu sản phẩm");
+  }
+  const existing = await ctx.db
+    .query("productCategoryTypes")
+    .withIndex("by_category", (q) => q.eq("categoryId", categoryId))
+    .collect();
+
+  const nextSet = new Set(productTypeIds);
+  for (const item of existing) {
+    if (!nextSet.has(item.typeId)) {
+      await ctx.db.delete(item._id);
+    }
+  }
+
+  const existingTypeIds = new Set(existing.map(item => item.typeId));
+  for (const typeId of productTypeIds) {
+    if (!existingTypeIds.has(typeId)) {
+      await ctx.db.insert("productCategoryTypes", {
+        categoryId,
+        typeId,
+      });
+    }
+  }
+}
 
 export const listAll = query({
   args: { limit: v.optional(v.number()) },
@@ -33,9 +78,8 @@ export const listAdminWithOffset = query({
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit ?? 20, 100);
     const offset = args.offset ?? 0;
-    const fetchLimit = Math.min(offset + limit + 50, 1000);
 
-    let categories = await ctx.db.query("productCategories").order("desc").take(fetchLimit);
+    let categories = await ctx.db.query("productCategories").take(1000);
 
     if (args.search?.trim()) {
       const searchLower = args.search.toLowerCase().trim();
@@ -44,6 +88,8 @@ export const listAdminWithOffset = query({
         category.slug.toLowerCase().includes(searchLower)
       );
     }
+
+    categories.sort((a, b) => a.order - b.order);
 
     return categories.slice(offset, offset + limit);
   },
@@ -378,11 +424,32 @@ export const listNonEmptyCategoryIds = query({
 
     const results = await Promise.all(
       categories.map(async (category) => {
-        const preview = await ctx.db
+        // 1. Kiểm tra sản phẩm gán chính
+        const primaryPreview = await ctx.db
           .query("products")
           .withIndex("by_category_status", (q) => q.eq("categoryId", category._id).eq("status", "Active"))
           .take(1);
-        return preview.length > 0 ? category._id : null;
+        if (primaryPreview.length > 0) {
+          return category._id;
+        }
+
+        // 2. Kiểm tra sản phẩm gán phụ (assignments)
+        const assignments = await ctx.db
+          .query("productCategoryAssignments")
+          .withIndex("by_category", (q) => q.eq("categoryId", category._id))
+          .take(20);
+
+        if (assignments.length > 0) {
+          const products = await Promise.all(
+            assignments.map((assign) => ctx.db.get(assign.productId))
+          );
+          const hasActive = products.some((prod) => prod && prod.status === "Active");
+          if (hasActive) {
+            return category._id;
+          }
+        }
+
+        return null;
       })
     );
 
@@ -441,8 +508,24 @@ export const create = mutation({
     order: v.optional(v.number()),
     parentId: v.optional(v.id("productCategories")),
     slug: v.string(),
+    filterFooterContent: v.optional(v.string()),
+    productDetailSuffixContent: v.optional(v.string()),
+    productDetailFaqItems: v.optional(
+      v.array(
+        v.object({
+          id: v.union(v.string(), v.number()),
+          question: v.string(),
+          answer: v.string(),
+          order: v.number(),
+        })
+      )
+    ),
+    productDetailFaqStyle: v.optional(v.string()),
+    productDetailFaqEnabled: v.optional(v.boolean()),
+    productTypeIds: v.optional(v.array(v.id("productTypes"))),
   },
   handler: async (ctx, args) => {
+    const { productTypeIds, ...categoryArgs } = args;
     const hierarchyFeature = await ctx.db
       .query("moduleFeatures")
       .withIndex("by_module_feature", (q) =>
@@ -466,13 +549,17 @@ export const create = mutation({
       nextOrder = lastCategory ? lastCategory.order + 1 : 0;
     }
     
-    return  ctx.db.insert("productCategories", {
-      ...args,
+    const categoryId = await ctx.db.insert("productCategories", {
+      ...categoryArgs,
       slug: resolvedSlug.slug,
       order: nextOrder,
       active: args.active ?? true,
       parentId: hierarchyEnabled ? args.parentId : undefined,
     });
+    if (productTypeIds) {
+      await syncCategoryProductTypes(ctx, categoryId, productTypeIds);
+    }
+    return categoryId;
   },
   returns: v.id("productCategories"),
 });
@@ -487,6 +574,21 @@ export const update = mutation({
     order: v.optional(v.number()),
     parentId: v.optional(v.id("productCategories")),
     slug: v.optional(v.string()),
+    filterFooterContent: v.optional(v.string()),
+    productDetailSuffixContent: v.optional(v.string()),
+    productDetailFaqItems: v.optional(
+      v.array(
+        v.object({
+          id: v.union(v.string(), v.number()),
+          question: v.string(),
+          answer: v.string(),
+          order: v.number(),
+        })
+      )
+    ),
+    productDetailFaqStyle: v.optional(v.string()),
+    productDetailFaqEnabled: v.optional(v.boolean()),
+    productTypeIds: v.optional(v.array(v.id("productTypes"))),
   },
   handler: async (ctx, args) => {
     const hierarchyFeature = await ctx.db
@@ -497,7 +599,7 @@ export const update = mutation({
       .unique();
     const hierarchyEnabled = hierarchyFeature?.enabled === true;
 
-    const { id, ...updates } = args;
+    const { id, productTypeIds, ...updates } = args;
     const category = await ctx.db.get(id);
     if (!category) {throw new Error("Category not found");}
     if (!hierarchyEnabled) {
@@ -514,6 +616,9 @@ export const update = mutation({
       }
     }
     await ctx.db.patch(id, updates);
+    if (productTypeIds) {
+      await syncCategoryProductTypes(ctx, id, productTypeIds);
+    }
     return null;
   },
   returns: v.null(),
@@ -637,4 +742,80 @@ export const reorder = mutation({
     return null;
   },
   returns: v.null(),
+});
+
+export const listActiveCategoriesWithProductCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    // 1. Lấy tất cả danh mục active
+    const categories = await ctx.db
+      .query("productCategories")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    if (categories.length === 0) {
+      return [];
+    }
+
+    // 2. Lấy toàn bộ sản phẩm Active
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_status_order", (q) => q.eq("status", "Active"))
+      .collect();
+
+    // 3. Lấy toàn bộ assignments
+    const assignments = await ctx.db
+      .query("productCategoryAssignments")
+      .collect();
+
+    // Tạo tập hợp các productId có status Active để lọc assignments nhanh O(1)
+    const activeProductIds = new Set(products.map((p) => p._id as string));
+
+    // Đếm số lượng sản phẩm cho từng danh mục (gồm cả chính và phụ)
+    const countsMap = new Map<Id<"productCategories">, number>();
+
+    // Khởi tạo count = 0 cho tất cả danh mục active
+    categories.forEach((cat) => countsMap.set(cat._id, 0));
+
+    // Đếm sản phẩm gán chính
+    products.forEach((prod) => {
+      if (countsMap.has(prod.categoryId)) {
+        countsMap.set(prod.categoryId, countsMap.get(prod.categoryId)! + 1);
+      }
+    });
+
+    // Đếm sản phẩm gán phụ (tránh đếm trùng nếu sản phẩm đã gán chính vào cùng danh mục đó)
+    const seenAssignments = new Set<string>();
+    products.forEach((prod) => {
+      seenAssignments.add(`${prod._id}-${prod.categoryId}`);
+    });
+
+    assignments.forEach((assign) => {
+      // Chỉ tính nếu sản phẩm đó đang Active
+      if (activeProductIds.has(assign.productId as string)) {
+        const key = `${assign.productId}-${assign.categoryId}`;
+        if (!seenAssignments.has(key)) {
+          seenAssignments.add(key);
+          if (countsMap.has(assign.categoryId)) {
+            countsMap.set(assign.categoryId, countsMap.get(assign.categoryId)! + 1);
+          }
+        }
+      }
+    });
+
+    return categories.map((cat) => ({
+      _id: cat._id,
+      name: cat.name,
+      _creationTime: cat._creationTime,
+      productCount: countsMap.get(cat._id) ?? 0,
+    }));
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("productCategories"),
+      name: v.string(),
+      _creationTime: v.number(),
+      productCount: v.number(),
+    })
+  ),
 });

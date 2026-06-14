@@ -15,8 +15,8 @@ import type {
 
 const createDefaultActions = (): SpeedDialAction[] => [
   { id: 'action-phone', bgColor: '#ef4444', icon: 'phone', label: 'Gọi ngay', url: 'tel:0123456789' },
-  { id: 'action-zalo', bgColor: '#0084ff', icon: 'zalo', label: 'Chat Zalo', url: 'https://zalo.me/yourpage' },
-  { id: 'action-mail', bgColor: '#ea580c', icon: 'mail', label: 'Email', url: 'mailto:contact@example.com' },
+  { id: 'action-zalo', bgColor: '#0084ff', icon: 'zalo', label: 'Zalo', url: 'https://zalo.me/yourpage' },
+  { id: 'action-facebook', bgColor: '#1877f2', icon: 'facebook', label: 'Facebook', url: 'https://facebook.com/yourpage' },
 ];
 
 export default function SpeedDialCreatePage() {

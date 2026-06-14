@@ -3,9 +3,10 @@
 import React from 'react';
 import { cn } from '../../../components/ui';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
-import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { PreviewWrapper, usePreviewDark } from '../../_shared/components/PreviewWrapper';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import type { BlogPostItem } from './BlogForm';
 import {
   getBlogColorTokens,
@@ -13,7 +14,8 @@ import {
   type BlogBrandMode,
 } from '../_lib/colors';
 import { BLOG_STYLES } from '../_lib/constants';
-import type { BlogStyle } from '../_types';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
+import type { BlogCardRadius, BlogStyle } from '../_types';
 import { BlogSectionRuntime } from './BlogSectionRuntime';
 import type { PreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 
@@ -39,12 +41,14 @@ interface BlogPreviewProps {
   showSubtitleHeader?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
   headerAlign?: 'left' | 'center' | 'right';
   titleColorPrimary?: boolean;
   subtitleAboveTitle?: boolean;
   uppercaseText?: boolean;
   // Grid columns
   desktopColumns?: 3 | 4;
+  cornerRadius?: BlogCardRadius;
 }
 
 const getPreviewViewportClassName = (device: PreviewDevice) => {
@@ -196,17 +200,19 @@ export const BlogPreview = ({
   titleColorPrimary = false,
   subtitleAboveTitle = false,
   uppercaseText = false,
+  spacing,
   // Grid columns
   desktopColumns = 4,
+  cornerRadius = 'lg',
 }: BlogPreviewProps) => {
   const { device, setDevice } = usePreviewDevice();
+  const { isDark } = usePreviewDark();
   const previewDeviceWidthClass = deviceWidths[device];
 
-  const tokens = getBlogColorTokens({
-    primary: brandColor,
-    secondary,
-    mode,
-  });
+  const tokens = React.useMemo(
+    () => adaptTokensForDarkMode(getBlogColorTokens({ primary: brandColor, secondary, mode }), isDark),
+    [brandColor, secondary, mode, isDark]
+  );
 
   const validation = getBlogValidationResult({
     primary: brandColor,
@@ -218,7 +224,7 @@ export const BlogPreview = ({
     if (previewItems && previewItems.length > 0) {
       return previewItems.map((post) => ({
         author: 'Admin',
-        category: post.categoryId && categoryMap ? categoryMap[post.categoryId] : 'Tin tức',
+        category: post.categoryName || (post.categoryId && categoryMap ? categoryMap[post.categoryId] : 'Tin tức'),
         date: post.publishedAt
           ? new Date(post.publishedAt).toLocaleDateString('vi-VN')
           : new Date(post._creationTime).toLocaleDateString('vi-VN'),
@@ -276,7 +282,7 @@ export const BlogPreview = ({
         <BrowserFrame url="yoursite.com/blog">
           <div className={getPreviewContentClassName(device)}>
             <div
-              className={cn('bg-white transition-all duration-300 relative flex flex-col', getDeviceFrameClassName(device))}
+              className={cn(isDark ? 'bg-slate-900' : 'bg-white', 'transition-all duration-300 relative flex flex-col', getDeviceFrameClassName(device))}
               style={{
                 borderTopColor: tokens.primary.solid,
               } as React.CSSProperties}
@@ -305,6 +311,8 @@ export const BlogPreview = ({
                   subtitleAboveTitle={subtitleAboveTitle}
                   uppercaseText={uppercaseText}
                   desktopColumns={desktopColumns}
+                  spacing={spacing}
+                  cornerRadius={cornerRadius}
                 />
               </div>
             </div>

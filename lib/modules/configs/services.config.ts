@@ -20,6 +20,22 @@ export const servicesModule = defineModuleWithRuntime({
    settings: [
     { key: 'servicesPerPage', label: 'Số dịch vụ / trang', type: 'number', default: 10 },
     {
+      key: 'enableMultipleCategories',
+      label: 'Cho phép nhiều danh mục',
+      type: 'toggle',
+      default: false,
+    },
+    {
+      key: 'commerceMode',
+      label: 'Chế độ thương mại',
+      type: 'select',
+      default: 'contact',
+      options: [
+        { value: 'cart', label: 'Giỏ hàng & thanh toán' },
+        { value: 'contact', label: 'Nút liên hệ (/contact)' },
+      ],
+    },
+    {
       key: 'defaultStatus',
       label: 'Trạng thái mặc định',
       type: 'select',

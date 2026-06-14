@@ -1,21 +1,34 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import useEmblaCarousel from 'embla-carousel-react';
 import { PublicImage as Image } from '@/components/shared/PublicImage';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
+import { notifyAddToCart, useCart } from '@/lib/cart';
+import { useCartConfig } from '@/lib/experiences';
+import { ProductCardActions } from '@/components/site/shared/ProductCardActions';
+import { QuickAddVariantModal } from '@/components/products/QuickAddVariantModal';
+import { getProductsListColors } from '@/components/site/products/colors';
+import type { Id } from '@/convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { useBrandColors } from './hooks';
+import { useBrandColors, useSiteSettings } from './hooks';
 import { useSnapshotDemoContext } from '@/components/modules/homepage/SnapshotDemoProvider';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 import { cn } from '@/app/admin/components/ui';
 import { resolveTypeOverrideColors } from '@/app/admin/home-components/_shared/lib/typeColorOverride';
 import { resolveTypeOverrideFont } from '@/app/admin/home-components/_shared/lib/typeFontOverride';
 import { getHomeComponentPriceLabel, resolveSaleMode } from '@/app/admin/home-components/_shared/lib/productPrice';
+import { getSectionSpacingClassName, normalizeSectionSpacing } from '@/app/admin/home-components/_shared/types/sectionSpacing';
 import { getProductImageAspectRatioCssValue, resolveProductImageAspectRatio } from '@/lib/products/image-aspect-ratio';
-import { buildDetailPath, normalizeRouteMode } from '@/lib/ia/route-mode';
+import { buildCategoryPath, buildDetailPath, normalizeRouteMode } from '@/lib/ia/route-mode';
+import { parseHighlightedHeading } from '@/lib/utils/heroText';
 import {
   getBentoColors,
+  getConquestColors,
+  getAPCATextColor,
   getFadeColors,
   getFullscreenColors,
   getParallaxColors,
@@ -31,33 +44,45 @@ import {
   getMinimalColors,
 } from '@/app/admin/home-components/stats/_lib/colors';
 import { getCategoryProductsColors } from '@/app/admin/home-components/category-products/_lib/colors';
+import { getCategoryProductsCardRadiusClassName, getCategoryProductsImageRadiusClassName, getCategoryProductsResponsiveGridClassName, normalizeCategoryProductsCornerRadius } from '@/app/admin/home-components/category-products/_types';
 import { getProductCategoriesColors } from '@/app/admin/home-components/product-categories/_lib/colors';
-import { getCTAColors } from '@/app/admin/home-components/cta/_lib/colors';
+import { getCTAThemeTokens } from '@/app/admin/home-components/cta/_lib/colors';
 import { CTASectionShared } from '@/app/admin/home-components/cta/_components/CTASectionShared';
+import { normalizeCTAStyle } from '@/app/admin/home-components/cta/_lib/constants';
 import { BenefitsSectionShared } from '@/app/admin/home-components/benefits/_components/BenefitsSectionShared';
 import { getBenefitsSectionColors, normalizeBenefitsHarmony, normalizeBenefitsStyle } from '@/app/admin/home-components/benefits/_lib/colors';
 import { FaqSectionShared } from '@/app/admin/home-components/faq/_components/FaqSectionShared';
 import { getFaqColors } from '@/app/admin/home-components/faq/_lib/colors';
 import { getTestimonialsSectionColors } from '@/app/admin/home-components/testimonials/_lib/colors';
 import { TestimonialsSectionShared } from '@/app/admin/home-components/testimonials/_components/TestimonialsSectionShared';
-import { normalizeTestimonialsDesktopColumns, normalizeTestimonialsStyle } from '@/app/admin/home-components/testimonials/_types';
+import { getTestimonialsSectionSpacingClassName, normalizeTestimonialsCornerRadius, normalizeTestimonialsDesktopColumns, normalizeTestimonialsSpacing, normalizeTestimonialsStyle } from '@/app/admin/home-components/testimonials/_types';
 import { getMarqueeSectionColors } from '@/app/admin/home-components/marquee/_lib/colors';
 import { MarqueeSectionShared } from '@/app/admin/home-components/marquee/_components/MarqueeSectionShared';
-import { normalizeMarqueeStyle, normalizeMarqueeDirection, normalizeMarqueeSpeed, normalizeMarqueeScale, normalizeMarqueeItem } from '@/app/admin/home-components/marquee/_types';
+import { normalizeMarqueeCornerRadius, normalizeMarqueeStyle, normalizeMarqueeDirection, normalizeMarqueeSpeed, normalizeMarqueeScale, normalizeMarqueeItem, normalizeMarqueeSpacing } from '@/app/admin/home-components/marquee/_types';
 import type { MarqueeBrandMode } from '@/app/admin/home-components/marquee/_types';
 import { getGalleryColorTokens, normalizeGalleryHarmony, type GalleryColorTokens } from '@/app/admin/home-components/gallery/_lib/colors';
-import { normalizeTrustBadgesStyle } from '@/app/admin/home-components/gallery/_types';
-import { getFooterLayoutColors, type FooterLayoutColors } from '@/app/admin/home-components/footer/_lib/colors';
-import { getFooterLogoBackgroundClassName, getFooterLogoBackgroundStyle, getFooterLogoSize } from '@/app/admin/home-components/footer/_lib/constants';
+import type { TrustBadgesStyle } from '@/app/admin/home-components/gallery/_types';
+import {
+  DEFAULT_STACK_DESCRIPTION,
+  DEFAULT_STACK_HEADING,
+  DEFAULT_TRUST_CUE_TEXT,
+  TRUST_BADGES_A4_ASPECT_CLASS,
+  getTrustBadgesMaxVisibleItems,
+  TrustBadgesSectionHeader,
+  TrustBadgesTrustCue,
+  useTrustBadgesSectionState,
+} from '@/app/admin/home-components/gallery/_components/TrustBadgesSectionShared';
+import { getFooterThemeColors, type FooterLayoutColors } from '@/app/admin/home-components/footer/_lib/colors';
+import { getFooterCornerRadiusClassName, getFooterLogoBackgroundClassName, getFooterLogoBackgroundStyle, getFooterLogoSize, getFooterMaxWidthClass, getFooterSectionSpacingClassName } from '@/app/admin/home-components/footer/_lib/constants';
 import type { ProcessBrandMode } from '@/app/admin/home-components/process/_types';
-import { normalizeProcessRenderSteps, normalizeProcessStyle } from '@/app/admin/home-components/process/_lib/normalize';
+import { normalizeProcessConfig, normalizeProcessRenderSteps, normalizeProcessStyle } from '@/app/admin/home-components/process/_lib/normalize';
 import { ProcessSectionShared } from '@/app/admin/home-components/process/_components/ProcessSectionShared';
 import { FeaturesSectionShared } from '@/app/admin/home-components/features/_components/FeaturesSectionShared';
 import { ClientsSectionShared, normalizeClientItems, normalizeClientsStyleSafe } from '@/app/admin/home-components/clients/_components/ClientsSectionShared';
 import { getClientsColorTokens } from '@/app/admin/home-components/clients/_lib/colors';
 import { getGalleryMarqueeBaseItems } from '@/app/admin/home-components/gallery/_lib/constants';
 import { ServicesSectionCore } from './ServicesSectionCore';
-import type { ServiceItem, ServiceItemMediaAlign, ServiceItemMediaPlacement, ServicesStyle } from '@/app/admin/home-components/services/_types';
+import { normalizeServicesCornerRadius, normalizeServicesSpacing, type ServiceItem, type ServiceItemMediaAlign, type ServiceItemMediaPlacement, type ServicesStyle } from '@/app/admin/home-components/services/_types';
 import { getServicesDesktopColumns, getServicesMediaAlign, getServicesMediaPlacement } from '@/app/admin/home-components/services/_lib/items';
 import { getServicesColors } from '@/app/admin/home-components/services/_lib/colors';
 import { SectionHeader } from '@/app/admin/home-components/_shared/components/SectionHeader';
@@ -70,10 +95,12 @@ import { PartnersCleanShared } from '@/app/admin/home-components/partners/_compo
 import { PartnersDividerShared } from '@/app/admin/home-components/partners/_components/PartnersDividerShared';
 import { PartnersGridShared } from '@/app/admin/home-components/partners/_components/PartnersGridShared';
 import { PartnersLogoCloudShared } from '@/app/admin/home-components/partners/_components/PartnersLogoCloudShared';
-import { normalizePartnersAlign, normalizePartnersDisplayMode, normalizePartnersStyle } from '@/app/admin/home-components/partners/_types';
-import type { FooterBrandMode, FooterLogoBackgroundStyle, FooterStyle } from '@/app/admin/home-components/footer/_types';
+import { PartnersGlassLogoCloudShared } from '@/app/admin/home-components/partners/_components/PartnersGlassLogoCloudShared';
+import { getPartnersSectionSpacingClassName, normalizePartnersAlign, normalizePartnersCornerRadius, normalizePartnersDisplayMode, normalizePartnersLogoColorIntensity, normalizePartnersLogoSize, normalizePartnersShowBorder, normalizePartnersSpacing, normalizePartnersStyle, type PartnersLogoColorMode } from '@/app/admin/home-components/partners/_types';
+import type { FooterBrandMode, FooterConfig, FooterCornerRadius, FooterLogoBackgroundStyle, FooterStyle } from '@/app/admin/home-components/footer/_types';
 import type { ClientsBrandMode, ClientsHeaderAlign } from '@/app/admin/home-components/clients/_types';
-import type { CTAStyle } from '@/app/admin/home-components/cta/_types';
+import { normalizeClientsCornerRadius } from '@/app/admin/home-components/clients/_types';
+import type { CTAConfig, CTAStyle } from '@/app/admin/home-components/cta/_types';
 import type { BenefitItem, BenefitsBrandMode, BenefitsConfig } from '@/app/admin/home-components/benefits/_types';
 import type { FaqConfig, FaqItem, FaqStyle } from '@/app/admin/home-components/faq/_types';
 import * as LucideIcons from 'lucide-react';
@@ -113,12 +140,12 @@ import { CaseStudySection } from './CaseStudySection';
 import { SpeedDialSection } from './SpeedDialSection';
 import { CountdownSectionWrapper } from './CountdownSectionWrapper';
 import type { HomepageCategoryHeroConfig } from '@/app/admin/home-components/homepage-category-hero/_types';
-import { ProductImageFrameOverlay, useProductFrameConfig } from '@/components/shared/ProductImageFrameBox';
+import { ProductImageWithOverlay, useProductImageOverlayConfigs } from '@/components/shared/ProductImageWithOverlay';
 import {
   ArrowUpRight,
   ArrowRight,
   ChevronLeft, ChevronRight, Globe,
-  Image as ImageIcon, LayoutTemplate, Maximize2, Package, Plus, Shield,
+  Image as ImageIcon, LayoutTemplate, Maximize2, Package, Shield,
   X, ZoomIn
 } from 'lucide-react';
 
@@ -149,11 +176,6 @@ const SiteImage = ({ src, alt = '', width = 1200, height = 800, sizes = '100vw',
   );
 };
 
-const useSafeId = (prefix: string) => {
-  const id = React.useId();
-  return `${prefix}-${id.replaceAll(':', '')}`;
-};
-
 const DEFAULT_COUNTDOWN_END_DATE = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
 interface HomeComponent {
@@ -171,6 +193,7 @@ interface ComponentRendererProps {
 
 export function ComponentRenderer({ component }: ComponentRendererProps) {
   const systemColors = useBrandColors();
+  const { isDark } = useSiteSettings();
   const isSnapshotMode = Boolean(useSnapshotDemoContext());
   const systemConfig = useQuery(api.homeComponentSystemConfig.getConfig, isSnapshotMode ? 'skip' : undefined);
   const { type, title, config } = component;
@@ -184,9 +207,10 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
     overrides: systemConfig?.typeFontOverrides ?? null,
     globalOverride: systemConfig?.globalFontOverride ?? null,
   });
+
   const fontStyle = { '--font-active': `var(${resolvedFont.fontVariable})` } as React.CSSProperties;
   const wrapWithFont = (node: React.ReactNode) => (
-    <div className="font-active" style={fontStyle}>{node}</div>
+    <div className={cn('font-active', isDark && 'dark')} style={fontStyle}>{node}</div>
   );
 
   // Render component dựa vào type
@@ -209,6 +233,7 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
           secondary={resolvedColors.secondary}
           mode={resolvedColors.mode}
           tokens={heroTokens}
+          isDark={isDark}
         />
       );
     }
@@ -220,6 +245,7 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
           secondary={resolvedColors.secondary} 
           mode={resolvedColors.mode} 
           title={title} 
+          isDark={isDark}
         />
       );
     }
@@ -230,94 +256,94 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
     }
     case 'Services': {
       return wrapWithFont(
-        <ServicesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ServicesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Benefits': {
       return wrapWithFont(
-        <BenefitsSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <BenefitsSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'FAQ': {
       return wrapWithFont(
-        <FAQSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <FAQSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'CTA': {
       return wrapWithFont(
-        <CTASection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} />
+        <CTASection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} isDark={isDark} />
       );
     }
     case 'Testimonials': {
       return wrapWithFont(
-        <TestimonialsSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <TestimonialsSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Contact': {
       return wrapWithFont(
-        <ContactSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ContactSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Gallery':
     case 'Partners': {
       return wrapWithFont(
-        <GallerySection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} type={type} />
+        <GallerySection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} type={type} isDark={isDark} />
       );
     }
     case 'TrustBadges': {
       return wrapWithFont(
-        <TrustBadgesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <TrustBadgesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Pricing': {
       return wrapWithFont(
-        <PricingSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <PricingSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'ProductList': {
       return wrapWithFont(
-        <ProductListSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ProductListSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'ProductGrid': {
       const gridStyle = (config.style as string) || '';
       if (gridStyle === 'tabbed' || gridStyle === 'storefront') {
         return wrapWithFont(
-          <ProductGridSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} title={title} />
+          <ProductGridSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
         );
       }
       return wrapWithFont(
-        <ProductListSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ProductListSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'ServiceList': {
       return wrapWithFont(
-        <ServiceListSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ServiceListSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Blog': {
       return wrapWithFont(
-        <BlogSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <BlogSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Career': {
       return wrapWithFont(
-        <CareerSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <CareerSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'CaseStudy': {
       return wrapWithFont(
-        <CaseStudySection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <CaseStudySection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'SpeedDial': {
       return wrapWithFont(
-        <SpeedDialSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <SpeedDialSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'ProductCategories': {
       return wrapWithFont(
-        <ProductCategoriesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ProductCategoriesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'CategoryProducts': {
@@ -328,57 +354,67 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
           secondary={resolvedColors.secondary}
           mode={resolvedColors.mode}
           title={title}
+          isDark={isDark}
         />
       );
     }
     case 'Team': {
       return wrapWithFont(
-        <TeamSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <TeamSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Features': {
       return wrapWithFont(
-        <FeaturesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <FeaturesSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Process': {
       return wrapWithFont(
-        <ProcessSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ProcessSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Clients': {
       return wrapWithFont(
-        <ClientsSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <ClientsSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Video': {
       return wrapWithFont(
-        <VideoSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <VideoSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Countdown': {
       return wrapWithFont(
-        <CountdownSectionWrapper config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} title={title} />
+        <CountdownSectionWrapper config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} title={title} isDark={isDark} />
       );
     }
     case 'VoucherPromotions': {
       return wrapWithFont(
-        <VoucherPromotionsSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <VoucherPromotionsSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Popup': {
       return wrapWithFont(
-        <PopupSectionRuntime config={config} brandColor={resolvedColors.primary} title={title} />
+        <PopupSectionRuntime config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} isDark={isDark} />
       );
     }
     case 'Marquee': {
       return wrapWithFont(
-        <MarqueeSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} title={title} />
+        <MarqueeSection
+          config={config}
+          brandColor={resolvedColors.primary}
+          secondary={resolvedColors.secondary}
+          mode={resolvedColors.mode}
+          title={title}
+          fontStyle={fontStyle}
+          fontClassName="font-active"
+          isDark={isDark}
+        />
       );
     }
     case 'Footer': {
       return wrapWithFont(
-        <FooterSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} />
+        <FooterSection config={config} brandColor={resolvedColors.primary} secondary={resolvedColors.secondary} mode={resolvedColors.mode} isDark={isDark} />
       );
     }
     default: {
@@ -389,8 +425,8 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
 
 // ============ HERO SECTION ============
 // Best Practice: Blurred Background Fill - fills letterbox gaps with blurred version of same image
-// Supports 6 styles: slider, fade, bento, fullscreen, split, parallax
-type HeroStyle = 'slider' | 'fade' | 'bento' | 'triple' | 'triple2' | 'fullscreen' | 'split' | 'parallax';
+// Supports Hero styles across admin preview and runtime renderer.
+type HeroStyle = 'slider' | 'fade' | 'builderCoffee' | 'bento' | 'triple' | 'triple2' | 'fullscreen' | 'conquest' | 'split' | 'parallax';
 
 interface HeroContent {
   badge?: string;
@@ -402,6 +438,9 @@ interface HeroContent {
   secondaryButtonLink?: string;
   countdownText?: string;
   showFullscreenContent?: boolean;
+  highlightColor?: string;
+  primaryButtonColor?: string;
+  secondaryButtonColor?: string;
 }
 
 function HeroSection({
@@ -425,17 +464,72 @@ function HeroSection({
   const sliderColors = getSliderColors(brandColor, secondary, mode);
   const fadeColors = getFadeColors(brandColor, secondary, mode);
   const bentoColors = getBentoColors(brandColor, secondary, mode);
+  const conquestColors = getConquestColors(brandColor, secondary, mode);
   const fullscreenColors = getFullscreenColors(brandColor, secondary, mode);
   const splitColors = getSplitColors(brandColor, secondary, mode);
   const parallaxColors = getParallaxColors(brandColor, secondary, mode);
 
+  const activeSlideCount = style === 'bento'
+    ? Math.min(slides.length, 4)
+    : (style === 'triple' || style === 'triple2' ? Math.min(slides.length, 3) : slides.length);
+  const [heroEmblaRef, heroEmblaApi] = useEmblaCarousel({ align: 'start', loop: activeSlideCount > 1 });
+  const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+  const [canScrollNext, setCanScrollNext] = React.useState(false);
+  const emblaCurrentSlide = activeSlideCount > 0 ? currentSlide % activeSlideCount : 0;
+
+  const updateEmblaState = React.useCallback(() => {
+    if (!heroEmblaApi) {return;}
+    setCurrentSlide(heroEmblaApi.selectedScrollSnap());
+    setCanScrollPrev(heroEmblaApi.canScrollPrev());
+    setCanScrollNext(heroEmblaApi.canScrollNext());
+  }, [heroEmblaApi]);
+
   React.useEffect(() => {
-    if (slides.length <= 1 || style === 'bento' || style === 'triple' || style === 'triple2') {return;}
+    if (!heroEmblaApi) {return;}
+    updateEmblaState();
+    heroEmblaApi.on('select', updateEmblaState);
+    heroEmblaApi.on('reInit', updateEmblaState);
+    return () => {
+      heroEmblaApi.off('select', updateEmblaState);
+      heroEmblaApi.off('reInit', updateEmblaState);
+    };
+  }, [heroEmblaApi, updateEmblaState]);
+
+  const scrollHeroPrev = React.useCallback(() => {
+    if (heroEmblaApi) {
+      heroEmblaApi.scrollPrev();
+      return;
+    }
+    setCurrentSlide(prev => prev === 0 ? activeSlideCount - 1 : prev - 1);
+  }, [activeSlideCount, heroEmblaApi]);
+
+  const scrollHeroNext = React.useCallback(() => {
+    if (heroEmblaApi) {
+      heroEmblaApi.scrollNext();
+      return;
+    }
+    setCurrentSlide(prev => (prev + 1) % activeSlideCount);
+  }, [activeSlideCount, heroEmblaApi]);
+
+  const scrollHeroTo = React.useCallback((index: number) => {
+    if (heroEmblaApi) {
+      heroEmblaApi.scrollTo(index);
+      return;
+    }
+    setCurrentSlide(index);
+  }, [heroEmblaApi]);
+
+  React.useEffect(() => {
+    if (activeSlideCount <= 1) {return;}
     const timer = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % slides.length);
+      if (style === 'slider' || style === 'bento' || style === 'fullscreen' || style === 'conquest' || style === 'split' || style === 'parallax') {
+        scrollHeroNext();
+        return;
+      }
+      setCurrentSlide(prev => (prev + 1) % activeSlideCount);
     }, 5000);
     return () =>{  clearInterval(timer); };
-  }, [slides.length, style]);
+  }, [activeSlideCount, scrollHeroNext, style]);
 
   if (slides.length === 0) {
     return (
@@ -472,7 +566,7 @@ function HeroSection({
     const endX = event.changedTouches[0]?.clientX;
     touchStartX.current = null;
 
-    if (slides.length <= 1 || startX == null || endX == null) {
+    if (activeSlideCount <= 1 || startX == null || endX == null) {
       return;
     }
 
@@ -482,42 +576,40 @@ function HeroSection({
     }
 
     if (deltaX < 0) {
-      setCurrentSlide(prev => (prev + 1) % slides.length);
+      setCurrentSlide(prev => (prev + 1) % activeSlideCount);
       return;
     }
 
-    setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1);
+    setCurrentSlide(prev => prev === 0 ? activeSlideCount - 1 : prev - 1);
   };
 
   // Style 1: Slider
   if (style === 'slider') {
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden">
-        <div
-          className="relative w-full aspect-[16/9] md:aspect-[21/9] max-h-[400px] md:max-h-[550px]"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          {slides.map((slide, idx) => (
-            <div
-              key={idx}
-              className={`absolute inset-0 transition-opacity duration-700 hover:ring-2 hover:ring-offset-2 hover:ring-offset-slate-900 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-              style={{ '--tw-ring-color': sliderColors.hoverRingColor } as React.CSSProperties}
-            >
-              {slide.image ? renderSlideWithBlur(slide, { priority: idx === 0 }) : renderPlaceholder(sliderColors.placeholderBg, sliderColors.placeholderIconColor)}
-            </div>
-          ))}
+        <div className="relative w-full aspect-[16/9] md:aspect-[21/9] max-h-[400px] md:max-h-[550px] overflow-hidden" ref={heroEmblaRef}>
+          <div className="flex h-full">
+            {slides.map((slide, idx) => (
+              <div
+                key={idx}
+                className="relative h-full min-w-0 flex-[0_0_100%] hover:ring-2 hover:ring-offset-2 hover:ring-offset-slate-900"
+                style={{ '--tw-ring-color': sliderColors.hoverRingColor } as React.CSSProperties}
+              >
+                {slide.image ? renderSlideWithBlur(slide, { priority: idx === 0 }) : renderPlaceholder(sliderColors.placeholderBg, sliderColors.placeholderIconColor)}
+              </div>
+            ))}
+          </div>
           {slides.length > 1 && (
             <>
-              <button onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg hidden md:flex items-center justify-center transition-all z-20 border-2" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
+              <button type="button" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg hidden md:flex items-center justify-center transition-all z-20 border-2 disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: sliderColors.navButtonIconColor }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
               </button>
-              <button onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg hidden md:flex items-center justify-center transition-all z-20 border-2" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
+              <button type="button" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg hidden md:flex items-center justify-center transition-all z-20 border-2 disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}` }}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: sliderColors.navButtonIconColor }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </button>
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
                 {slides.map((_, idx) => (
-                  <button key={idx} onClick={() =>{  setCurrentSlide(idx); }} className={`w-3 h-3 rounded-full transition-all ${idx === currentSlide ? 'w-8' : ''}`} style={{ backgroundColor: idx === currentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
+                  <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={`w-3 h-3 rounded-full transition-all ${idx === emblaCurrentSlide ? 'w-8' : ''}`} style={{ backgroundColor: idx === emblaCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
                 ))}
               </div>
               <div className="absolute bottom-2 left-0 right-0 h-0.5 z-20" style={{ backgroundColor: sliderColors.progressBarInactive }}>
@@ -525,7 +617,7 @@ function HeroSection({
                   className="h-full transition-all duration-700"
                   style={{
                     backgroundColor: sliderColors.progressBarActive,
-                    width: `${((currentSlide + 1) / slides.length) * 100}%`,
+                    width: `${((emblaCurrentSlide + 1) / slides.length) * 100}%`,
                   }}
                 />
               </div>
@@ -560,37 +652,113 @@ function HeroSection({
     );
   }
 
+  if (style === 'builderCoffee') {
+    return (
+      <section className="relative w-full overflow-hidden bg-white pb-[50px]">
+        <div className="mx-auto w-full max-w-7xl tv:max-w-[1600px] px-3">
+          <div className="mt-5 flex flex-wrap -mx-3">
+            <div className="grid w-full max-w-full grid-cols-3 gap-[10px] px-3">
+              <div className="col-span-3 overflow-hidden">
+                <div className="relative">
+                  <div
+                    className="relative flex w-full touch-pan-y select-none items-center overflow-hidden rounded-[10px] bg-white"
+                    role="toolbar"
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
+                  >
+                    <div className="relative w-full overflow-hidden">
+                      {slides.map((slide, idx) => (
+                        <div key={idx} className={`absolute inset-0 text-center transition-opacity duration-700 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                          <a href={slide.link || '#'} className="inline h-full w-full cursor-pointer text-center">
+                            {slide.image ? (
+                              <div className="relative h-full w-full overflow-hidden">
+                                <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(30px)' }} />
+                                <div className="absolute inset-0 bg-black/10" />
+                                <SiteImage src={slide.image} alt="Sản phẩm nổi bật" className="relative z-10 mx-auto h-full w-full max-w-full object-contain align-middle" width={1500} height={560} priority={idx === 0} sizes="100vw" />
+                              </div>
+                            ) : renderPlaceholder('#f8fafc', sliderColors.placeholderIconColor)}
+                          </a>
+                        </div>
+                      ))}
+                      <div className="relative w-full aspect-[16/9]" aria-hidden />
+                    </div>
+                    {slides.length > 1 && (
+                      <>
+                        <button type="button" aria-label="Previous" onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="absolute -left-0.5 top-1/2 z-20 block h-[52px] w-[13px] -translate-y-1/2 overflow-hidden bg-transparent text-transparent md:h-[118px] md:w-[30px]" style={{ backgroundImage: 'url("https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/arow-left.png?1778581786863")', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundSize: 'contain' }}>
+                          <span className="absolute inset-0 z-30 flex items-center justify-start pl-0.5 text-black md:pl-1">
+                            <svg className="h-2.5 w-2.5 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.1} d="M15 19l-7-7 7-7" /></svg>
+                          </span>
+                        </button>
+                        <button type="button" aria-label="Next" onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="absolute -right-0.5 top-1/2 z-20 block h-[52px] w-[13px] -translate-y-1/2 overflow-hidden bg-transparent text-transparent md:h-[118px] md:w-[30px]" style={{ backgroundImage: 'url("https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/arow-right.png?1778581786863")', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', backgroundSize: 'contain' }}>
+                          <span className="absolute inset-0 z-30 flex items-center justify-end pr-0.5 text-black md:pr-1">
+                            <svg className="h-2.5 w-2.5 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.1} d="M9 5l7 7-7 7" /></svg>
+                          </span>
+                        </button>
+                        <div className="absolute bottom-0 left-1/2 z-20 mb-4 flex h-6 w-[100px] -translate-x-1/2 items-center justify-center rounded-[15px]">
+                          {slides.map((_, idx) => (
+                            <button key={idx} type="button" aria-label={`Đi tới slide ${idx + 1}`} onClick={() =>{  setCurrentSlide(idx); }} className="mx-[3px] h-0.5 w-4 border transition-opacity" style={{ backgroundColor: idx === currentSlide ? '#8b7046' : '#cccccc', borderColor: idx === currentSlide ? '#8b7046' : '#cccccc', opacity: idx === currentSlide ? 1 : 0.7 }} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   // Style 3: Bento Grid
   if (style === 'bento') {
     const bentoSlides = slides.slice(0, 4);
+    const bentoCurrentSlide = bentoSlides.length > 0 ? currentSlide % bentoSlides.length : 0;
     const bentoPlaceholders = ['#f1f5f9', '#e2e8f0', '#f1f5f9', '#e2e8f0'];
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden p-2 md:p-4">
-        <div className="max-h-[400px] md:max-h-[550px]">
-          {/* Mobile: 2x2 grid */}
-          <div className="grid grid-cols-2 gap-2 md:hidden" style={{ height: '320px' }}>
-            {bentoSlides.slice(0, 4).map((slide, idx) => (
-              <a key={idx} href={slide.link || '#'} className="relative rounded-xl overflow-hidden">
-                {slide.image ? (
-                  <div className="w-full h-full relative">
-                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
-                    <div className="absolute inset-0 bg-black/20" />
-                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" priority={idx === 0} sizes="50vw" />
-                  </div>
-                ) : (
-                  renderPlaceholder(bentoPlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)
-                )}
-              </a>
-            ))}
+        <div className="mx-auto w-full max-w-7xl tv:max-w-[1600px]">
+          {/* Mobile: slider-like carousel */}
+          <div className="relative aspect-[16/9] max-h-[400px] overflow-hidden md:hidden" ref={heroEmblaRef}>
+            <div className="flex h-full">
+              {bentoSlides.map((slide, idx) => (
+                <a key={idx} href={slide.link || '#'} className="relative h-full min-w-0 flex-[0_0_100%] overflow-hidden rounded-xl">
+                  {slide.image ? (
+                    <SiteImage src={slide.image} alt="" className="h-full w-full object-cover" priority={idx === 0} sizes="100vw" />
+                  ) : (
+                    renderPlaceholder(bentoPlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)
+                  )}
+                </a>
+              ))}
+            </div>
+            {bentoSlides.length > 1 && (
+              <>
+                <button type="button" aria-label="Ảnh trước" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button type="button" aria-label="Ảnh tiếp" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+                <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                  {bentoSlides.map((_, idx) => (
+                    <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={`h-2 rounded-full transition-all ${idx === bentoCurrentSlide ? 'w-6' : 'w-2'}`} style={{ backgroundColor: idx === bentoCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
+                  ))}
+                </div>
+                <div className="absolute bottom-2 left-0 right-0 z-20 h-0.5" style={{ backgroundColor: sliderColors.progressBarInactive }}>
+                  <div className="h-full transition-all duration-700" style={{ backgroundColor: sliderColors.progressBarActive, width: `${((bentoCurrentSlide + 1) / bentoSlides.length) * 100}%` }} />
+                </div>
+              </>
+            )}
           </div>
           {/* Desktop: Bento layout */}
-          <div className="hidden md:grid grid-cols-4 grid-rows-2 gap-3" style={{ height: '500px' }}>
+          <div className="hidden md:grid grid-cols-4 grid-rows-2 gap-3 aspect-[5/2] max-h-[550px]">
             <a href={bentoSlides[0]?.link || '#'} className="col-span-2 row-span-2 relative rounded-2xl overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900" style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
               {bentoSlides[0]?.image ? (
                 <div className="w-full h-full relative">
                   <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
-                  <SiteImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" priority sizes="50vw" />
+                  <SiteImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-cover z-10" priority sizes="50vw" />
                 </div>
               ) : renderPlaceholder(bentoPlaceholders[0], bentoColors.placeholderIcon, 24)}
             </a>
@@ -599,7 +767,7 @@ function HeroSection({
                 <div className="w-full h-full relative">
                   <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[1].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
-                  <SiteImage src={bentoSlides[1].image} alt="" className="relative w-full h-full object-contain z-10" sizes="25vw" />
+                  <SiteImage src={bentoSlides[1].image} alt="" className="relative w-full h-full object-cover z-10" sizes="25vw" />
                 </div>
               ) : renderPlaceholder(bentoPlaceholders[1], bentoColors.placeholderIcon, 22)}
             </a>
@@ -608,7 +776,7 @@ function HeroSection({
                 <div className="w-full h-full relative">
                   <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[2].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
-                  <SiteImage src={bentoSlides[2].image} alt="" className="relative w-full h-full object-contain z-10" sizes="25vw" />
+                  <SiteImage src={bentoSlides[2].image} alt="" className="relative w-full h-full object-cover z-10" sizes="25vw" />
                 </div>
               ) : renderPlaceholder(bentoPlaceholders[2], bentoColors.placeholderIcon, 20)}
             </a>
@@ -617,7 +785,7 @@ function HeroSection({
                 <div className="w-full h-full relative">
                   <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[3].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
-                  <SiteImage src={bentoSlides[3].image} alt="" className="relative w-full h-full object-contain z-10" sizes="25vw" />
+                  <SiteImage src={bentoSlides[3].image} alt="" className="relative w-full h-full object-cover z-10" sizes="25vw" />
                 </div>
               ) : renderPlaceholder(bentoPlaceholders[3], bentoColors.placeholderIcon, 20)}
             </a>
@@ -633,30 +801,46 @@ function HeroSection({
     const triplePlaceholders = ['#f1f5f9', '#e2e8f0', '#f1f5f9'];
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden p-2 md:p-4">
-        <div className="max-h-[400px] md:max-h-[550px]">
-          <div className="flex flex-col gap-2 md:hidden" style={{ height: '420px' }}>
-            {tripleSlides.slice(0, 3).map((slide, idx) => (
-              <a key={idx} href={slide.link || '#'} className="relative rounded-xl overflow-hidden flex-1">
-                {slide.image ? (
-                  <div className="w-full h-full relative">
-                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
-                    <div className="absolute inset-0 bg-black/20" />
-                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" priority={idx === 0} sizes="100vw" />
-                  </div>
-                ) : (
-                  renderPlaceholder(triplePlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)
-                )}
-              </a>
-            ))}
+        <div className="mx-auto w-full max-w-7xl tv:max-w-[1600px]">
+          <div className="relative aspect-[16/9] max-h-[400px] overflow-hidden md:hidden" ref={heroEmblaRef}>
+            <div className="flex h-full">
+              {tripleSlides.map((slide, idx) => (
+                <a key={idx} href={slide.link || '#'} className="relative h-full min-w-0 flex-[0_0_100%] overflow-hidden rounded-xl">
+                  {slide.image ? (
+                    <SiteImage src={slide.image} alt="" className="h-full w-full object-cover" priority={idx === 0} sizes="100vw" />
+                  ) : (
+                    renderPlaceholder(triplePlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)
+                  )}
+                </a>
+              ))}
+            </div>
+            {tripleSlides.length > 1 && (
+              <>
+                <button type="button" aria-label="Ảnh trước" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button type="button" aria-label="Ảnh tiếp" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+                <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                  {tripleSlides.map((_, idx) => (
+                    <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={`h-2 rounded-full transition-all ${idx === emblaCurrentSlide ? 'w-6' : 'w-2'}`} style={{ backgroundColor: idx === emblaCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
+                  ))}
+                </div>
+                <div className="absolute bottom-2 left-0 right-0 z-20 h-0.5" style={{ backgroundColor: sliderColors.progressBarInactive }}>
+                  <div className="h-full transition-all duration-700" style={{ backgroundColor: sliderColors.progressBarActive, width: `${((emblaCurrentSlide + 1) / tripleSlides.length) * 100}%` }} />
+                </div>
+              </>
+            )}
           </div>
-          <div className="hidden md:grid grid-cols-3 gap-3" style={{ height: '500px' }}>
+          <div className="hidden aspect-[16/3] max-h-[550px] grid-cols-3 gap-3 md:grid">
             {tripleSlides.map((slide, idx) => (
               <a key={idx} href={slide.link || '#'} className={`relative rounded-2xl overflow-hidden ${idx === 0 ? 'ring-2 ring-offset-1 ring-offset-slate-900' : ''}`} style={idx === 0 ? { '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties : undefined}>
                 {slide.image ? (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${25 - idx * 5}px)` }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" priority={idx === 0} sizes="33vw" />
+                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-cover z-10" priority={idx === 0} sizes="33vw" />
                   </div>
                 ) : renderPlaceholder(triplePlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, idx === 0 ? 24 : 20)}
               </a>
@@ -673,29 +857,45 @@ function HeroSection({
     const triplePlaceholders = ['#f1f5f9', '#e2e8f0', '#f1f5f9'];
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden p-2 md:p-4">
-        <div className="max-h-[400px] md:max-h-[550px]">
-          <div className="flex flex-col gap-2 md:hidden" style={{ height: '420px' }}>
-            {tripleSlides.slice(0, 3).map((slide, idx) => (
-              <a key={idx} href={slide.link || '#'} className="relative rounded-xl overflow-hidden flex-1">
-                {slide.image ? (
-                  <div className="w-full h-full relative">
-                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
-                    <div className="absolute inset-0 bg-black/20" />
-                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" priority={idx === 0} sizes="100vw" />
-                  </div>
-                ) : (
-                  renderPlaceholder(triplePlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)
-                )}
-              </a>
-            ))}
+        <div className="mx-auto w-full max-w-7xl tv:max-w-[1600px]">
+          <div className="relative aspect-[16/9] max-h-[400px] overflow-hidden md:hidden" ref={heroEmblaRef}>
+            <div className="flex h-full">
+              {tripleSlides.map((slide, idx) => (
+                <a key={idx} href={slide.link || '#'} className="relative h-full min-w-0 flex-[0_0_100%] overflow-hidden rounded-xl">
+                  {slide.image ? (
+                    <SiteImage src={slide.image} alt="" className="h-full w-full object-cover" priority={idx === 0} sizes="100vw" />
+                  ) : (
+                    renderPlaceholder(triplePlaceholders[idx] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)
+                  )}
+                </a>
+              ))}
+            </div>
+            {tripleSlides.length > 1 && (
+              <>
+                <button type="button" aria-label="Ảnh trước" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button type="button" aria-label="Ảnh tiếp" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+                <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                  {tripleSlides.map((_, idx) => (
+                    <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={`h-2 rounded-full transition-all ${idx === emblaCurrentSlide ? 'w-6' : 'w-2'}`} style={{ backgroundColor: idx === emblaCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
+                  ))}
+                </div>
+                <div className="absolute bottom-2 left-0 right-0 z-20 h-0.5" style={{ backgroundColor: sliderColors.progressBarInactive }}>
+                  <div className="h-full transition-all duration-700" style={{ backgroundColor: sliderColors.progressBarActive, width: `${((emblaCurrentSlide + 1) / tripleSlides.length) * 100}%` }} />
+                </div>
+              </>
+            )}
           </div>
-          <div className="hidden md:grid grid-cols-3 grid-rows-2 gap-3" style={{ height: '500px' }}>
+          <div className="hidden aspect-[8/3] max-h-[550px] grid-cols-3 grid-rows-2 gap-3 md:grid">
             <a href={tripleSlides[0]?.link || '#'} className="col-span-2 row-span-2 relative rounded-2xl overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900" style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
               {tripleSlides[0]?.image ? (
                 <div className="w-full h-full relative">
                   <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${tripleSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
-                  <SiteImage src={tripleSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" priority sizes="66vw" />
+                  <SiteImage src={tripleSlides[0].image} alt="" className="relative w-full h-full object-cover z-10" priority sizes="66vw" />
                 </div>
               ) : renderPlaceholder(triplePlaceholders[0], bentoColors.placeholderIcon, 24)}
             </a>
@@ -705,7 +905,7 @@ function HeroSection({
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${20 - idx * 5}px)` }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" sizes="33vw" />
+                    <SiteImage src={slide.image} alt="" className="relative w-full h-full object-cover z-10" sizes="33vw" />
                   </div>
                 ) : renderPlaceholder(triplePlaceholders[idx + 1] ?? bentoColors.gridTint1, bentoColors.placeholderIcon, 20)}
               </a>
@@ -749,16 +949,48 @@ function HeroSection({
     const showFullscreenContent = content.showFullscreenContent !== false;
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden">
-        <div className="relative w-full h-[400px] md:h-[550px] lg:h-[650px]">
-          {slides.map((slide, idx) => (
+        <div className="relative w-full aspect-[16/9] overflow-hidden">
+          {!showFullscreenContent ? (
+            <>
+              <div className="absolute inset-0 overflow-hidden md:hidden" ref={heroEmblaRef}>
+                <div className="flex h-full">
+                  {slides.map((slide, idx) => (
+                    <div key={idx} className="relative h-full min-w-0 flex-[0_0_100%]">
+                      {slide.image ? renderHeroSlideContain(slide, { fit: 'contain', priority: idx === 0 }) : renderPlaceholder(fullscreenColors.placeholderBg, fullscreenColors.placeholderIcon)}
+                    </div>
+                  ))}
+                </div>
+                {slides.length > 1 && (
+                  <>
+                    <button type="button" aria-label="Ảnh trước" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <button type="button" aria-label="Ảnh tiếp" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                    <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                      {slides.map((_, idx) => (
+                        <button key={idx} type="button" onClick={() => { scrollHeroTo(idx); }} className={`h-2 rounded-full transition-all ${idx === emblaCurrentSlide ? 'w-6' : 'w-2'}`} style={{ backgroundColor: idx === emblaCurrentSlide ? fullscreenColors.dotActive : fullscreenColors.dotInactive }} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="absolute inset-0 hidden md:block">
+                {slides.map((slide, idx) => (
+                  <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    {slide.image ? renderHeroSlideContain(slide, { fit: 'contain', priority: idx === 0 }) : renderPlaceholder(fullscreenColors.placeholderBg, fullscreenColors.placeholderIcon)}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : slides.map((slide, idx) => (
             <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               {slide.image ? (
                 renderHeroSlideContain(slide, {
-                  fit: 'cover',
+                  fit: 'contain',
                   priority: idx === 0,
-                  overlay: showFullscreenContent ? (
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent z-20" />
-                  ) : null,
+                  overlay: <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent z-20" />,
                 })
               ) : renderPlaceholder(fullscreenColors.placeholderBg, fullscreenColors.placeholderIcon)}
             </div>
@@ -797,13 +1029,75 @@ function HeroSection({
             </div>
           )}
           {/* Navigation dots */}
-          {slides.length > 1 && (
+          {showFullscreenContent && slides.length > 1 && (
             <div className="absolute bottom-6 right-6 flex gap-2 z-40">
               {slides.map((_, idx) => (
                 <button key={idx} onClick={() =>{  setCurrentSlide(idx); }} className={`w-3 h-3 rounded-full transition-all ${idx === currentSlide ? 'w-8' : ''}`} style={{ backgroundColor: idx === currentSlide ? fullscreenColors.dotActive : fullscreenColors.dotInactive }} />
               ))}
             </div>
           )}
+        </div>
+      </section>
+    );
+  }
+
+  if (style === 'conquest') {
+    const primaryButtonBg = content.primaryButtonColor || conquestColors.primaryCTA;
+    const primaryButtonText = getAPCATextColor(primaryButtonBg, 16, 600);
+    const secondaryButtonStyle = content.secondaryButtonColor
+      ? {
+        backgroundColor: content.secondaryButtonColor,
+        borderColor: content.secondaryButtonColor,
+        color: conquestColors.primaryCTAText,
+      }
+      : {
+        backgroundColor: 'transparent',
+        borderColor: conquestColors.sectionText,
+        color: conquestColors.secondaryCTAText,
+      };
+
+    return (
+      <section className="relative w-full overflow-hidden" style={{ backgroundColor: conquestColors.sectionBg, color: conquestColors.sectionText }}>
+        <div className="relative mx-auto flex min-h-[520px] w-full max-w-7xl tv:max-w-[1600px] flex-col overflow-hidden px-4 pt-8 md:min-h-[560px] md:flex-row md:items-stretch md:justify-between md:px-8 md:pt-0">
+          <div className="relative z-20 flex max-w-full flex-col justify-center gap-4 pb-4 text-center md:min-w-[420px] md:max-w-[540px] md:gap-6 md:py-20 md:text-left">
+            {content.badge && (
+              <span className="inline-flex w-fit items-center gap-2 self-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide md:self-start" style={{ backgroundColor: conquestColors.badgeBg, color: conquestColors.badgeText }}>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: conquestColors.accentSolid }} />
+                {content.badge}
+              </span>
+            )}
+            <h1 className="text-3xl font-bold uppercase leading-[1.05] md:text-5xl lg:text-6xl">
+              {parseHighlightedHeading(content.heading ?? 'Chinh phục tầm cao mới', content.highlightColor || conquestColors.accentSolid)}
+            </h1>
+            {content.description && (
+              <p className="mx-auto max-w-xl text-sm md:mx-0 md:text-lg" style={{ color: conquestColors.descriptionText }}>
+                {content.description}
+              </p>
+            )}
+            <div className="flex flex-wrap justify-center gap-3 md:justify-start">
+              {content.primaryButtonText && <a href={primaryHref} className="rounded-full px-6 py-3 text-sm font-semibold shadow-lg" style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>{content.primaryButtonText}</a>}
+              {content.secondaryButtonText && <a href={secondaryHref} className="rounded-full border px-6 py-3 text-sm font-semibold" style={secondaryButtonStyle}>{content.secondaryButtonText}</a>}
+            </div>
+          </div>
+          <div className="relative flex min-h-[270px] flex-1 items-end justify-center md:min-h-[560px]">
+            <div className="absolute inset-y-0 right-0 hidden w-full max-w-[640px] md:block" aria-hidden>
+              {[0, 1, 2].map((idx) => <span key={idx} className="absolute top-0 w-16 rounded-b-sm opacity-80" style={{ right: `${90 + idx * 150}px`, height: '60%', backgroundImage: conquestColors.pillarGradient }} />)}
+              <span className="absolute bottom-0 right-[360px] h-[34%] w-44 skew-x-[-14deg] opacity-80" style={{ backgroundImage: conquestColors.baseGradient }} />
+              <span className="absolute bottom-0 right-[205px] h-[34%] w-36 skew-x-[10deg] opacity-80" style={{ backgroundImage: conquestColors.baseGradient }} />
+              <span className="absolute bottom-0 right-6 h-[34%] w-44 skew-x-[14deg] opacity-80" style={{ backgroundImage: conquestColors.baseGradient }} />
+            </div>
+            <div className="relative z-10 h-[260px] w-full overflow-hidden md:h-[500px] md:max-w-[620px]" ref={heroEmblaRef}>
+              <div className="flex h-full">
+                {slides.map((slide, idx) => (
+                  <div key={idx} className="relative h-full min-w-0 flex-[0_0_100%]">
+                    {slide.image ? renderHeroSlideContain(slide, { fit: 'contain', priority: idx === 0, blur: 18 }) : renderPlaceholder(conquestColors.placeholderBg, conquestColors.placeholderIcon)}
+                  </div>
+                ))}
+              </div>
+              {slides.length > 1 && <><button type="button" aria-label="Ảnh trước" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: conquestColors.primaryCTA, borderColor: conquestColors.sectionText, color: conquestColors.primaryCTAText }}><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button><button type="button" aria-label="Ảnh tiếp" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: conquestColors.primaryCTA, borderColor: conquestColors.sectionText, color: conquestColors.primaryCTAText }}><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg></button></>}
+            </div>
+          </div>
+          {slides.length > 1 && <div className="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 gap-2">{slides.map((_, idx) => <button key={idx} type="button" onClick={() => { scrollHeroTo(idx); }} className={`h-2 rounded-full transition-all ${idx === emblaCurrentSlide ? 'w-6' : 'w-2'}`} style={{ backgroundColor: idx === emblaCurrentSlide ? conquestColors.dotActive : conquestColors.dotInactive }} />)}</div>}
         </div>
       </section>
     );
@@ -838,15 +1132,45 @@ function HeroSection({
             </div>
             {/* Slide indicators */}
             {slides.length > 1 && (
-              <div className="flex gap-2 mt-8">
+              <div className="mt-8 hidden gap-2 md:flex">
                 {slides.map((_, idx) => (
-                  <button key={idx} onClick={() =>{  setCurrentSlide(idx); }} className={`h-1.5 rounded-full transition-all ${idx === currentSlide ? 'w-10' : 'w-6'}`} style={{ backgroundColor: idx === currentSlide ? splitColors.progressDotActive : splitColors.progressDotInactive }} />
+                  <button key={idx} type="button" onClick={() =>{  setCurrentSlide(idx); }} className={`h-1.5 rounded-full transition-all ${idx === currentSlide ? 'w-10' : 'w-6'}`} style={{ backgroundColor: idx === currentSlide ? splitColors.progressDotActive : splitColors.progressDotInactive }} />
                 ))}
               </div>
             )}
           </div>
           {/* Image Side */}
-          <div className="w-full md:w-1/2 h-[280px] md:h-full relative overflow-hidden order-1 md:order-2">
+          <div className="relative order-1 h-[280px] w-full overflow-hidden md:hidden" ref={heroEmblaRef}>
+            <div className="flex h-full">
+              {slides.map((slide, idx) => (
+                <div key={idx} className="relative h-full min-w-0 flex-[0_0_100%]">
+                  {slide.image ? (
+                    <SiteImage src={slide.image} alt="" className="w-full h-full object-cover" priority={idx === 0} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-200">
+                      <LayoutTemplate size={48} className="text-slate-400" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {slides.length > 1 && (
+              <>
+                <button type="button" aria-label="Ảnh trước" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
+                  <svg className="h-4 w-4" style={{ color: splitColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button type="button" aria-label="Ảnh tiếp" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
+                  <svg className="h-4 w-4" style={{ color: splitColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+                <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+                  {slides.map((_, idx) => (
+                    <button key={idx} type="button" onClick={() => { scrollHeroTo(idx); }} className={`h-2 rounded-full transition-all ${idx === emblaCurrentSlide ? 'w-6' : 'w-2'}`} style={{ backgroundColor: idx === emblaCurrentSlide ? splitColors.progressDotActive : splitColors.progressDotInactive }} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="relative order-2 hidden overflow-hidden md:block md:h-full md:w-1/2">
             {slides.map((slide, idx) => (
               <div key={idx} className={`absolute inset-0 transition-all duration-700 ${idx === currentSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
                 {slide.image ? (
@@ -861,10 +1185,10 @@ function HeroSection({
             {/* Navigation arrows */}
             {slides.length > 1 && (
               <>
-                <button onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center z-10" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
+                <button type="button" onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center z-10" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
                   <svg className="w-5 h-5" style={{ color: splitColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                 </button>
-                <button onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center z-10" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
+                <button type="button" onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center z-10" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
                   <svg className="w-5 h-5" style={{ color: splitColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </button>
               </>
@@ -879,7 +1203,66 @@ function HeroSection({
   if (style === 'parallax') {
     return (
       <section className="relative w-full bg-slate-900 overflow-hidden">
-        <div className="relative w-full h-[350px] md:h-[450px] lg:h-[550px]">
+        <div className="md:hidden" style={{ backgroundColor: parallaxColors.cardBg }}>
+          <div className="relative h-[280px] w-full overflow-hidden" ref={heroEmblaRef}>
+            <div className="flex h-full">
+              {slides.map((slide, idx) => (
+                <div key={idx} className="relative h-full min-w-0 flex-[0_0_100%]">
+                  {slide.image ? (
+                    renderHeroSlideContain(slide, {
+                      priority: idx === 0,
+                      overlay: (
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent z-20" />
+                      ),
+                    })
+                  ) : renderPlaceholder(parallaxColors.placeholderBg, parallaxColors.placeholderIcon)}
+                </div>
+              ))}
+            </div>
+            {slides.length > 1 && (
+              <>
+                <button type="button" aria-label="Ảnh trước" onClick={scrollHeroPrev} disabled={!canScrollPrev} className="absolute left-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
+                  <svg className="h-4 w-4" style={{ color: parallaxColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button type="button" aria-label="Ảnh tiếp" onClick={scrollHeroNext} disabled={!canScrollNext} className="absolute right-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
+                  <svg className="h-4 w-4" style={{ color: parallaxColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+                <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                  {slides.map((_, idx) => (
+                    <button key={idx} type="button" onClick={() => { scrollHeroTo(idx); }} className={`h-2 rounded-full transition-all ${idx === emblaCurrentSlide ? 'w-6' : 'w-2'}`} style={{ backgroundColor: idx === emblaCurrentSlide ? parallaxColors.cardBadgeDot : 'rgba(255,255,255,0.55)' }} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="p-6">
+            {content.badge && (
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: parallaxColors.cardBadgeDot }} />
+                <span className="text-xs font-semibold uppercase tracking-wide px-2.5 py-0.5 rounded-full" style={{ backgroundColor: parallaxColors.cardBadgeBg, color: parallaxColors.cardBadgeText }}>{content.badge}</span>
+              </div>
+            )}
+            <h3 className="text-lg font-bold" style={{ color: parallaxColors.headingText }}>
+              {content.heading ?? 'Tiêu đề nổi bật'}
+            </h3>
+            {content.description && (
+              <p className="text-sm mt-1" style={{ color: parallaxColors.descriptionText }}>
+                {content.description}
+              </p>
+            )}
+            <div className="flex items-center gap-3 mt-4">
+              {content.primaryButtonText && (
+                <a href={primaryHref} className="px-5 py-2 font-medium rounded-lg text-sm" style={{ backgroundColor: parallaxColors.primaryCTA, color: parallaxColors.primaryCTAText }}>
+                  {content.primaryButtonText}
+                </a>
+              )}
+              {content.countdownText && (
+                <span className="text-sm" style={{ color: parallaxColors.countdownText }}>{content.countdownText}</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="relative hidden w-full md:block md:h-[450px] lg:h-[550px]">
           {slides.map((slide, idx) => (
             <div key={idx} className={`absolute inset-0 transition-opacity duration-700 ${idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               {slide.image ? (
@@ -924,11 +1307,11 @@ function HeroSection({
           {/* Top navigation bar */}
           {slides.length > 1 && (
             <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-              <button onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="w-8 h-8 rounded-full backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
+              <button type="button" onClick={() =>{  setCurrentSlide(prev => prev === 0 ? slides.length - 1 : prev - 1); }} className="w-8 h-8 rounded-full backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
                 <svg className="w-4 h-4" style={{ color: parallaxColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
               </button>
               <span className="text-white/80 text-xs font-medium px-2">{currentSlide + 1} / {slides.length}</span>
-              <button onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="w-8 h-8 rounded-full backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
+              <button type="button" onClick={() =>{  setCurrentSlide(prev => (prev + 1) % slides.length); }} className="w-8 h-8 rounded-full backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
                 <svg className="w-4 h-4" style={{ color: parallaxColors.navButtonIcon }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </button>
             </div>
@@ -959,8 +1342,8 @@ const resolveStatsIconComponent = (iconName?: string) => {
   return iconMap[iconName] ?? null;
 };
 
-function StatsSection({ config, brandColor, secondary, mode, title: _title }: { config: Record<string, unknown>; brandColor: string;
-  secondary: string; mode: 'single' | 'dual'; title: string }) {
+function StatsSection({ config, brandColor, secondary, mode, title: _title, isDark }: { config: Record<string, unknown>; brandColor: string;
+  secondary: string; mode: 'single' | 'dual'; title: string; isDark?: boolean }) {
   void _title;
   const items = (config.items as StatsItemWithIcon[]) || [];
   const style = (config.style as StatsStyle) || 'horizontal';
@@ -979,21 +1362,36 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
     return `flex flex-col ${alignClass}`;
   };
 
+  const getItemAlignClass = (align?: 'left' | 'center' | 'right') => {
+    if (align === 'left') return 'items-start text-left';
+    if (align === 'right') return 'items-end text-right';
+    return 'items-center text-center';
+  };
+
+  const getMediaWrapperClass = (placement?: 'top' | 'left', align?: 'left' | 'center' | 'right') => {
+    if (placement === 'left') {
+      return 'mb-0 flex shrink-0 items-center justify-center self-center';
+    }
+    if (align === 'left') return 'flex justify-start';
+    if (align === 'right') return 'flex justify-end';
+    return 'flex justify-center';
+  };
+
   // Style 1: Thanh ngang - Full width bar với dividers
   if (style === 'horizontal') {
-    const colors = getHorizontalColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getHorizontalColors(brandColor, secondary, mode), isDark ?? false);
     return (
       <section className="py-12 px-4">
         <div className="max-w-5xl mx-auto">
           <div 
             className="w-full rounded-lg shadow-sm overflow-hidden border"
-            style={{ backgroundColor: 'white', borderColor: colors.border }}
+            style={{ backgroundColor: colors.sectionBg, borderColor: colors.border }}
           >
             <div className="flex flex-col md:flex-row items-center justify-between divide-y md:divide-y-0 md:divide-x divide-slate-200">
               {items.map((item, idx) => {
                 const IconCmp = item.iconType === 'lucide' && item.iconName ? resolveStatsIconComponent(item.iconName) : null;
                 const iconElement = item.iconType === 'lucide' && IconCmp ? (
-                  <IconCmp size={32} style={{ color: brandColor }} />
+                  <IconCmp size={32} style={{ color: colors.iconColor }} />
                 ) : item.iconType === 'upload' && item.iconUrl ? (
                   <img src={item.iconUrl} alt="" className="w-8 h-8 md:w-11 md:h-11 object-contain" />
                 ) : item.iconType === 'url' && item.iconUrl ? (
@@ -1006,15 +1404,15 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
                   className={`flex-1 w-full py-6 px-4 justify-center cursor-default ${getItemContainerClass(mediaPlacement, mediaAlign)}`}
                 >
                   {iconElement && (
-                    <div className={mediaPlacement === 'left' ? 'mb-0 flex shrink-0 items-center justify-center self-center' : 'mb-2'}>
+                    <div className={cn(mediaPlacement === 'left' ? 'mb-0' : 'mb-2', getMediaWrapperClass(mediaPlacement, mediaAlign))}>
                       {iconElement}
                     </div>
                   )}
-                  <div className={mediaPlacement === 'left' ? 'flex-1' : ''}>
-                    <span className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums leading-none mb-1" style={{ color: brandColor }}>
+                  <div className={cn("flex flex-col", mediaPlacement === 'left' ? 'flex-1' : getItemAlignClass(mediaAlign))}>
+                    <span className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums leading-none mb-1" style={{ color: colors.valueColor }}>
                       {item.value}
                     </span>
-                    <h3 className="text-xs font-medium uppercase tracking-wider text-slate-600">
+                    <h3 className="text-xs font-medium uppercase tracking-wider" style={{ color: colors.labelColor }}>
                       {item.label}
                     </h3>
                   </div>
@@ -1030,7 +1428,7 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
 
   // Style 2: Cards - Grid cards với hover effects và accent line
   if (style === 'cards') {
-    const colors = getCardsColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getCardsColors(brandColor, secondary, mode), isDark ?? false);
     return (
       <section className="py-12 px-4">
         <div className="max-w-5xl mx-auto">
@@ -1038,7 +1436,7 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
             {items.map((item, idx) => {
               const IconCmp = item.iconType === 'lucide' && item.iconName ? resolveStatsIconComponent(item.iconName) : null;
               const iconElement = item.iconType === 'lucide' && IconCmp ? (
-                <IconCmp size={28} style={{ color: brandColor }} />
+                <IconCmp size={28} style={{ color: colors.iconColor }} />
               ) : item.iconType === 'upload' && item.iconUrl ? (
                 <img src={item.iconUrl} alt="" className="w-12 h-12 md:w-16 md:h-16 object-cover" />
               ) : item.iconType === 'url' && item.iconUrl ? (
@@ -1052,18 +1450,18 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
                 style={{ borderColor: colors.border }}
               >
                 {iconElement && (
-                  <div className={mediaPlacement === 'left' ? 'mb-0 flex shrink-0 items-center justify-center self-center' : 'mb-2'}>
+                  <div className={cn(mediaPlacement === 'left' ? 'mb-0' : 'mb-2', getMediaWrapperClass(mediaPlacement, mediaAlign))}>
                     {iconElement}
                   </div>
                 )}
-                <div className={mediaPlacement === 'left' ? 'flex-1' : ''}>
+                <div className={cn("flex flex-col", mediaPlacement === 'left' ? 'flex-1' : getItemAlignClass(mediaAlign))}>
                   <span 
                     className="text-3xl font-bold mb-1 tracking-tight tabular-nums"
-                    style={{ color: brandColor }}
+                    style={{ color: colors.valueColor }}
                   >
                     {item.value}
                   </span>
-                  <h3 className="text-sm font-semibold text-slate-700">
+                  <h3 className="text-sm font-semibold" style={{ color: colors.labelColor }}>
                     {item.label}
                   </h3>
                   {mediaPlacement !== 'left' && (
@@ -1084,7 +1482,7 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
 
   // Style 3: Icon Grid - Circle containers với shadow và hover scale
   if (style === 'icons') {
-    const colors = getIconsColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getIconsColors(brandColor, secondary, mode), isDark ?? false);
     return (
       <section className="py-12 px-4">
         <div className="max-w-5xl mx-auto">
@@ -1139,7 +1537,7 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
 
   // Style 4: Gradient - Glass morphism với gradient background
   if (style === 'gradient') {
-    const colors = getGradientColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getGradientColors(brandColor, secondary, mode), isDark ?? false);
     return (
       <section className="py-12 px-4">
         <div className="max-w-5xl mx-auto">
@@ -1193,7 +1591,7 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
 
   // Style 5: Minimal - Clean, simple với typography focus
   if (style === 'minimal') {
-    const colors = getMinimalColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getMinimalColors(brandColor, secondary, mode), isDark ?? false);
     return (
       <section className="py-12 md:py-16 px-4 bg-slate-50">
         <div className="max-w-5xl mx-auto">
@@ -1239,7 +1637,7 @@ function StatsSection({ config, brandColor, secondary, mode, title: _title }: { 
   }
 
   // Style 6: Counter - Big numbers với animated feel & progress indicator
-  const colors = getCounterColors(brandColor, secondary, mode);
+  const colors = adaptTokensForDarkMode(getCounterColors(brandColor, secondary, mode), isDark ?? false);
   return (
     <section className="py-12 md:py-16 px-4">
       <div className="max-w-5xl mx-auto">
@@ -1304,26 +1702,30 @@ function ServicesSection({
   secondary,
   mode,
   title,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: 'single' | 'dual';
   title: string;
+  isDark?: boolean;
 }) {
   const items = (config.items as ServiceItem[]) || [];
   const style = (config.style as ServicesStyle) || 'elegantGrid';
   const desktopColumns = getServicesDesktopColumns(config.desktopColumns);
   const mediaPlacement = getServicesMediaPlacement(config.mediaPlacement);
   const mediaAlign = getServicesMediaAlign(config.mediaAlign);
-  const colors = getServicesColors(brandColor, secondary, mode);
+  const spacing = normalizeServicesSpacing(config.spacing);
+  const cornerRadius = normalizeServicesCornerRadius(config.cornerRadius);
+  const colors = adaptTokensForDarkMode(getServicesColors(brandColor, secondary, mode), isDark ?? false);
 
   // Extract header config
   const headerConfig = extractSectionHeaderConfig(config);
 
   return (
-    <section className="py-8 px-3">
-      <div className="mx-auto max-w-7xl">
+    <section className={cn(getSectionSpacingClassName(spacing), 'px-3')}>
+      <div className="mx-auto max-w-7xl tv:max-w-[1600px]">
         <SectionHeader
           title={title}
           subtitle={headerConfig.subtitle}
@@ -1350,6 +1752,8 @@ function ServicesSection({
           showSubtitle={false}
           title={''}
           colors={colors}
+          spacing="none"
+          cornerRadius={cornerRadius}
           isPreview={false}
         />
       </div>
@@ -1364,12 +1768,14 @@ function BenefitsSection({
   secondary,
   mode,
   title,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: 'single' | 'dual';
   title: string;
+  isDark?: boolean;
 }) {
   const benefitsConfig = config as {
     items?: Array<{ icon?: string; title?: string; description?: string }>;
@@ -1408,12 +1814,12 @@ function BenefitsSection({
 
   const harmony = normalizeBenefitsHarmony(benefitsConfig.harmony);
 
-  const tokens = getBenefitsSectionColors({
+  const tokens = adaptTokensForDarkMode(getBenefitsSectionColors({
     harmony,
     mode,
     primary: brandColor,
     secondary,
-  });
+  }), isDark ?? false);
 
   const _hasSharedHeaderConfig = (
     typeof benefitsConfig.hideHeader === 'boolean'
@@ -1445,7 +1851,7 @@ function BenefitsSection({
 
   return (
     <section className="py-8 px-3">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl tv:max-w-[1600px] mx-auto">
         <SectionHeader
           title={title}
           subtitle={headerConfig.subtitle}
@@ -1483,12 +1889,14 @@ function FAQSection({
   secondary,
   mode,
   title,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: 'single' | 'dual';
   title: string;
+  isDark?: boolean;
 }) {
   const faqConfig = config as {
     items?: Array<{ question?: string; answer?: string }>;
@@ -1511,12 +1919,12 @@ function FAQSection({
     buttonLink: faqConfig.buttonLink,
   };
 
-  const tokens = getFaqColors({
+  const tokens = adaptTokensForDarkMode(getFaqColors({
     primary: brandColor,
     secondary,
     mode,
     style,
-  });
+  }), isDark ?? false);
 
   // Extract header config
   const headerConfig = extractSectionHeaderConfig(config);
@@ -1543,7 +1951,7 @@ function FAQSection({
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
       <section className="py-8 px-3">
-        <div className="mx-auto max-w-7xl space-y-6">
+        <div className="mx-auto max-w-7xl tv:max-w-[1600px] space-y-6">
           <SectionHeader
             title={title}
             subtitle={headerConfig.subtitle}
@@ -1583,11 +1991,13 @@ function CTASection({
   brandColor,
   secondary,
   mode,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: 'single' | 'dual';
+  isDark?: boolean;
 }) {
   const ctaConfig = config as {
     title?: string;
@@ -1597,16 +2007,22 @@ function CTASection({
     secondaryButtonText?: string;
     secondaryButtonLink?: string;
     badge?: string;
+    spacing?: CTAConfig['spacing'];
+    cornerRadius?: CTAConfig['cornerRadius'];
+    noBorderRadius?: boolean;
+    noVerticalMargin?: boolean;
+    containerWidth?: CTAConfig['containerWidth'];
     style?: CTAStyle;
   };
 
-  const style = ctaConfig.style ?? 'banner';
+  const style = normalizeCTAStyle(ctaConfig.style);
 
-  const tokens = getCTAColors({
+  const tokens = getCTAThemeTokens({
     primary: brandColor,
     secondary,
     mode,
     style,
+    isDark: isDark ?? false,
   });
 
   return (
@@ -1619,6 +2035,11 @@ function CTASection({
         secondaryButtonText: ctaConfig.secondaryButtonText ?? '',
         secondaryButtonLink: ctaConfig.secondaryButtonLink ?? '',
         badge: ctaConfig.badge ?? '',
+        spacing: ctaConfig.spacing,
+        cornerRadius: ctaConfig.cornerRadius,
+        noBorderRadius: ctaConfig.noBorderRadius,
+        noVerticalMargin: ctaConfig.noVerticalMargin,
+        containerWidth: ctaConfig.containerWidth,
       }}
       style={style}
       tokens={tokens}
@@ -1627,24 +2048,27 @@ function CTASection({
   );
 }
 
-function TestimonialsSection({ config, brandColor, secondary, mode, title }: { config: Record<string, unknown>; brandColor: string;
-  secondary: string; mode: 'single' | 'dual'; title: string }) {
+function TestimonialsSection({ config, brandColor, secondary, mode, title, isDark }: { config: Record<string, unknown>; brandColor: string;
+  secondary: string; mode: 'single' | 'dual'; title: string; isDark?: boolean }) {
   const items = Array.isArray(config.items) ? config.items : [];
   const style = normalizeTestimonialsStyle(config.style);
   const desktopColumns = normalizeTestimonialsDesktopColumns(config.desktopColumns);
+  const spacing = normalizeTestimonialsSpacing(config.spacing, config.noVerticalMargin);
+  const cornerRadius = normalizeTestimonialsCornerRadius(config.cornerRadius, config.noBorderRadius);
   const isFullBleedTestimonials = style === 'split-carousel' || style === 'overlap-carousel';
-  const colors = getTestimonialsSectionColors({
+  const sectionSpacingClassName = getTestimonialsSectionSpacingClassName(spacing);
+  const colors = adaptTokensForDarkMode(getTestimonialsSectionColors({
     primary: brandColor,
     secondary,
     mode,
-  });
+  }), isDark ?? false);
 
   // Extract header config
   const headerConfig = extractSectionHeaderConfig(config);
 
   return (
-    <section className={isFullBleedTestimonials ? 'py-0' : 'px-3 py-8'}>
-      <div className={isFullBleedTestimonials ? 'w-full' : 'mx-auto max-w-7xl space-y-6'}>
+    <section className={cn(isFullBleedTestimonials ? 'py-0' : 'px-3', !isFullBleedTestimonials && sectionSpacingClassName)}>
+      <div className={isFullBleedTestimonials ? 'w-full' : 'mx-auto max-w-7xl tv:max-w-[1600px] space-y-6'}>
         {!isFullBleedTestimonials && (
           <SectionHeader
             title={title}
@@ -1681,6 +2105,8 @@ function TestimonialsSection({ config, brandColor, secondary, mode, title }: { c
           desktopColumns={desktopColumns}
           splitBackgroundImage={typeof config.splitBackgroundImage === 'string' ? config.splitBackgroundImage : undefined}
           splitBackgroundOverlayOpacity={typeof config.splitBackgroundOverlayOpacity === 'number' ? config.splitBackgroundOverlayOpacity : undefined}
+          spacing={isFullBleedTestimonials ? spacing : 'none'}
+          cornerRadius={cornerRadius}
         />
       </div>
     </section>
@@ -1691,6 +2117,34 @@ function TestimonialsSection({ config, brandColor, secondary, mode, title }: { c
 // Gallery: 6 Professional Styles (Spotlight, Explore, Stories, Grid, Marquee, Masonry)
 // Partners: 6 Professional Styles (Grid, Marquee, Mono, Badge, Carousel, Featured)
 type GalleryStyle = 'spotlight' | 'explore' | 'stories' | 'grid' | 'marquee' | 'masonry' | 'mono' | 'badge' | 'carousel' | 'featured' | 'clean' | 'divider';
+type GalleryCornerRadius = 'none' | 'sm' | 'lg';
+type GalleryDesktopColumns = 3 | 4 | 6;
+
+function normalizeGalleryCornerRadius(value: unknown, noBorderRadius?: unknown): GalleryCornerRadius {
+  if (noBorderRadius === true) {
+    return 'none';
+  }
+
+  if (value === 'none' || value === 'sm' || value === 'lg') {
+    return value;
+  }
+
+  if (value === 'md' || value === 'full') {
+    return 'lg';
+  }
+
+  return 'lg';
+}
+
+function normalizeGalleryDesktopColumns(value: unknown): GalleryDesktopColumns {
+  return value === 3 ? 3 : value === 6 ? 6 : 4;
+}
+
+function getGalleryCornerRadiusClassName(value: GalleryCornerRadius): string {
+  if (value === 'none') { return 'rounded-none'; }
+  if (value === 'sm') { return 'rounded-md'; }
+  return 'rounded-2xl';
+}
 
 // Auto Scroll Slider Component for Marquee/Mono styles
 const _AutoScrollSlider = ({ children, speed = 0.5, isPaused }: { children: React.ReactNode; speed?: number; isPaused?: boolean }) => {
@@ -1756,36 +2210,82 @@ const GalleryLightbox = ({
   onNavigate?: (direction: 'prev' | 'next') => void;
   colors: GalleryColorTokens;
 }) => {
+  const [mounted, setMounted] = React.useState(false);
+  const originalBodyOverflowRef = React.useRef<string | null>(null);
+  const isOpen = Boolean(photo?.url);
+  const [imageKey, setImageKey] = React.useState(0);
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+
   React.useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Update imageKey on index change for transition
+  React.useEffect(() => {
+    if (typeof currentIndex === 'number') {
+      setImageKey(currentIndex);
+    }
+  }, [currentIndex]);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (originalBodyOverflowRef.current === null) {
+      originalBodyOverflowRef.current = document.body.style.overflow;
+    }
+    document.body.style.overflow = 'hidden';
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {onClose();}
       if (e.key === 'ArrowLeft' && onNavigate) {onNavigate('prev');}
       if (e.key === 'ArrowRight' && onNavigate) {onNavigate('next');}
     };
-    if (photo) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = originalBodyOverflowRef.current ?? '';
+      originalBodyOverflowRef.current = null;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [photo, onClose, onNavigate]);
+  }, [isOpen, onClose, onNavigate]);
 
-  if (!photo || !photo.url) {return null;}
+  if (!photo || !photo.url || !mounted) {return null;}
 
   const hasMultiple = photos && photos.length > 1 && onNavigate;
 
-  return (
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || !onNavigate) {return;}
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+    // Only horizontal swipe if dx > 50px and more horizontal than vertical
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      onNavigate(dx < 0 ? 'next' : 'prev');
+    }
+  };
+
+  const lightboxContent = (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center animate-in fade-in duration-200"
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
       onClick={onClose}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
-      <div className="absolute inset-0 bg-slate-950" onClick={onClose} />
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/95 animate-in fade-in duration-300" />
+
+      {/* Close button */}
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-4 right-4 p-2 rounded-full border transition-colors z-[70]"
+        className="absolute top-3 right-3 md:top-5 md:right-5 w-11 h-11 md:w-12 md:h-12 rounded-full border flex items-center justify-center transition-all z-[10020] hover:scale-110"
         style={{
           backgroundColor: colors.lightboxControlBg,
           borderColor: colors.lightboxControlBorder,
@@ -1793,13 +2293,16 @@ const GalleryLightbox = ({
         }}
         aria-label="Đóng"
       >
-        <X size={24} />
+        <X size={22} />
       </button>
+
+      {/* Navigation arrows */}
       {hasMultiple && (
         <>
-          <button 
+          <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); onNavigate('prev'); }}
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border flex items-center justify-center transition-colors z-[70]"
+            className="absolute left-2 md:left-5 top-1/2 -translate-y-1/2 w-11 h-11 md:w-12 md:h-12 rounded-full border flex items-center justify-center transition-all z-[10020] hover:scale-110 active:scale-95"
             style={{
               backgroundColor: colors.lightboxControlBg,
               borderColor: colors.lightboxControlBorder,
@@ -1807,11 +2310,12 @@ const GalleryLightbox = ({
             }}
             aria-label="Ảnh trước"
           >
-            <ChevronLeft size={24} />
+            <ChevronLeft size={26} />
           </button>
-          <button 
+          <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); onNavigate('next'); }}
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border flex items-center justify-center transition-colors z-[70]"
+            className="absolute right-2 md:right-5 top-1/2 -translate-y-1/2 w-11 h-11 md:w-12 md:h-12 rounded-full border flex items-center justify-center transition-all z-[10020] hover:scale-110 active:scale-95"
             style={{
               backgroundColor: colors.lightboxControlBg,
               borderColor: colors.lightboxControlBorder,
@@ -1819,13 +2323,15 @@ const GalleryLightbox = ({
             }}
             aria-label="Ảnh sau"
           >
-            <ChevronRight size={24} />
+            <ChevronRight size={26} />
           </button>
         </>
       )}
+
+      {/* Counter */}
       {hasMultiple && typeof currentIndex === 'number' && (
         <div
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm z-[70] px-3 py-1 rounded-full border"
+          className="absolute bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 text-sm z-[10020] px-4 py-1.5 rounded-full border font-medium"
           style={{
             backgroundColor: colors.lightboxCounterBg,
             color: colors.lightboxCounterText,
@@ -1835,16 +2341,26 @@ const GalleryLightbox = ({
           {currentIndex + 1} / {photos.length}
         </div>
       )}
-      <div className="relative z-[70] max-w-5xl w-full max-h-[90vh] p-4 flex flex-col items-center justify-center" onClick={e =>{  e.stopPropagation(); }}>
-        <SiteImage 
-          src={photo.url} 
-          alt="Lightbox" 
-          className="max-h-[90vh] max-w-full object-contain shadow-sm animate-in zoom-in-95 duration-300" 
+
+      {/* Image container — near fullscreen */}
+      <div
+        className="relative z-[10000] w-full h-full flex items-center justify-center px-14 md:px-20 py-16 md:py-14"
+        onClick={e => { e.stopPropagation(); onClose(); }}
+      >
+        <SiteImage
+          key={imageKey}
+          src={photo.url}
+          alt="Lightbox"
+          className="max-h-full max-w-full object-contain animate-in fade-in zoom-in-95 duration-300"
+          onClick={e => { e.stopPropagation(); }}
         />
       </div>
     </div>
   );
+
+  return createPortal(lightboxContent, document.body);
 };
+
 
 // ============ TRUST BADGES / CERTIFICATIONS SECTION ============
 // 6 Styles: grid, cards, stack, wall, carousel, seal
@@ -1916,74 +2432,159 @@ function TrustBadgesSection({
   secondary,
   mode,
   title,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: 'single' | 'dual';
   title: string;
+  isDark?: boolean;
 }) {
   const items = (config.items as TrustBadgeItem[]) || [];
-  const style = normalizeTrustBadgesStyle(config.style);
-  const carouselId = useSafeId('trustbadges-carousel');
+  const trustCueText = typeof config.trustCueText === 'string' ? config.trustCueText : DEFAULT_TRUST_CUE_TEXT;
+  const stackHeading = typeof config.stackHeading === 'string' ? config.stackHeading : DEFAULT_STACK_HEADING;
+  const stackDescription = typeof config.stackDescription === 'string' ? config.stackDescription : DEFAULT_STACK_DESCRIPTION;
   const [selectedCert, setSelectedCert] = React.useState<TrustBadgeItem | null>(null);
-  const colors = getGalleryColorTokens({ primary: brandColor, secondary, mode });
+  const [carouselRef, carouselApi] = useEmblaCarousel({ align: 'start', containScroll: 'trimSnaps' });
+  const [cardsRef, cardsApi] = useEmblaCarousel({ align: 'start', containScroll: 'trimSnaps' });
+  const [sealRef, sealApi] = useEmblaCarousel({ align: 'start', axis: 'y', containScroll: 'trimSnaps' });
+  const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+  const [canScrollNext, setCanScrollNext] = React.useState(false);
+  const [canCardsScrollPrev, setCanCardsScrollPrev] = React.useState(false);
+  const [canCardsScrollNext, setCanCardsScrollNext] = React.useState(false);
+  const [canSealScrollPrev, setCanSealScrollPrev] = React.useState(false);
+  const [canSealScrollNext, setCanSealScrollNext] = React.useState(false);
   const headerConfig = extractSectionHeaderConfig(config);
-  const desktopColumns = config.desktopColumns === 3 ? 3 : 4;
-  const responsiveGridClassName = desktopColumns === 3
-    ? 'grid-cols-1 md:grid-cols-3 lg:grid-cols-3'
-    : 'grid-cols-2 md:grid-cols-2 lg:grid-cols-4';
-  const responsiveCardGridClassName = desktopColumns === 3
-    ? 'grid-cols-1 md:grid-cols-3 lg:grid-cols-3'
-    : 'grid-cols-2 md:grid-cols-2 lg:grid-cols-4';
+  const {
+    cardBorder,
+    colors: rawColors,
+    innerRadiusClassName,
+    radiusClassName,
+    renderConfig,
+    sectionSpacingClassName,
+    siteGridClassName,
+  } = useTrustBadgesSectionState({
+    brandColor,
+    config: { ...headerConfig, cornerRadius: config.cornerRadius, noBorderRadius: config.noBorderRadius, noVerticalMargin: config.noVerticalMargin, showBorder: config.showBorder, stackDescription, stackHeading, trustCueText },
+    desktopColumns: config.desktopColumns === 3 ? 3 : 4,
+    mode,
+    secondary,
+    selectedStyle: config.style as TrustBadgesStyle | undefined,
+  });
+  const colors = React.useMemo(() => adaptTokensForDarkMode(rawColors, isDark ?? false), [rawColors, isDark]);
+  const style = renderConfig.style;
+  const desktopColumns = renderConfig.desktopColumns;
+  const responsiveGridClassName = siteGridClassName;
+  const visibleItems = items.slice(0, getTrustBadgesMaxVisibleItems(desktopColumns));
 
-  const sharedHeader = (
-    <SectionHeader
-      title={title}
-      subtitle={headerConfig.subtitle}
-      badgeText={headerConfig.badgeText}
-      hideHeader={headerConfig.hideHeader}
-      showTitle={headerConfig.showTitle}
-      showSubtitle={headerConfig.showSubtitle}
-      showBadge={headerConfig.showBadge}
-      headerAlign={headerConfig.headerAlign}
-      titleColorPrimary={headerConfig.titleColorPrimary}
-      subtitleAboveTitle={headerConfig.subtitleAboveTitle}
-      uppercaseText={headerConfig.uppercaseText}
-      brandColor={brandColor}
-    />
+  const updateCarouselState = React.useCallback(() => {
+    if (!carouselApi) { return; }
+    setCanScrollPrev(carouselApi.canScrollPrev());
+    setCanScrollNext(carouselApi.canScrollNext());
+  }, [carouselApi]);
+
+  const updateCardsState = React.useCallback(() => {
+    if (!cardsApi) { return; }
+    setCanCardsScrollPrev(cardsApi.canScrollPrev());
+    setCanCardsScrollNext(cardsApi.canScrollNext());
+  }, [cardsApi]);
+
+  const updateSealState = React.useCallback(() => {
+    if (!sealApi) { return; }
+    setCanSealScrollPrev(sealApi.canScrollPrev());
+    setCanSealScrollNext(sealApi.canScrollNext());
+  }, [sealApi]);
+
+  React.useEffect(() => {
+    if (!carouselApi) { return; }
+    updateCarouselState();
+    carouselApi.on('select', updateCarouselState);
+    carouselApi.on('reInit', updateCarouselState);
+
+    return () => {
+      carouselApi.off('select', updateCarouselState);
+      carouselApi.off('reInit', updateCarouselState);
+    };
+  }, [carouselApi, updateCarouselState]);
+
+  React.useEffect(() => {
+    if (!cardsApi) { return; }
+    updateCardsState();
+    cardsApi.on('select', updateCardsState);
+    cardsApi.on('reInit', updateCardsState);
+
+    return () => {
+      cardsApi.off('select', updateCardsState);
+      cardsApi.off('reInit', updateCardsState);
+    };
+  }, [cardsApi, updateCardsState]);
+
+  React.useEffect(() => {
+    if (!sealApi) { return; }
+    updateSealState();
+    sealApi.on('select', updateSealState);
+    sealApi.on('reInit', updateSealState);
+
+    return () => {
+      sealApi.off('select', updateSealState);
+      sealApi.off('reInit', updateSealState);
+    };
+  }, [sealApi, updateSealState]);
+
+  React.useEffect(() => {
+    if (!carouselApi) { return; }
+    carouselApi.reInit();
+    updateCarouselState();
+  }, [carouselApi, items.length, desktopColumns, style, updateCarouselState]);
+
+  React.useEffect(() => {
+    if (!cardsApi) { return; }
+    cardsApi.reInit();
+    updateCardsState();
+  }, [cardsApi, items.length, desktopColumns, style, updateCardsState]);
+
+  React.useEffect(() => {
+    if (!sealApi) { return; }
+    sealApi.reInit();
+    updateSealState();
+  }, [sealApi, items.length, desktopColumns, style, updateSealState]);
+
+  const sharedHeader = <TrustBadgesSectionHeader brandColor={brandColor} config={headerConfig} fallbackSubtitle={headerConfig.subtitle} title={title} />;
+
+  const renderTrustCue = (compact = false) => (
+    <TrustBadgesTrustCue colors={colors} compact={compact} text={trustCueText} />
   );
 
 
   // Style 1: Square Grid
   if (style === 'grid') {
     return (
-      <section className="py-8 px-3 bg-white">
-        <div className="mx-auto max-w-7xl">
+      <section className={cn(sectionSpacingClassName, 'px-3 bg-white')}>
+        <div className="mx-auto max-w-7xl tv:max-w-[1600px]">
           {sharedHeader}
           <div className={cn("grid gap-3 md:gap-4", responsiveGridClassName)}>
-            {items.map((item, idx) => (
+            {visibleItems.map((item, idx) => (
               <div
                 key={idx}
                 onClick={() => { setSelectedCert(item); }}
-                className="group relative aspect-[4/3] rounded-2xl flex items-center justify-center p-4 md:p-5 cursor-zoom-in transition-all duration-300 hover:-translate-y-0.5"
-                style={{ border: `1px solid ${colors.neutralBorder}`, backgroundColor: colors.neutralSurface, boxShadow: '0 16px 40px rgba(15, 23, 42, 0.06)' }}
+                className={cn('group relative flex min-h-[164px] flex-col overflow-hidden cursor-zoom-in transition-all duration-300 hover:-translate-y-0.5', radiusClassName)}
+                style={{ border: cardBorder, backgroundColor: colors.neutralSurface, boxShadow: '0 16px 40px rgba(15, 23, 42, 0.06)' }}
               >
-                {item.url ? (
-                  <SiteImage src={item.url} className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" alt={item.name ?? ''} />
-                ) : (
-                  <Shield size={34} className="text-slate-300" />
-                )}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: colors.badgeBg }}>
+                <div className="absolute left-3 top-3 z-10">{renderTrustCue(true)}</div>
+                <div className={cn('flex flex-1 items-center justify-center p-5 pt-10', TRUST_BADGES_A4_ASPECT_CLASS)} style={{ backgroundColor: colors.neutralBackground }}>
+                  {item.url ? (
+                    <SiteImage src={item.url} className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105" alt={item.name ?? ''} />
+                  ) : (
+                    <Shield size={34} style={{ color: colors.subheading }} />
+                  )}
+                </div>
+                <div className="flex min-h-[54px] items-center justify-between gap-3 border-t px-4 py-3" style={{ borderColor: colors.neutralBorder }}>
+                  <p className="min-w-0 text-sm font-semibold leading-tight break-words" style={{ color: colors.heading }}>{item.name ?? 'Chứng nhận tin cậy'}</p>
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: colors.badgeBg }}>
                     <Maximize2 size={14} style={{ color: colors.badgeText }} />
                   </div>
                 </div>
-                {item.name && (
-                  <div className="absolute bottom-2 left-2 right-2 text-center">
-                    <span className="block truncate rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 shadow-sm">{item.name}</span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -1996,22 +2597,47 @@ function TrustBadgesSection({
   // Style 2: Feature Cards
   if (style === 'cards') {
     return (
-      <section className="py-8 px-3 bg-slate-50">
-        <div className="mx-auto max-w-7xl">
+      <section className={cn(sectionSpacingClassName, 'px-3 bg-slate-50')}>
+        <div className="mx-auto max-w-7xl tv:max-w-[1600px]">
           {sharedHeader}
-          <div className={cn("grid gap-4 md:gap-5", responsiveCardGridClassName)}>
-            {items.map((item, idx) => (
+          <div className="relative">
+            {visibleItems.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => cardsApi?.scrollPrev()}
+                  disabled={!canCardsScrollPrev}
+                  className={cn('absolute left-0 top-1/2 z-10 flex h-9 w-9 -translate-x-2 -translate-y-1/2 items-center justify-center rounded-full border bg-white shadow-sm transition-opacity', !canCardsScrollPrev && 'cursor-not-allowed opacity-40')}
+                  style={{ borderColor: colors.sectionAccentBar, color: colors.heading }}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cardsApi?.scrollNext()}
+                  disabled={!canCardsScrollNext}
+                  className={cn('absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 translate-x-2 items-center justify-center rounded-full border bg-white shadow-sm transition-opacity', !canCardsScrollNext && 'cursor-not-allowed opacity-40')}
+                  style={{ borderColor: colors.sectionAccentBar, color: colors.heading }}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </>
+            )}
+          <div className="-mx-2 overflow-hidden px-2 pb-2" ref={cardsRef}>
+            <div className="flex snap-x gap-4 md:gap-5">
+            {visibleItems.map((item, idx) => (
               <div
                 key={idx}
                 onClick={() => { setSelectedCert(item); }}
-                className="group relative flex flex-col rounded-3xl overflow-hidden cursor-zoom-in h-full transition-all duration-300 hover:-translate-y-1"
-                style={{ border: `1px solid ${colors.neutralBorder}`, backgroundColor: colors.neutralSurface, boxShadow: '0 18px 45px rgba(15, 23, 42, 0.08)' }}
+                className={cn('group relative flex basis-[78%] snap-start flex-col overflow-hidden cursor-zoom-in h-full shrink-0 grow-0 transition-all duration-300 hover:-translate-y-1 md:basis-[31%]', desktopColumns === 4 && 'md:basis-[24%]', radiusClassName)}
+                style={{ border: cardBorder, backgroundColor: colors.neutralSurface, boxShadow: '0 18px 45px rgba(15, 23, 42, 0.08)' }}
               >
-                <div className="aspect-[4/3] flex items-center justify-center p-6 md:p-7 relative overflow-hidden" style={{ backgroundColor: colors.neutralBackground }}>
+                <div className={cn(TRUST_BADGES_A4_ASPECT_CLASS, 'flex items-center justify-center p-5 md:p-6 relative overflow-hidden')} style={{ backgroundColor: colors.neutralBackground }}>
+                  <div className="absolute left-4 top-4 z-20">{renderTrustCue(true)}</div>
                   {item.url ? (
                     <SiteImage src={item.url} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 z-10" alt={item.name ?? ''} />
                   ) : (
-                    <Shield size={38} className="text-slate-300" />
+                    <Shield size={38} style={{ color: colors.subheading }} />
                   )}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
                     <span className="px-4 py-2 rounded-full font-medium flex items-center gap-2 text-sm" style={{ color: colors.subheading, backgroundColor: colors.neutralSurface, border: `1px solid ${colors.sectionAccentBar}` }}>
@@ -2019,14 +2645,16 @@ function TrustBadgesSection({
                     </span>
                   </div>
                 </div>
-                <div className="py-4 px-5 border-t flex items-center justify-between transition-colors" style={{ borderColor: colors.neutralBorder, backgroundColor: colors.neutralSurface }}>
-                  <span className="font-semibold truncate text-sm" style={{ color: colors.subheading }}>
+                <div className="py-4 px-5 border-t flex min-h-[58px] items-center justify-between gap-3 transition-colors" style={{ borderColor: colors.neutralBorder, backgroundColor: colors.neutralSurface }}>
+                  <span className="font-semibold text-sm leading-tight break-words" style={{ color: colors.subheading }}>
                     {item.name ?? 'Chứng nhận'}
                   </span>
                   <ArrowUpRight size={16} className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: colors.subheading }} />
                 </div>
               </div>
             ))}
+            </div>
+          </div>
           </div>
         </div>
         <CertificateModal item={selectedCert} isOpen={Boolean(selectedCert)} onClose={() => { setSelectedCert(null); }} />
@@ -2036,19 +2664,20 @@ function TrustBadgesSection({
 
   // Style 3: Stack
   if (style === 'stack') {
-    const stackItems = items.slice(0, 3);
-    const stackRemaining = items.length - stackItems.length;
+    const stackItems = visibleItems.filter((item) => item.url || item.name).slice(0, desktopColumns);
+    const compactStack = desktopColumns === 4;
     return (
-      <section className="overflow-hidden bg-slate-50 py-12 px-3 md:py-14">
-        <div className="mx-auto max-w-7xl">
+      <section className={cn('overflow-hidden bg-slate-50 px-3', sectionSpacingClassName)}>
+        <div className="mx-auto max-w-7xl tv:max-w-[1600px]">
           {sharedHeader}
-          <div className="grid items-start gap-4 md:grid-cols-[0.92fr_1.5fr] md:gap-6">
-            <div className="rounded-2xl border bg-white p-5 shadow-sm md:p-6" style={{ borderColor: colors.neutralBorder, boxShadow: '0 18px 45px rgba(15, 23, 42, 0.06)' }}>
-              <div className="mb-6">
-                <p className="text-base font-bold" style={{ color: colors.heading }}>Bộ tín hiệu tin cậy</p>
-                <p className="mt-2 text-xs leading-5" style={{ color: colors.mutedText }}>Hiển thị rõ cam kết trước khi khách ra quyết định.</p>
+          <div className={cn('grid items-stretch', compactStack ? 'gap-3 md:grid-cols-[0.46fr_1.9fr]' : 'gap-4 md:grid-cols-[0.82fr_1.35fr]')}>
+            <div className={cn('flex h-full flex-col border bg-white shadow-sm', compactStack ? 'p-3' : 'p-4 md:p-5', radiusClassName)} style={{ borderColor: renderConfig.showBorder ? colors.neutralBorder : 'transparent', boxShadow: '0 18px 45px rgba(15, 23, 42, 0.06)' }}>
+              <div className={compactStack ? 'mb-3' : 'mb-4'}>
+                {renderTrustCue()}
+                <p className={cn('mt-3 font-bold', compactStack ? 'text-sm' : 'text-base')} style={{ color: colors.heading }}>{stackHeading}</p>
+                <p className={cn('mt-2 text-xs', compactStack ? 'leading-4' : 'leading-5')} style={{ color: colors.mutedText }}>{stackDescription}</p>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {stackItems.map((item, index) => {
                   const active = index === 0;
                   return (
@@ -2056,38 +2685,35 @@ function TrustBadgesSection({
                     key={index}
                     type="button"
                     onClick={() => { setSelectedCert(item); }}
-                    className="flex min-h-14 w-full items-center gap-4 rounded-lg border bg-white px-4 py-3 text-left transition-all duration-300"
+                    className={cn('flex w-full items-center border bg-white text-left transition-all duration-300', compactStack ? 'min-h-10 gap-2 px-2.5 py-2' : 'min-h-12 gap-3 px-3 py-2', innerRadiusClassName)}
                     style={{
-                      borderColor: active ? colors.sectionAccentBar : colors.neutralBorder,
+                      borderColor: renderConfig.showBorder ? (active ? colors.sectionAccentBar : colors.neutralBorder) : 'transparent',
                       boxShadow: active ? `0 12px 28px ${colors.sectionAccentBar}18` : '0 8px 20px rgba(15, 23, 42, 0.04)',
                     }}
                   >
-                    <span className="w-5 shrink-0 text-sm font-semibold" style={{ color: active ? colors.sectionAccentBar : colors.subheading }}>{index + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-extrabold uppercase tracking-tight" style={{ color: colors.heading }}>{item.name ?? `Chứng nhận ${index + 1}`}</span>
-                    <ArrowUpRight size={17} style={{ color: active ? colors.sectionAccentBar : colors.mutedText }} />
+                    <span className={cn('shrink-0 font-semibold', compactStack ? 'w-4 text-xs' : 'w-5 text-sm')} style={{ color: active ? colors.sectionAccentBar : colors.subheading }}>{index + 1}</span>
+                    <span className={cn('min-w-0 flex-1 font-extrabold uppercase tracking-tight break-words', compactStack ? 'text-xs' : 'text-sm')} style={{ color: colors.heading }}>{item.name ?? `Chứng nhận ${index + 1}`}</span>
+                    <ArrowUpRight size={compactStack ? 14 : 17} style={{ color: active ? colors.sectionAccentBar : colors.mutedText }} />
                   </button>
                   );
                 })}
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className={cn('grid h-full auto-rows-fr gap-3', desktopColumns === 3 ? 'md:grid-cols-3' : 'md:grid-cols-4')}>
               {stackItems.map((item, idx) => (
-                <button key={idx} type="button" onClick={() => { setSelectedCert(item); }} className="group overflow-hidden rounded-xl border bg-white p-4 text-center shadow-sm transition-all duration-300 hover:-translate-y-1" style={{ borderColor: colors.neutralBorder, boxShadow: '0 18px 45px rgba(15, 23, 42, 0.07)' }}>
-                  <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg" style={{ backgroundColor: colors.neutralBackground }}>
+                <button key={idx} type="button" onClick={() => { setSelectedCert(item); }} className={cn('group flex h-full min-h-0 flex-col overflow-hidden border bg-white p-3 text-center shadow-sm transition-all duration-300 hover:-translate-y-1', radiusClassName)} style={{ borderColor: renderConfig.showBorder ? colors.neutralBorder : 'transparent', boxShadow: '0 18px 45px rgba(15, 23, 42, 0.07)' }}>
+                  <div className={cn('mx-auto flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden', innerRadiusClassName)} style={{ backgroundColor: colors.neutralBackground }}>
                     {item.url ? (
                       <SiteImage src={item.url} className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]" alt={item.name ?? ''} />
                     ) : (
                       <Shield size={40} style={{ color: colors.subheading }} />
                     )}
                   </div>
-                  <p className="mt-5 truncate text-sm font-extrabold uppercase tracking-tight" style={{ color: colors.heading }}>{item.name ?? 'Chứng nhận'}</p>
-                  <div className="mx-auto mt-3 h-0.5 w-8 rounded-full" style={{ backgroundColor: colors.sectionAccentBar }} />
+                  <p className="mt-3 min-h-9 text-xs font-extrabold uppercase tracking-tight break-words" style={{ color: colors.heading }}>{item.name ?? 'Chứng nhận'}</p>
+                  <div className="mx-auto mt-2 h-0.5 w-7 rounded-full" style={{ backgroundColor: colors.sectionAccentBar }} />
                 </button>
               ))}
             </div>
-            {stackRemaining > 0 && (
-              <div className="flex items-center justify-center rounded-2xl border border-dashed p-4 text-sm font-semibold md:col-span-2" style={{ borderColor: colors.accentBorder, color: colors.subheading }}>+{stackRemaining} chứng nhận khác</div>
-            )}
           </div>
         </div>
         <CertificateModal item={selectedCert} isOpen={Boolean(selectedCert)} onClose={() => { setSelectedCert(null); }} />
@@ -2098,28 +2724,31 @@ function TrustBadgesSection({
   // Style 4: Framed Wall
   if (style === 'wall') {
     return (
-      <section className="py-8 px-3" style={{ backgroundColor: colors.neutralBackground }}>
-        <div className="mx-auto max-w-7xl">
+      <section className={cn(sectionSpacingClassName, 'px-3')} style={{ backgroundColor: colors.neutralBackground }}>
+        <div className="mx-auto max-w-7xl tv:max-w-[1600px]">
           {sharedHeader}
           <div className={cn("grid gap-4 md:gap-5", responsiveGridClassName)}>
-            {items.map((item, idx) => (
+            {visibleItems.map((item, idx) => (
               <div
                 key={idx}
                 onClick={() => { setSelectedCert(item); }}
-                className="group relative p-2 md:p-3 rounded-2xl flex min-h-[170px] md:min-h-[210px] flex-col cursor-zoom-in transition-all duration-300 hover:-translate-y-0.5"
-                style={{ border: `1px solid ${colors.neutralBorder}`, backgroundColor: colors.neutralSurface, boxShadow: '0 16px 40px rgba(15, 23, 42, 0.06)' }}
+                className={cn('group relative p-2 md:p-3 flex min-h-[170px] md:min-h-[210px] flex-col cursor-zoom-in transition-all duration-300 hover:-translate-y-0.5', radiusClassName)}
+                style={{ border: cardBorder, backgroundColor: colors.neutralSurface, boxShadow: '0 16px 40px rgba(15, 23, 42, 0.06)' }}
               >
-                <div className="mb-3 h-1.5 w-10 rounded-full" style={{ backgroundColor: colors.sectionAccentBar }} />
-                <div className="flex-1 flex items-center justify-center rounded-xl p-3 relative overflow-hidden" style={{ backgroundColor: colors.neutralBackground, border: `1px solid ${colors.neutralBorder}` }}>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="h-1.5 w-10 rounded-full" style={{ backgroundColor: colors.sectionAccentBar }} />
+                  {renderTrustCue(true)}
+                </div>
+                <div className={cn('flex items-center justify-center p-3 relative overflow-hidden', TRUST_BADGES_A4_ASPECT_CLASS, innerRadiusClassName)} style={{ backgroundColor: colors.neutralBackground, border: cardBorder }}>
                   {item.url ? (
                     <SiteImage src={item.url} className="w-full h-full object-contain" alt={item.name ?? ''} />
                   ) : (
-                    <Shield size={28} className="text-slate-300" />
+                    <Shield size={28} style={{ color: colors.subheading }} />
                   )}
                 </div>
                 <div className="h-7 md:h-8 flex items-center justify-center mt-1">
-                  <span className="text-[10px] md:text-xs font-semibold text-center truncate px-1" style={{ color: colors.subheading }}>
-                    {item.name ? (item.name.length > 18 ? item.name.slice(0, 16) + '...' : item.name) : 'Certificate'}
+                  <span className="text-[10px] md:text-xs font-semibold text-center leading-tight break-words px-1" style={{ color: colors.subheading }}>
+                    {item.name ?? 'Chứng nhận'}
                   </span>
                 </div>
               </div>
@@ -2133,35 +2762,29 @@ function TrustBadgesSection({
 
   // Style 5: Carousel
   if (style === 'carousel') {
-    const cardWidth = desktopColumns === 3 ? 220 : 180;
-    const gap = 16;
-    const showArrowsDesktop = items.length > 5;
+    const showArrowsDesktop = visibleItems.length > 5;
 
     return (
-      <section className="py-8 px-3 bg-white">
-        <div className="mx-auto max-w-7xl">
+      <section className={cn(sectionSpacingClassName, 'px-3 bg-white')}>
+        <div className="mx-auto max-w-7xl tv:max-w-[1600px]">
           <div className="flex items-center justify-between">
             {sharedHeader}
             {showArrowsDesktop && (
               <div className="hidden md:flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    const container = document.querySelector(`#${carouselId}`);
-                    if (container) {container.scrollBy({ behavior: 'smooth', left: -(cardWidth + gap) });}
-                  }}
-                  className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+                  onClick={() => carouselApi?.scrollPrev()}
+                  disabled={!canScrollPrev}
+                  className={cn('w-10 h-10 rounded-full flex items-center justify-center transition-colors', !canScrollPrev && 'cursor-not-allowed opacity-40')}
                   style={{ border: `1px solid ${colors.sectionAccentBar}`, backgroundColor: colors.neutralSurface }}
                 >
                   <ChevronLeft size={20} style={{ color: colors.heading }} />
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    const container = document.querySelector(`#${carouselId}`);
-                    if (container) {container.scrollBy({ behavior: 'smooth', left: cardWidth + gap });}
-                  }}
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors"
+                  onClick={() => carouselApi?.scrollNext()}
+                  disabled={!canScrollNext}
+                  className={cn('w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors', !canScrollNext && 'cursor-not-allowed opacity-40')}
                   style={{ backgroundColor: colors.heading }}
                 >
                   <ChevronRight size={20} />
@@ -2171,55 +2794,32 @@ function TrustBadgesSection({
           </div>
 
           <div className="relative overflow-hidden rounded-xl">
-            <div
-              id={carouselId}
-              className="flex overflow-x-auto snap-x snap-mandatory gap-4 py-4 px-2 cursor-grab active:cursor-grabbing select-none"
-              style={{ WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}
-              onMouseDown={(e) => {
-                const el = e.currentTarget;
-                el.dataset.isDown = 'true';
-                el.dataset.startX = String(e.pageX - el.offsetLeft);
-                el.dataset.scrollLeft = String(el.scrollLeft);
-                el.style.scrollBehavior = 'auto';
-              }}
-              onMouseLeave={(e) => { e.currentTarget.dataset.isDown = 'false'; e.currentTarget.style.scrollBehavior = 'smooth'; }}
-              onMouseUp={(e) => { e.currentTarget.dataset.isDown = 'false'; e.currentTarget.style.scrollBehavior = 'smooth'; }}
-              onMouseMove={(e) => {
-                const el = e.currentTarget;
-                if (el.dataset.isDown !== 'true') {return;}
-                e.preventDefault();
-                const x = e.pageX - el.offsetLeft;
-                const walk = (x - Number(el.dataset.startX)) * 1.5;
-                el.scrollLeft = Number(el.dataset.scrollLeft) - walk;
-              }}
-            >
-              {items.map((item, idx) => (
-                <div
-                  key={idx}
-                  onClick={() =>{  setSelectedCert(item); }}
-                className={cn("snap-start flex-shrink-0 w-[140px] group cursor-zoom-in", desktopColumns === 3 ? 'md:w-[220px]' : 'md:w-[180px]')}
-                  draggable={false}
-                >
+            <div className="overflow-hidden px-2 py-4" ref={carouselRef}>
+              <div className="flex gap-4">
+                {visibleItems.map((item, idx) => (
                   <div
-                    className="aspect-[4/3] rounded-2xl flex items-center justify-center p-4 md:p-5 transition-all duration-300"
-                    style={{ backgroundColor: colors.neutralBackground, border: `1px solid ${colors.neutralBorder}` }}
+                    key={idx}
+                    onClick={() => { setSelectedCert(item); }}
+                    className={cn('min-w-0 flex-[0_0_140px] group cursor-zoom-in', desktopColumns === 3 ? 'md:flex-[0_0_220px]' : 'md:flex-[0_0_180px]')}
                   >
-                    {item.url ? (
-                      <SiteImage src={item.url} className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" alt={item.name ?? ''} draggable={false} />
-                    ) : (
-                      <Shield size={32} className="text-slate-300" />
+                    <div
+                      className={cn(TRUST_BADGES_A4_ASPECT_CLASS, 'flex items-center justify-center p-4 md:p-5 transition-all duration-300', radiusClassName)}
+                      style={{ backgroundColor: colors.neutralBackground, border: cardBorder }}
+                    >
+                      {item.url ? (
+                        <SiteImage src={item.url} className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" alt={item.name ?? ''} draggable={false} />
+                      ) : (
+                        <Shield size={32} style={{ color: colors.subheading }} />
+                      )}
+                    </div>
+                    {item.name && (
+                      <p className="text-center text-xs font-semibold leading-tight mt-2 break-words px-1" style={{ color: colors.subheading }}>{item.name}</p>
                     )}
                   </div>
-                  {item.name && (
-                    <p className="text-center text-xs font-medium text-slate-500 mt-2 truncate px-1">{item.name}</p>
-                  )}
-                </div>
-              ))}
-              <div className="flex-shrink-0 w-4" />
+                ))}
+              </div>
             </div>
           </div>
-
-          <style>{`#${carouselId}::-webkit-scrollbar { display: none; }`}</style>
         </div>
         <CertificateModal item={selectedCert} isOpen={Boolean(selectedCert)} onClose={() =>{  setSelectedCert(null); }} />
       </section>
@@ -2227,13 +2827,13 @@ function TrustBadgesSection({
   }
 
   // Style 6: Seal
-  const sealItems = items.slice(0, 3);
-  const sealRemaining = items.length - sealItems.length;
+  const sealItems = visibleItems;
+  const hubItems = sealItems.slice(0, 3);
   return (
-    <section className="relative overflow-hidden bg-slate-50 py-12 px-3 md:py-16">
+    <section className={cn('relative overflow-hidden bg-slate-50 px-3', sectionSpacingClassName)}>
       <div className="pointer-events-none absolute -left-24 -top-24 h-64 w-64 rounded-full bg-white/70 blur-2xl" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-white/70 blur-2xl" />
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-7xl tv:max-w-[1600px]">
         {sharedHeader}
         <div className="relative grid items-center gap-6 md:grid-cols-[0.9fr_1.15fr] md:gap-10">
           <div className="relative mx-auto flex aspect-square w-full max-w-[380px] items-center justify-center">
@@ -2245,18 +2845,18 @@ function TrustBadgesSection({
             <span className="absolute bottom-16 right-14 h-2 w-2 rounded-full" style={{ backgroundColor: colors.sectionAccentBar }} />
             <div className="relative z-10 flex h-44 w-44 flex-col items-center justify-center rounded-full border bg-white text-center shadow-xl" style={{ borderColor: colors.sectionAccentBar }}>
               <Shield size={34} style={{ color: colors.heading }} />
-              <span className="mt-4 text-xs font-bold uppercase tracking-[0.32em]" style={{ color: colors.mutedText }}>Verified</span>
+              <span className="mt-4 text-xs font-bold uppercase tracking-[0.28em]" style={{ color: colors.mutedText }}>{trustCueText}</span>
               <div className="mt-3 h-0.5 w-8 rounded-full" style={{ backgroundColor: colors.sectionAccentBar }} />
               <span className="mt-3 text-5xl font-black leading-none" style={{ color: colors.heading }}>{sealItems.length}</span>
             </div>
-            {sealItems.map((item, idx) => {
+            {hubItems.map((item, idx) => {
               const positions = [
                 'left-1/2 top-0 -translate-x-1/2',
                 'right-0 top-[36%]',
                 'bottom-2 left-[62%] -translate-x-1/2',
               ];
               return (
-                <button key={idx} type="button" onClick={() => { setSelectedCert(item); }} className={cn("absolute z-20 flex h-20 w-20 items-center justify-center rounded-2xl border bg-white p-2 shadow-lg", positions[idx])} style={{ borderColor: colors.neutralBorder }}>
+                <button key={idx} type="button" onClick={() => { setSelectedCert(item); }} className={cn('absolute z-20 flex h-24 w-16 items-center justify-center border bg-white p-2 shadow-lg', radiusClassName, positions[idx])} style={{ borderColor: colors.neutralBorder }}>
                   {item.url ? (
                     <SiteImage src={item.url} className="h-full w-full object-contain" alt={item.name ?? ''} />
                   ) : (
@@ -2266,29 +2866,50 @@ function TrustBadgesSection({
               );
             })}
           </div>
-          <div className="grid gap-4">
-            {sealItems.map((item, idx) => (
-              <button key={idx} type="button" onClick={() =>{  setSelectedCert(item); }} className="group flex min-h-24 items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-x-1" style={{ borderColor: colors.neutralBorder, boxShadow: '0 18px 45px rgba(15, 23, 42, 0.06)' }}>
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg" style={{ backgroundColor: colors.neutralBackground }}>
-                {item.url ? (
-                  <SiteImage src={item.url} className="h-full w-full object-contain" alt={item.name ?? ''} />
-                ) : (
-                  <Shield size={26} style={{ color: colors.subheading }} />
-                )}
-                </div>
-                <div className="h-12 w-px shrink-0" style={{ backgroundColor: colors.neutralBorder }} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-extrabold uppercase tracking-tight" style={{ color: colors.heading }}>{item.name ?? 'Chứng nhận'}</p>
-                  <p className="text-xs" style={{ color: colors.mutedText }}>Tín hiệu #{idx + 1} trong bộ chứng nhận</p>
-                </div>
-                <ArrowUpRight size={18} style={{ color: colors.heading }} />
-              </button>
-            ))}
-            {sealRemaining > 0 && (
-              <div className="rounded-2xl border border-dashed p-3 text-center text-sm font-semibold" style={{ borderColor: colors.accentBorder, color: colors.subheading }}>
-                +{sealRemaining} chứng nhận khác
+          <div className="relative">
+            {sealItems.length > 3 && (
+              <div className="absolute -right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => sealApi?.scrollPrev()}
+                  disabled={!canSealScrollPrev}
+                  className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm transition-opacity', !canSealScrollPrev && 'cursor-not-allowed opacity-40')}
+                  style={{ borderColor: colors.sectionAccentBar, color: colors.heading }}
+                >
+                  <ChevronLeft className="rotate-90" size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sealApi?.scrollNext()}
+                  disabled={!canSealScrollNext}
+                  className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm transition-opacity', !canSealScrollNext && 'cursor-not-allowed opacity-40')}
+                  style={{ borderColor: colors.sectionAccentBar, color: colors.heading }}
+                >
+                  <ChevronRight className="rotate-90" size={16} />
+                </button>
               </div>
             )}
+            <div className="h-[360px] overflow-hidden pr-2" ref={sealRef}>
+              <div className="flex h-full flex-col gap-4">
+                {sealItems.map((item, idx) => (
+                  <button key={idx} type="button" onClick={() =>{  setSelectedCert(item); }} className={cn('group flex min-h-24 items-center gap-4 border bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-x-1', radiusClassName)} style={{ borderColor: colors.neutralBorder, boxShadow: '0 18px 45px rgba(15, 23, 42, 0.06)' }}>
+                    <div className={cn('flex h-20 w-14 shrink-0 items-center justify-center overflow-hidden', innerRadiusClassName)} style={{ backgroundColor: colors.neutralBackground }}>
+                    {item.url ? (
+                      <SiteImage src={item.url} className="h-full w-full object-contain" alt={item.name ?? ''} />
+                    ) : (
+                      <Shield size={26} style={{ color: colors.subheading }} />
+                    )}
+                    </div>
+                    <div className="h-12 w-px shrink-0" style={{ backgroundColor: colors.neutralBorder }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-extrabold uppercase tracking-tight break-words" style={{ color: colors.heading }}>{item.name ?? 'Chứng nhận'}</p>
+                      <p className="text-xs" style={{ color: colors.mutedText }}>Bằng chứng tin cậy #{idx + 1}</p>
+                    </div>
+                    <ArrowUpRight size={18} style={{ color: colors.heading }} />
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2297,8 +2918,8 @@ function TrustBadgesSection({
   );
 }
 
-function GallerySection({ config, brandColor, secondary, mode, title, type }: { config: Record<string, unknown>; brandColor: string;
-  secondary: string; mode: 'single' | 'dual'; title: string; type: string }) {
+function GallerySection({ config, brandColor, secondary, mode, title, type, isDark }: { config: Record<string, unknown>; brandColor: string;
+  secondary: string; mode: 'single' | 'dual'; title: string; type: string; isDark?: boolean }) {
   const items = (config.items as { url: string; link?: string; name?: string }[]) || [];
   const style = type === 'Partners'
     ? normalizePartnersStyle(config.style)
@@ -2306,6 +2927,10 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
   const partnersSubheading = type === 'Partners' && typeof (config.subtitle ?? config.subheading) === 'string' ? ((config.subtitle ?? config.subheading) as string) : undefined;
   const partnersAlign = type === 'Partners' ? normalizePartnersAlign(config.align) : 'center';
   const partnersDisplayMode = type === 'Partners' ? normalizePartnersDisplayMode(config.displayMode) : 'withName';
+  const partnersCornerRadius = type === 'Partners' ? normalizePartnersCornerRadius(config.cornerRadius) : 'lg';
+  const partnersLogoSize = type === 'Partners' ? normalizePartnersLogoSize(config.logoSize) : 'normal';
+  const partnersShowBorder = type === 'Partners' ? normalizePartnersShowBorder(config.showBorder) : true;
+  const partnersSpacing = type === 'Partners' ? normalizePartnersSpacing(config.spacing) : 'normal';
   const harmony = normalizeGalleryHarmony((config.harmony as string | undefined));
   const [selectedPhoto, setSelectedPhoto] = React.useState<{ id: string; url: string; link?: string; name?: string } | null>(null);
   const [device, setDevice] = React.useState<'mobile' | 'tablet' | 'desktop'>('desktop');
@@ -2315,11 +2940,15 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
   const marqueeScrollRef = React.useRef<HTMLDivElement>(null);
   const marqueeBaseTrackRef = React.useRef<HTMLDivElement>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
-  const colors = getGalleryColorTokens({ primary: brandColor, secondary, mode, harmony });
-  const layoutAccent = colors.sectionAccentBarByStyle[style as keyof typeof colors.sectionAccentBarByStyle] ?? colors.sectionAccentBar;
+  const colors = adaptTokensForDarkMode(getGalleryColorTokens({ primary: brandColor, secondary, mode, harmony }), isDark ?? false);
   const normalizedItems = items.map((item, idx) => ({ ...item, id: item.url ? `${item.url}-${idx}` : `gallery-${idx}` }));
   const marqueeBaseItems = React.useMemo(() => getGalleryMarqueeBaseItems(normalizedItems), [normalizedItems]);
   const lightboxItems = style === 'marquee' ? marqueeBaseItems : normalizedItems;
+  const galleryCornerRadius = normalizeGalleryCornerRadius(config.cornerRadius, config.noBorderRadius);
+  const galleryRoundedClass = getGalleryCornerRadiusClassName(galleryCornerRadius);
+  const galleryDesktopColumns = normalizeGalleryDesktopColumns(config.desktopColumns);
+  const galleryGridColumnsClass = galleryDesktopColumns === 3 ? 'grid-cols-3' : galleryDesktopColumns === 6 ? 'grid-cols-6' : 'grid-cols-4';
+  const galleryMasonryColumnsClass = galleryDesktopColumns === 3 ? 'columns-3' : galleryDesktopColumns === 6 ? 'columns-6' : 'columns-4';
 
   React.useEffect(() => {
     if (style !== 'marquee') {return;}
@@ -2446,38 +3075,39 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
     const sub = normalizedItems.slice(1, 4);
 
     return (
-      <div
-        className="grid gap-1 border grid-cols-1 md:grid-cols-3"
-        style={{ backgroundColor: colors.neutralBackground, borderColor: colors.neutralBorder }}
-      >
+      <div className="grid gap-2 grid-cols-1 md:grid-cols-3">
         <div
-          className="relative group cursor-pointer overflow-hidden border aspect-[4/3] md:col-span-2 md:aspect-auto md:row-span-1 md:min-h-[300px]"
-          style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+          className={cn('relative group cursor-pointer overflow-hidden aspect-[4/3] md:col-span-2 md:aspect-auto md:row-span-1 md:min-h-[300px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass)}
+          style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
           onClick={() =>{  setSelectedPhoto(featured); }}
+          tabIndex={0}
+          role="button"
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(featured); } }}
         >
           {featured.url ? (
             <SiteImage src={featured.url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
           ) : (
             <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.placeholderBg }}><ImageIcon size={48} style={{ color: colors.placeholderIcon }} /></div>
           )}
-          <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
-          <div className="absolute inset-0 border-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: layoutAccent }} />
+          <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors', galleryRoundedClass)} />
         </div>
-        <div className="grid gap-1 grid-cols-3 md:grid-cols-1">
+        <div className="grid gap-2 grid-cols-3 md:grid-cols-1">
           {sub.map((photo) => (
             <div
               key={photo.id}
-              className="aspect-square relative group cursor-pointer overflow-hidden border"
-              style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+              className={cn('aspect-square relative group cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass)}
+              style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
               onClick={() =>{  setSelectedPhoto(photo); }}
+              tabIndex={0}
+              role="button"
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(photo); } }}
             >
               {photo.url ? (
                 <SiteImage src={photo.url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.placeholderBg }}><ImageIcon size={24} style={{ color: colors.placeholderIcon }} /></div>
               )}
-              <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
-              <div className="absolute inset-0 border-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: layoutAccent }} />
+              <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors', galleryRoundedClass)} />
             </div>
           ))}
         </div>
@@ -2489,25 +3119,26 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
     if (normalizedItems.length === 0) {return renderGalleryEmptyState();}
 
     return (
-      <div className="grid gap-0.5 border grid-cols-3 md:grid-cols-4 lg:grid-cols-5" style={{ backgroundColor: colors.neutralBackground, borderColor: colors.neutralBorder }}>
+      <div className={cn('grid gap-3 grid-cols-2 md:grid-cols-3', galleryDesktopColumns === 3 ? 'lg:grid-cols-3' : galleryDesktopColumns === 6 ? 'lg:grid-cols-6' : 'lg:grid-cols-4')}>
         {normalizedItems.map((photo) => (
           <div
             key={photo.id}
-            className="aspect-square relative group cursor-pointer overflow-hidden border"
-            style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+            className={cn('aspect-square relative group cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass)}
+            style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
             onClick={() =>{  setSelectedPhoto(photo); }}
+            tabIndex={0}
+            role="button"
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(photo); } }}
           >
             {photo.url ? (
               <SiteImage
                 src={photo.url}
                 alt=""
-                className="w-full h-full object-cover transition-opacity duration-300 hover:opacity-90"
+                className="w-full h-full object-cover transition-all duration-300 group-hover:scale-[1.03] group-hover:brightness-95"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.placeholderBg }}><ImageIcon size={24} style={{ color: colors.placeholderIcon }} /></div>
             )}
-            <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
-            <div className="absolute inset-0 border-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: layoutAccent }} />
           </div>
         ))}
       </div>
@@ -2519,8 +3150,7 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
 
     return (
       <div
-        className="grid gap-4 grid-cols-3 auto-rows-[110px] sm:auto-rows-[250px] md:grid-cols-3 md:auto-rows-[300px] rounded-lg border p-2"
-        style={{ backgroundColor: colors.neutralBackground, borderColor: colors.neutralBorder }}
+        className="grid gap-2 grid-cols-3 auto-rows-[110px] sm:auto-rows-[250px] md:grid-cols-3 md:auto-rows-[300px]"
       >
         {normalizedItems.map((photo, i) => {
           const isLarge = i % 4 === 0 || i % 4 === 3;
@@ -2529,9 +3159,12 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
           return (
             <div
               key={photo.id}
-              className={`${colSpan} relative group cursor-pointer overflow-hidden rounded-sm border`}
-              style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+              className={cn(`${colSpan} relative group cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2`, galleryRoundedClass)}
+              style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
               onClick={() =>{  setSelectedPhoto(photo); }}
+              tabIndex={0}
+              role="button"
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(photo); } }}
             >
               {photo.url ? (
                 <SiteImage
@@ -2544,8 +3177,7 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
                   <ImageIcon size={32} style={{ color: colors.placeholderIcon }} />
                 </div>
               )}
-              <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
-              <div className="absolute inset-0 border-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: layoutAccent }} />
+              <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors', galleryRoundedClass)} />
             </div>
           );
         })}
@@ -2558,25 +3190,27 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
 
     const maxVisible = device === 'mobile' ? 6 : (device === 'tablet' ? 9 : 12);
     const visibleItems = normalizedItems.slice(0, maxVisible);
-    const remainingCount = normalizedItems.length - maxVisible;
 
     if (normalizedItems.length <= 2) {
       return (
-        <div className="py-8 px-4">
-          <div className={cn('mx-auto flex items-center justify-center gap-4', normalizedItems.length === 1 ? 'max-w-sm' : 'max-w-xl')}>
+        <div className="px-4 pt-4 pb-8">
+          <div className={cn('mx-auto flex items-center justify-center gap-3', normalizedItems.length === 1 ? 'max-w-sm' : 'max-w-xl')}>
             {normalizedItems.map((photo) => (
               <div
                 key={photo.id}
-                className="flex-1 aspect-square rounded-xl overflow-hidden cursor-pointer group border relative"
-                style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+                className={cn('flex-1 aspect-square overflow-hidden cursor-pointer group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass)}
+                style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
                 onClick={() =>{  setSelectedPhoto(photo); }}
+                tabIndex={0}
+                role="button"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(photo); } }}
               >
                 {photo.url ? (
                   <SiteImage src={photo.url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.placeholderBg }}><ImageIcon size={40} style={{ color: colors.placeholderIcon }} /></div>
                 )}
-                <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
+                <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors', galleryRoundedClass)} />
               </div>
             ))}
           </div>
@@ -2585,37 +3219,29 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
     }
 
     return (
-      <div className="py-8 px-4">
+      <div className="px-4 pt-4 pb-8">
         <div className={cn(
-          'grid gap-2 rounded-lg border p-2',
-          device === 'mobile' ? 'grid-cols-2' : (device === 'tablet' ? 'grid-cols-3' : 'grid-cols-4'),
-        )} style={{ backgroundColor: colors.neutralBackground, borderColor: colors.neutralBorder }}>
+          'grid gap-3',
+          device === 'mobile' ? 'grid-cols-2' : (device === 'tablet' ? 'grid-cols-3' : galleryGridColumnsClass),
+        )}>
           {visibleItems.map((photo) => (
             <div
               key={photo.id}
-              className="aspect-square rounded-lg overflow-hidden cursor-pointer group relative border"
-              style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+              className={cn('aspect-square overflow-hidden cursor-pointer group relative break-inside-avoid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass)}
+              style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
               onClick={() =>{  setSelectedPhoto(photo); }}
+              tabIndex={0}
+              role="button"
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(photo); } }}
             >
               {photo.url ? (
                 <SiteImage src={photo.url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.placeholderBg }}><ImageIcon size={28} style={{ color: colors.placeholderIcon }} /></div>
               )}
-              <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
-              <div className="absolute inset-0 border-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: layoutAccent }} />
+              <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors', galleryRoundedClass)} />
             </div>
           ))}
-          {remainingCount > 0 && (
-            <div
-              className="aspect-square rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer border"
-              style={{ backgroundColor: colors.badgeBg, borderColor: colors.neutralBorder }}
-            >
-              <Plus size={28} style={{ color: colors.iconColor }} className="mb-1" />
-              <span className="text-lg font-bold" style={{ color: colors.badgeText }}>+{remainingCount}</span>
-              <span className="text-xs" style={{ color: colors.mutedText }}>ảnh khác</span>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -2626,8 +3252,8 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
     if (marqueeBaseItems.length === 0) {return renderGalleryEmptyState();}
 
     return (
-      <div className="py-8">
-        <div className="w-full max-w-7xl mx-auto relative overflow-hidden rounded-2xl border p-4 md:p-6" style={{ backgroundColor: colors.neutralBackground, borderColor: colors.neutralBorder }}>
+      <div className="pt-4 pb-8">
+        <div className="w-full max-w-7xl tv:max-w-[1600px] mx-auto relative overflow-hidden py-4 md:py-4 rounded-2xl">
           <div
             className="pointer-events-none absolute inset-y-0 left-0 w-16 md:w-20 z-10"
             style={{ background: `linear-gradient(to right, ${colors.neutralBackground} 0%, transparent 100%)` }}
@@ -2681,12 +3307,10 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
                   <button
                     type="button"
                     key={`gallery-marquee-${loopIdx}-${photo.id}-${idx}`}
-                    className="shrink-0 h-40 md:h-56 lg:h-64 aspect-[4/3] rounded-xl overflow-hidden group relative border text-left appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    className={cn('shrink-0 h-40 md:h-56 lg:h-64 aspect-[4/3] overflow-hidden group relative text-left appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass)}
                     style={{
                       backgroundColor: colors.neutralSurface,
-                      borderColor: colors.neutralBorder,
-                      boxShadow: '0 8px 24px rgba(15,23,42,0.08)',
-                      '--tw-ring-color': layoutAccent,
+                      '--tw-ring-color': colors.focusRing,
                     } as React.CSSProperties}
                     onClick={() => { setSelectedPhoto(photo); }}
                     aria-label={`Mở ảnh ${idx + 1}`}
@@ -2698,8 +3322,7 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
                         <ImageIcon size={32} style={{ color: colors.placeholderIcon }} />
                       </div>
                     )}
-                    <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
-                    <div className="absolute inset-0 border-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: layoutAccent }} />
+                    <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors', galleryRoundedClass)} />
                   </button>
                 ))}
               </div>
@@ -2715,25 +3338,27 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
 
     const maxVisible = device === 'mobile' ? 6 : 10;
     const visibleItems = normalizedItems.slice(0, maxVisible);
-    const remainingCount = normalizedItems.length - maxVisible;
 
     if (normalizedItems.length <= 2) {
       return (
-        <div className="py-8 px-4">
-          <div className={cn('mx-auto flex items-center justify-center gap-4', normalizedItems.length === 1 ? 'max-w-md' : 'max-w-2xl')}>
+        <div className="px-4 pt-4 pb-8">
+          <div className={cn('mx-auto flex items-center justify-center gap-3', normalizedItems.length === 1 ? 'max-w-md' : 'max-w-2xl')}>
             {normalizedItems.map((photo, idx) => (
               <div
                 key={photo.id}
-                className={cn('flex-1 rounded-xl overflow-hidden cursor-pointer group border relative', idx % 2 === 0 ? 'aspect-[3/4]' : 'aspect-[4/3]')}
-                style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+                className={cn('flex-1 overflow-hidden cursor-pointer group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass, idx % 2 === 0 ? 'aspect-[3/4]' : 'aspect-[4/3]')}
+                style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
                 onClick={() =>{  setSelectedPhoto(photo); }}
+                tabIndex={0}
+                role="button"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(photo); } }}
               >
                 {photo.url ? (
                   <SiteImage src={photo.url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.placeholderBg }}><ImageIcon size={40} style={{ color: colors.placeholderIcon }} /></div>
                 )}
-                <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
+                <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors', galleryRoundedClass)} />
               </div>
             ))}
           </div>
@@ -2742,11 +3367,11 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
     }
 
     return (
-      <div className="py-8 px-4">
+      <div className="px-4 pt-4 pb-8">
         <div className={cn(
-          'gap-3 rounded-lg border p-2',
-          device === 'mobile' ? 'columns-2' : (device === 'tablet' ? 'columns-3' : 'columns-4')
-        )} style={{ backgroundColor: colors.neutralBackground, borderColor: colors.neutralBorder }}>
+          'gap-3',
+          device === 'mobile' ? 'columns-2' : (device === 'tablet' ? 'columns-3' : galleryMasonryColumnsClass)
+        )}>
           {visibleItems.map((photo, idx) => {
             const heights = ['h-48', 'h-64', 'h-56', 'h-72', 'h-52', 'h-60'];
             const heightClass = heights[idx % heights.length];
@@ -2754,41 +3379,37 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
             return (
               <div
                 key={photo.id}
-                className={cn('mb-3 break-inside-avoid rounded-xl overflow-hidden cursor-pointer group relative border', heightClass)}
-                style={{ backgroundColor: colors.neutralSurface, borderColor: colors.neutralBorder }}
+                className={cn('mb-3 break-inside-avoid overflow-hidden cursor-pointer group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', galleryRoundedClass, heightClass)}
+                style={{ backgroundColor: colors.neutralSurface, '--tw-ring-color': colors.focusRing } as React.CSSProperties}
                 onClick={() =>{  setSelectedPhoto(photo); }}
+                tabIndex={0}
+                role="button"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPhoto(photo); } }}
               >
                 {photo.url ? (
                   <SiteImage src={photo.url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.placeholderBg }}><ImageIcon size={28} style={{ color: colors.placeholderIcon }} /></div>
                 )}
-                <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: layoutAccent }} />
-                <div className="absolute inset-0 border-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: layoutAccent }} />
+                <div className={cn('absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors', galleryRoundedClass)} />
               </div>
             );
           })}
         </div>
-        {remainingCount > 0 && (
-          <div className="flex items-center justify-center mt-4">
-            <span className="text-sm font-medium px-4 py-2 rounded-full border" style={{ backgroundColor: colors.badgeBg, color: colors.badgeText, borderColor: colors.neutralBorder }}>
-              +{remainingCount} ảnh khác
-            </span>
-          </div>
-        )}
       </div>
     );
   };
 
   const renderGalleryContent = () => {
     const headerConfig = extractSectionHeaderConfig(config);
-    const galleryFullWidth = (config.fullWidthDesktop as boolean) ?? false;
+    const galleryFullWidth = ((config.fullWidthDesktop ?? config.fullWidth) as boolean) ?? false;
+    const sectionSpacingClassName = getSectionSpacingClassName(config.noVerticalMargin === true ? 'none' : normalizeSectionSpacing(config.spacing));
     
     return (
-      <section className="w-full" style={{ backgroundColor: colors.neutralSurface }}>
+      <section className={cn('w-full', sectionSpacingClassName)} style={{ backgroundColor: 'transparent' }}>
         <div className={cn(
-          'mx-auto px-3 py-8',
-          galleryFullWidth ? 'max-w-none' : 'max-w-7xl',
+          'mx-auto px-3',
+          galleryFullWidth ? 'max-w-none' : 'max-w-7xl tv:max-w-[1600px]',
         )}>
           <SectionHeader
             title={title}
@@ -2803,7 +3424,7 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
             subtitleAboveTitle={headerConfig.subtitleAboveTitle}
             uppercaseText={headerConfig.uppercaseText}
             brandColor={brandColor}
-            className="mb-3"
+            className="mb-1.5"
           />
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 ease-out">
             {style === 'spotlight' && renderSpotlightStyle()}
@@ -2835,10 +3456,11 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
   // Extract header config for Partners
   const partnersHeaderConfig = extractSectionHeaderConfig(config);
 
-  const renderPartnersWithHeader = (content: React.ReactNode) => {
+  const renderPartnersWithHeader = (content: React.ReactNode, bgClass = 'bg-white', forceDarkHeader = false) => {
+    const darkHeader = forceDarkHeader || Boolean(isDark);
     return (
-      <section className="w-full bg-white py-8 px-3">
-        <div className="mx-auto w-full max-w-7xl">
+      <section className={cn('w-full px-3', isDark ? '' : bgClass, getPartnersSectionSpacingClassName(partnersSpacing, 'siteOuter'))} style={isDark ? { backgroundColor: colors.neutralBackground } : undefined}>
+        <div className="mx-auto w-full max-w-7xl tv:max-w-[1600px]">
           {!partnersHeaderConfig.hideHeader && (
             <SectionHeader
               title={title}
@@ -2853,6 +3475,7 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
               subtitleAboveTitle={partnersHeaderConfig.subtitleAboveTitle}
               uppercaseText={partnersHeaderConfig.uppercaseText}
               brandColor={brandColor}
+              className={cn(darkHeader && '[&_h2]:text-white [&_p]:text-slate-400 [&_span]:text-slate-400')}
             />
           )}
           {content}
@@ -2870,6 +3493,10 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
         subheading={partnersSubheading}
         align={partnersAlign}
         displayMode={partnersDisplayMode}
+        cornerRadius={partnersCornerRadius}
+        logoSize={partnersLogoSize}
+        showBorder={partnersShowBorder}
+        spacing={partnersSpacing}
         brandColor={brandColor}
         secondary={secondary}
         mode={mode}
@@ -2882,7 +3509,6 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
     );
   }
 
-  // Style: Marquee - 2-column layout (header left, logo grid right)
   if (style === 'marquee') {
     return (
       <PartnersMarqueeShared
@@ -2890,15 +3516,18 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
         brandColor={brandColor}
         secondary={secondary}
         mode={mode}
-        title={title}
-        subheading={partnersSubheading}
-        align={partnersAlign}
+        title={partnersHeaderConfig.showTitle !== false ? title : undefined}
+        subheading={partnersHeaderConfig.showSubtitle !== false ? (partnersHeaderConfig.subtitle || partnersSubheading) : undefined}
+        badgeText={partnersHeaderConfig.showBadge !== false ? partnersHeaderConfig.badgeText : undefined}
+        align={partnersHeaderConfig.headerAlign ?? partnersAlign}
         displayMode={partnersDisplayMode}
+        logoSize={partnersLogoSize}
+        spacing={partnersSpacing}
         speed={1.15}
         renderImage={(item, className) => (
           <SiteImage src={item.url} alt={item.name ?? ''} className={className} mode="logo" />
         )}
-        skipHeader={false}
+        skipHeader={partnersHeaderConfig.hideHeader === true}
       />
     );
   }
@@ -2914,6 +3543,9 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
         subheading={partnersSubheading}
         align={partnersAlign}
         displayMode={partnersDisplayMode}
+        cornerRadius={partnersCornerRadius}
+        logoSize={partnersLogoSize}
+        spacing={partnersSpacing}
         renderImage={(item, className) => (
           <SiteImage src={item.url} alt={item.name ?? ''} className={className} mode="logo" />
         )}
@@ -2936,6 +3568,10 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
         subheading={partnersSubheading}
         align={partnersAlign}
         displayMode={partnersDisplayMode}
+        cornerRadius={partnersCornerRadius}
+        logoSize={partnersLogoSize}
+        showBorder={partnersShowBorder}
+        spacing={partnersSpacing}
         openInNewTab={false}
         renderImage={(item, className) => (
           <SiteImage src={item.url} alt={item.name ?? ''} className={className} mode="logo" />
@@ -2952,11 +3588,66 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
       <PartnersLogoCloudShared
         items={normalizedItems}
         brandColor={brandColor}
+        secondary={secondary}
+        mode={mode}
+        cornerRadius={partnersCornerRadius}
+        logoSize={partnersLogoSize}
+        showBorder={partnersShowBorder}
+        spacing={partnersSpacing}
         openInNewTab={false}
         renderImage={(item, className) => (
           <SiteImage src={item.url} alt={item.name ?? 'Hình ảnh'} className={className} width={180} height={80} mode="logo" />
         )}
       />
+    );
+  }
+
+  if (style === 'glassLogoCloud') {
+    const normalizedItems = items.map((item, idx) => ({ ...item, id: idx }));
+    const logoColorMode = (config.logoColorMode as PartnersLogoColorMode) || 'grayscale';
+    const logoColorIntensity = normalizePartnersLogoColorIntensity(config.logoColorIntensity, logoColorMode);
+
+    return (
+      <div className="w-full" style={{ backgroundColor: isDark ? colors.neutralBackground : '#ffffff' }}>
+        {!partnersHeaderConfig.hideHeader && (
+          <div className={cn('mx-auto w-full max-w-7xl tv:max-w-[1600px] px-4 sm:px-6', partnersSpacing === 'none' ? 'pt-0' : partnersSpacing === 'compact' ? 'pt-4 md:pt-6' : 'pt-8 md:pt-12')}>
+            <SectionHeader
+              title={title}
+              subtitle={partnersHeaderConfig.subtitle}
+              badgeText={partnersHeaderConfig.badgeText}
+              hideHeader={partnersHeaderConfig.hideHeader}
+              showTitle={partnersHeaderConfig.showTitle}
+              showSubtitle={partnersHeaderConfig.showSubtitle}
+              showBadge={partnersHeaderConfig.showBadge}
+              headerAlign={partnersHeaderConfig.headerAlign}
+              titleColorPrimary={partnersHeaderConfig.titleColorPrimary}
+              subtitleAboveTitle={partnersHeaderConfig.subtitleAboveTitle}
+              uppercaseText={partnersHeaderConfig.uppercaseText}
+              brandColor={brandColor}
+            />
+          </div>
+        )}
+        <div className={cn('w-full bg-gradient-to-r from-zinc-950 via-zinc-900/90 to-zinc-950 border-t border-b border-zinc-800/80 z-20', getPartnersSectionSpacingClassName(partnersSpacing, 'glassLogoCloud', true))}>
+          <div className="mx-auto w-full max-w-7xl tv:max-w-[1600px] px-4 sm:px-6">
+            <PartnersGlassLogoCloudShared
+              items={normalizedItems}
+              brandColor={brandColor}
+              secondary={secondary}
+              mode={mode}
+              cornerRadius={partnersCornerRadius}
+              logoSize={partnersLogoSize}
+              showBorder={partnersShowBorder}
+              spacing={partnersSpacing}
+              logoColorMode={logoColorMode}
+              logoColorIntensity={logoColorIntensity}
+              openInNewTab={false}
+              renderImage={(item, className) => (
+                <SiteImage src={item.url} alt={item.name ?? 'Hình ảnh'} className={className} width={180} height={80} mode="logo" />
+              )}
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -2971,6 +3662,10 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
         subheading={partnersSubheading}
         align={partnersAlign}
         displayMode={partnersDisplayMode}
+        cornerRadius={partnersCornerRadius}
+        logoSize={partnersLogoSize}
+        showBorder={partnersShowBorder}
+        spacing={partnersSpacing}
         renderImage={(item, className) => (
           <SiteImage src={item.url} alt={item.name ?? ''} className={className} mode="logo" />
         )}
@@ -2990,7 +3685,11 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
       subheading={partnersSubheading}
       align={partnersAlign}
       displayMode={partnersDisplayMode}
-      maxVisible={6}
+      cornerRadius={partnersCornerRadius}
+      logoSize={partnersLogoSize}
+      showBorder={partnersShowBorder}
+      spacing={partnersSpacing}
+      maxVisible={items.length}
       variant="site"
       renderImage={(item, className) => (
         <SiteImage src={item.url} alt={item.name ?? ''} className={className} mode="logo" />
@@ -3004,24 +3703,31 @@ function GallerySection({ config, brandColor, secondary, mode, title, type }: { 
 // Best Practices: Clear navigation, visual appeal, mobile optimization, hover effects
 // 8 styles: grid, carousel, cards, marquee, circular, icon-grid, mosaic, compact-grid
 import { ProductCategoriesSectionShared } from '@/app/admin/home-components/product-categories/_components/ProductCategoriesSectionShared';
-import type { ProductCategoriesAlign, ProductCategoriesResolvedItem, ProductCategoriesStyle } from '@/app/admin/home-components/product-categories/_types';
+import { normalizeProductCategoriesCornerRadius, normalizeProductCategoriesSpacing, normalizeProductCategoriesDesktopColumns, type ProductCategoriesAlign, type ProductCategoriesResolvedItem, type ProductCategoriesStyle } from '@/app/admin/home-components/product-categories/_types';
 
-function ProductCategoriesSection({ config, brandColor, secondary, mode, title }: { config: Record<string, unknown>; brandColor: string;
-  secondary: string; mode: 'single' | 'dual'; title: string }) {
+function ProductCategoriesSection({ config, brandColor, secondary, mode, title, isDark }: { config: Record<string, unknown>; brandColor: string;
+  secondary: string; mode: 'single' | 'dual'; title: string; isDark?: boolean }) {
+  const isSnapshotMode = Boolean(useSnapshotDemoContext());
   const categoriesConfig = (config.categories as { categoryId: string; customImage?: string; imageMode?: string }[]) || [];
-  const style = (config.style as ProductCategoriesStyle) || 'grid';
+  const fallbackCategories = Array.isArray(config.fallbackCategories)
+    ? config.fallbackCategories as { sourceId?: string; title?: string; image?: string; slug?: string; description?: string }[]
+    : [];
+  const style = (config.style as ProductCategoriesStyle) || 'image-strip';
   const showProductCount = (config.showProductCount as boolean) ?? true;
+  const spacing = normalizeProductCategoriesSpacing(config.spacing, config.noVerticalMargin);
+  const cornerRadius = normalizeProductCategoriesCornerRadius(config.cornerRadius, config.noBorderRadius);
   const subtitle = typeof config.subtitle === 'string'
     ? config.subtitle
     : typeof config.subheading === 'string'
       ? config.subheading
       : '';
   const headerAlign = (config.headerAlign as ProductCategoriesAlign) ?? (config.align as ProductCategoriesAlign) ?? 'center';
-  const colors = React.useMemo(() => getProductCategoriesColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
+  const colors = React.useMemo(() => adaptTokensForDarkMode(getProductCategoriesColors(brandColor, secondary, mode), isDark ?? false), [brandColor, secondary, mode, isDark]);
   const [device, setDevice] = React.useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   
-  const categoriesData = useQuery(api.productCategories.listActive);
-  const productsData = useQuery(api.products.listPublicResolved, {});
+  const categoriesData = useQuery(api.productCategories.listActive, isSnapshotMode ? 'skip' : undefined);
+  const productsData = useQuery(api.products.listPublicResolved, isSnapshotMode ? 'skip' : {});
+  const categoriesWithStats = useQuery(api.productCategories.listActiveWithStats, isSnapshotMode ? 'skip' : { productLimit: 5000 });
   
   const categoryMap = React.useMemo(() => {
     const map: Record<string, { name: string; slug: string; image?: string; description?: string }> = {};
@@ -3035,13 +3741,29 @@ function ProductCategoriesSection({ config, brandColor, secondary, mode, title }
   
   const productCountMap = React.useMemo(() => {
     const map: Record<string, number> = {};
-    if (productsData) {
-      for (const p of productsData) {
-        map[p.categoryId] = (map[p.categoryId] || 0) + 1;
+    if (categoriesWithStats?.stats) {
+      for (const stat of categoriesWithStats.stats) {
+        map[stat.categoryId] = stat.productCount;
       }
     }
     return map;
-  }, [productsData]);
+  }, [categoriesWithStats]);
+  const productIdsForImages = React.useMemo(() => {
+    const ids: string[] = [];
+    for (const item of categoriesConfig) {
+      if (item.imageMode === 'product-image' && item.customImage?.startsWith('product:')) {
+        const id = item.customImage.replace('product:', '');
+        if (id) ids.push(id);
+      }
+    }
+    return ids;
+  }, [categoriesConfig]);
+
+  const targetProductsData = useQuery(
+    api.products.listByIds,
+    isSnapshotMode || productIdsForImages.length === 0 ? 'skip' : { ids: productIdsForImages as any }
+  );
+
   const productImageMap = React.useMemo(() => {
     const map: Record<string, string | undefined> = {};
     if (productsData) {
@@ -3049,8 +3771,13 @@ function ProductCategoriesSection({ config, brandColor, secondary, mode, title }
         map[product._id] = product.image;
       }
     }
+    if (targetProductsData) {
+      for (const product of targetProductsData) {
+        map[product._id] = product.image;
+      }
+    }
     return map;
-  }, [productsData]);
+  }, [productsData, targetProductsData]);
 
   React.useEffect(() => {
     const updateDevice = () => {
@@ -3104,7 +3831,7 @@ function ProductCategoriesSection({ config, brandColor, secondary, mode, title }
 
   // Demo mode: use embedded demo data instead of real categories
   const selectionMode = (config.selectionMode as string) || 'real';
-  const demoCategories = Array.isArray(config.demoCategories) ? config.demoCategories as { id: string; name: string; image?: string; productCount?: number }[] : [];
+  const demoCategories = Array.isArray(config.demoCategories) ? config.demoCategories as { id: string; name: string; image?: string; productCount?: number; link?: string }[] : [];
   
   const finalItems: ProductCategoriesResolvedItem[] = selectionMode === 'demo' && demoCategories.length > 0
     ? demoCategories.map((item, idx) => ({
@@ -3113,7 +3840,18 @@ function ProductCategoriesSection({ config, brandColor, secondary, mode, title }
         name: item.name || `Danh mục ${idx + 1}`,
         displayImage: item.image,
         productCount: item.productCount ?? 0,
+        link: item.link,
       }))
+    : isSnapshotMode && fallbackCategories.length > 0
+      ? fallbackCategories.map((item, idx) => ({
+          id: item.sourceId ?? String(idx),
+          itemId: item.sourceId ?? idx,
+          name: item.title || `Danh mục ${idx + 1}`,
+          slug: item.slug,
+          description: item.description,
+          displayImage: item.image,
+          productCount: 0,
+        }))
     : resolvedCategories;
 
   if (finalItems.length === 0) {return null;}
@@ -3141,8 +3879,11 @@ function ProductCategoriesSection({ config, brandColor, secondary, mode, title }
       device={device}
       mode={mode}
       showProductCount={showProductCount}
+      spacing={spacing}
+      cornerRadius={cornerRadius}
+      desktopColumns={normalizeProductCategoriesDesktopColumns(config.desktopColumns)}
       viewAllHref="/products"
-      getItemHref={(item) => item.slug ? `/products?category=${item.slug}` : '/products'}
+      getItemHref={(item) => item.link || (item.slug ? `/${item.slug}` : '/products')}
       renderImage={(item, className) => (
         item.displayImage
           ? <SiteImage src={item.displayImage} alt={item.name} className={className} />
@@ -3174,24 +3915,29 @@ function CategoryProductsSection({
   secondary,
   mode,
   title: _title,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: 'single' | 'dual';
   title: string;
+  isDark?: boolean;
 }) {
   const sections = (config.sections as { categoryId: string; itemCount: number }[]) || [];
   const selectionMode = (config.selectionMode as 'real' | 'demo' | undefined) ?? 'real';
   const demoSections = (config.demoSections as RuntimeDemoCategoryProductsSection[] | undefined) ?? [];
   const style = (config.style as CategoryProductsStyle) || 'grid';
   const showViewAll = (config.showViewAll as boolean) ?? true;
-  const columnsDesktop = (config.columnsDesktop as number) || 4;
-  const columnsMobile = (config.columnsMobile as number) || 2;
+  const columnsDesktop = config.columnsDesktop === 3 ? 3 : 4;
   const sectionTitle = _title || 'Sản phẩm';
+  const sectionSpacingClassName = getSectionSpacingClassName(normalizeSectionSpacing(config.spacing));
+  const cornerRadius = normalizeCategoryProductsCornerRadius(config.cornerRadius);
+  const cardRadiusClassName = getCategoryProductsCardRadiusClassName(cornerRadius);
+  const imageRadiusClassName = getCategoryProductsImageRadiusClassName(cornerRadius);
   const colors = React.useMemo(
-    () => getCategoryProductsColors(brandColor, secondary, mode),
-    [brandColor, secondary, mode]
+    () => adaptTokensForDarkMode(getCategoryProductsColors(brandColor, secondary, mode), isDark ?? false),
+    [brandColor, secondary, mode, isDark]
   );
 
   // Query categories and products
@@ -3210,7 +3956,7 @@ function CategoryProductsSection({
     () => ({ aspectRatio: getProductImageAspectRatioCssValue(imageAspectRatio) }),
     [imageAspectRatio]
   );
-  const { frame } = useProductFrameConfig();
+  const { frameConfig, watermarkConfig } = useProductImageOverlayConfigs(imageAspectRatio);
 
   const resolvedSections = React.useMemo(() => {
     if (selectionMode === 'demo') {
@@ -3260,18 +4006,7 @@ function CategoryProductsSection({
       }[];
   }, [categoriesData, demoSections, productsData, sections, selectionMode]);
 
-  const getGridCols = () => {
-    switch (columnsDesktop) {
-      case 3: { return 'md:grid-cols-3';
-      }
-      case 5: { return 'md:grid-cols-5';
-      }
-      default: { return 'md:grid-cols-4';
-      }
-    }
-  };
-
-  const getMobileGridCols = () => columnsMobile === 1 ? 'grid-cols-1' : 'grid-cols-2';
+  const getGridCols = () => getCategoryProductsResponsiveGridClassName(columnsDesktop);
 
   const getPriceDisplay = (price?: number, salePrice?: number, isRangeFromVariant?: boolean) =>
     getHomeComponentPriceLabel({ saleMode, price, salePrice, isRangeFromVariant });
@@ -3308,45 +4043,148 @@ function CategoryProductsSection({
   }), [categorySlugMap, resolveProductHref]);
 
   // Product Card Component with Equal Height (line-clamp + min-height)
-  const ProductCard = ({ product, categoryId }: { product: { _id: string; name: string; image?: string; price?: number; salePrice?: number; slug?: string; hasVariants?: boolean }; categoryId: string }) => (
-    <a href={resolveProductHrefByCategory({ categoryId, product })} aria-label={`${sectionTitle}: ${product.name}`} className="group cursor-pointer flex flex-col h-full">
-      <div className="rounded-lg overflow-hidden mb-2" style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}>
-        {product.image ? (
-          <SiteImage 
-            src={product.image} 
-            alt={product.name} 
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package size={24} style={{ color: colors.emptyStateIcon }} />
-          </div>
-        )}
-        <ProductImageFrameOverlay frame={frame} />
-      </div>
-      <h4 className="font-medium text-sm line-clamp-2 min-h-[2.5rem]" style={{ color: colors.bodyText }}>{product.name || 'Tên sản phẩm'}</h4>
-      <div className="flex flex-col mt-auto">
-        {(() => {
-          const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
-          if (priceDisplay.comparePrice) {
-            return (
+  const showAddToCartButton = saleMode === 'cart' && config.showAddToCartButton !== false;
+  const showBuyNowButton = saleMode === 'cart' && config.showBuyNowButton !== false;
+  const cartButtonsLayout = (config.cartButtonsLayout as 'stack' | 'grid-2') || 'stack';
+  const showStock = config.showStock !== false;
+
+  const router = useRouter();
+  const { addItem, openDrawer } = useCart();
+  const cartConfig = useCartConfig();
+  const [quickAddTarget, setQuickAddTarget] = React.useState<{ product: any; action: 'addToCart' | 'buyNow' } | null>(null);
+
+  const tokens = React.useMemo(
+    () => adaptTokensForDarkMode(getProductsListColors(brandColor, secondary, mode || 'single'), isDark ?? false),
+    [brandColor, secondary, mode, isDark]
+  );
+
+  const handleAddToCart = async (product: any) => {
+    if (showStock && !product.hasVariants && (product.stock ?? 0) <= 0) {
+      return;
+    }
+
+    if (product.hasVariants) {
+      setQuickAddTarget({ product, action: 'addToCart' });
+      return;
+    }
+
+    await addItem(product._id, 1);
+    notifyAddToCart();
+    if (cartConfig.layoutStyle === 'drawer') {
+      openDrawer();
+    } else {
+      router.push('/cart');
+    }
+  };
+
+  const handleBuyNow = (product: any) => {
+    if (showStock && !product.hasVariants && (product.stock ?? 0) <= 0) {
+      return;
+    }
+
+    if (product.hasVariants) {
+      setQuickAddTarget({ product, action: 'buyNow' });
+      return;
+    }
+
+    router.push(`/checkout?productId=${product._id}&quantity=1`);
+  };
+
+  const handleQuickAddConfirm = async (variantId: Id<'productVariants'>, quantity: number) => {
+    if (!quickAddTarget) return;
+    const { product, action } = quickAddTarget;
+
+    if (action === 'addToCart') {
+      await addItem(product._id, quantity, variantId);
+      notifyAddToCart();
+      if (cartConfig.layoutStyle === 'drawer') {
+        openDrawer();
+      } else {
+        router.push('/cart');
+      }
+    } else {
+      router.push(`/checkout?productId=${product._id}&quantity=${quantity}&variantId=${variantId}`);
+    }
+    setQuickAddTarget(null);
+  };
+
+  const renderQuickAddModal = () => (
+    <QuickAddVariantModal
+      isOpen={quickAddTarget !== null}
+      product={quickAddTarget?.product ?? null}
+      brandColor={brandColor}
+      actionLabel={quickAddTarget?.action === 'addToCart' ? 'Thêm vào giỏ' : 'Mua ngay'}
+      onClose={() => setQuickAddTarget(null)}
+      onConfirm={handleQuickAddConfirm}
+    />
+  );
+
+  const ProductCard = ({ product, categoryId }: { product: { _id: string; name: string; image?: string; price?: number; salePrice?: number; slug?: string; hasVariants?: boolean }; categoryId: string }) => {
+    const href = resolveProductHrefByCategory({ categoryId, product });
+    const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
+    return (
+      <div className={cn("group bg-white border border-slate-200 overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col h-full p-3", cardRadiusClassName)}>
+        <a href={href} aria-label={`${sectionTitle}: ${product.name}`} className="block relative bg-slate-100 overflow-hidden mb-2" style={imageAspectRatioStyle}>
+          <ProductImageWithOverlay
+            frameConfig={frameConfig}
+            watermarkConfig={watermarkConfig}
+            className={cn('w-full h-full', imageRadiusClassName)}
+          >
+            {product.image ? (
+              <SiteImage 
+                src={product.image} 
+                alt={product.name} 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Package size={24} style={{ color: colors.emptyStateIcon }} />
+              </div>
+            )}
+          </ProductImageWithOverlay>
+        </a>
+        <a href={href} className="block flex-1 flex flex-col mb-3">
+          <h4 className="font-medium text-sm line-clamp-2 min-h-[2.5rem]" style={{ color: colors.bodyText }}>{product.name || 'Tên sản phẩm'}</h4>
+          <div className="flex flex-col mt-auto">
+            {priceDisplay.comparePrice ? (
               <>
                 <span className="font-bold text-sm" style={{ color: colors.priceText }}>
                   {priceDisplay.label}
                 </span>
                 <span className="text-xs line-through" style={{ color: colors.mutedText }}>{formatComparePrice(priceDisplay.comparePrice)}</span>
               </>
-            );
-          }
-          return (
-            <span className="font-bold text-sm" style={{ color: colors.priceText }}>
-              {priceDisplay.label}
-            </span>
-          );
-        })()}
+            ) : (
+              <span className="font-bold text-sm" style={{ color: colors.priceText }}>
+                {priceDisplay.label}
+              </span>
+            )}
+          </div>
+        </a>
+
+        {showAddToCartButton || showBuyNowButton ? (
+          <ProductCardActions
+            product={product as any}
+            tokens={tokens}
+            showStock={showStock}
+            showAddToCartButton={showAddToCartButton}
+            showBuyNowButton={showBuyNowButton}
+            buyNowLabel="Mua ngay"
+            onAddToCart={handleAddToCart}
+            onBuyNow={handleBuyNow}
+            cartButtonsLayout={cartButtonsLayout}
+          />
+        ) : (
+          <a
+            href={href}
+            className="w-full gap-1 border-2 py-1.5 px-2 rounded-lg font-medium flex items-center justify-center transition-colors whitespace-nowrap text-xs hover:bg-opacity-10"
+            style={{ borderColor: `${brandColor}20`, color: brandColor }}
+          >
+            Xem chi tiết <ArrowRight className="w-3 h-3 flex-shrink-0" />
+          </a>
+        )}
       </div>
-    </a>
-  );
+    );
+  };
 
   // Empty State Component with brandColor
   const EmptyProductsState = ({ message }: { message: string }) => (
@@ -3371,39 +4209,42 @@ function CategoryProductsSection({
   // Style 1: Grid
   if (style === 'grid') {
     return (
-      <div className="py-8 md:py-12 space-y-10 md:space-y-16">
-        {resolvedSections.map((section, idx) => (
-          <section key={idx} className="px-4">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl md:text-2xl font-bold" style={{ color: colors.heading }}>{section.category.name}</h2>
-                {showViewAll && (
-                  <a 
-                    href={`/products?category=${section.category.slug ?? section.category._id}`}
-                    className="text-sm font-medium flex items-center gap-1 hover:underline px-3 py-1.5 rounded-lg border transition-colors"
-                    style={{ borderColor: colors.buttonBorder, color: colors.buttonText }}
-                  >
-                    Xem danh mục
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                  </a>
+      <>
+        <div className={cn('space-y-10 md:space-y-16', sectionSpacingClassName)}>
+          {resolvedSections.map((section, idx) => (
+            <section key={idx} className="px-4">
+              <div className="max-w-7xl tv:max-w-[1600px] mx-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl md:text-2xl font-bold" style={{ color: colors.heading }}>{section.category.name}</h2>
+                  {showViewAll && (
+                    <a 
+                      href={buildCategoryPath({ categorySlug: section.category.slug ?? section.category._id, mode: routeMode, moduleKey: 'products' })}
+                      className="text-sm font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-colors"
+                      style={{ borderColor: colors.buttonBorder, color: colors.buttonText }}
+                    >
+                      Xem danh mục
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+                
+                {section.products.length > 0 ? (
+                  <div className={cn('grid gap-4', getGridCols())}>
+                    {section.products.map((product) => (
+                      <ProductCard key={product._id} product={product} categoryId={section.category._id} />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyProductsState message="Chưa có sản phẩm trong danh mục này" />
                 )}
               </div>
-              
-              {section.products.length > 0 ? (
-                <div className={`grid gap-4 ${getMobileGridCols()} ${getGridCols()}`}>
-                  {section.products.map((product) => (
-                    <ProductCard key={product._id} product={product} categoryId={section.category._id} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyProductsState message="Chưa có sản phẩm trong danh mục này" />
-              )}
-            </div>
-          </section>
-        ))}
-      </div>
+            </section>
+          ))}
+        </div>
+        {renderQuickAddModal()}
+      </>
     );
   }
 
@@ -3438,14 +4279,14 @@ function CategoryProductsSection({
 
       return (
         <section>
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-7xl tv:max-w-[1600px] mx-auto">
             <div className="flex items-center justify-between px-4 mb-4">
               <h2 className="text-xl md:text-2xl font-bold" style={{ color: colors.heading }}>{section.category.name}</h2>
               <div className="flex items-center gap-2">
                 {showViewAll && (
                   <a
-                    href={`/products?category=${section.category.slug ?? section.category._id}`}
-                    className="text-sm font-medium flex items-center gap-1 underline"
+                    href={buildCategoryPath({ categorySlug: section.category.slug ?? section.category._id, mode: routeMode, moduleKey: 'products' })}
+                    className="text-sm font-medium flex items-center gap-1"
                     style={{ color: colors.buttonText }}
                   >
                     Xem danh mục <ArrowRight size={16} />
@@ -3485,34 +4326,60 @@ function CategoryProductsSection({
             {section.products.length > 0 ? (
               <div className="overflow-hidden px-4" ref={emblaRef}>
                 <div className="flex gap-4 backface-hidden touch-pan-y">
-                  {section.products.map((product) => (
-                    <a
-                      key={product._id}
-                      href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
-                      className="flex-none w-36 md:w-48 group cursor-grab active:cursor-grabbing select-none"
-                      draggable={false}
-                    >
-                      <div className="rounded-lg overflow-hidden mb-2" style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}>
-                        {product.image ? (
-                          <SiteImage
-                            src={product.image}
-                            alt={product.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            draggable={false}
+                  {section.products.map((product) => {
+                    const href = resolveProductHrefByCategory({ categoryId: section.category._id, product });
+                    const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
+                    return (
+                      <div
+                        key={product._id}
+                        className="flex-none w-36 md:w-48 group flex flex-col justify-between"
+                      >
+                        <a
+                          href={href}
+                          className="block cursor-grab active:cursor-grabbing select-none mb-3 flex-1"
+                          draggable={false}
+                        >
+                          <ProductImageWithOverlay
+                            frameConfig={frameConfig}
+                            watermarkConfig={watermarkConfig}
+                            className={cn('overflow-hidden mb-2', imageRadiusClassName)}
+                            style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}
+                          >
+                            {product.image ? (
+                              <SiteImage
+                                src={product.image}
+                                alt={product.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                draggable={false}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={24} style={{ color: colors.emptyStateIcon }} />
+                              </div>
+                            )}
+                          </ProductImageWithOverlay>
+                          <h4 className="font-medium text-sm line-clamp-2 mb-1" style={{ color: colors.bodyText }}>{product.name}</h4>
+                          <span className="font-bold text-base" style={{ color: colors.buttonText }}>
+                            {priceDisplay.label}
+                          </span>
+                        </a>
+
+                        {showAddToCartButton || showBuyNowButton ? (
+                          <ProductCardActions
+                            product={product as any}
+                            tokens={tokens}
+                            showStock={showStock}
+                            showAddToCartButton={showAddToCartButton}
+                            showBuyNowButton={showBuyNowButton}
+                            buyNowLabel="Mua ngay"
+                            onAddToCart={handleAddToCart}
+                            onBuyNow={handleBuyNow}
+                            cartButtonsLayout={cartButtonsLayout}
                           />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Package size={24} style={{ color: colors.emptyStateIcon }} />
-                          </div>
-                        )}
-                        <ProductImageFrameOverlay frame={frame} />
+                        ) : null}
                       </div>
-                      <h4 className="font-medium text-sm line-clamp-2 mb-1" style={{ color: colors.bodyText }}>{product.name}</h4>
-                      <span className="font-bold text-base" style={{ color: colors.buttonText }}>
-                        {getPriceDisplay(product.price, product.salePrice, product.hasVariants).label}
-                      </span>
-                    </a>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : (
@@ -3526,87 +4393,94 @@ function CategoryProductsSection({
     };
 
     return (
-      <div className="py-4 space-y-8 md:space-y-12">
-        {resolvedSections.map((section, idx) => (
-          <CarouselSection key={idx} section={section} />
-        ))}
-      </div>
+      <>
+        <div className={cn('space-y-8 md:space-y-12', sectionSpacingClassName)}>
+          {resolvedSections.map((section, idx) => (
+            <CarouselSection key={idx} section={section} />
+          ))}
+        </div>
+        {renderQuickAddModal()}
+      </>
     );
   }
 
   // Style 3: Cards - Modern cards with category header
   if (style === 'cards') {
     return (
-      <div className="py-8 md:py-12 space-y-10 md:space-y-16">
-        {resolvedSections.map((section, idx) => (
-          <section key={idx} className="px-4">
-            <div className="max-w-7xl mx-auto">
-              <div 
-                className="rounded-xl overflow-hidden"
-                style={{ border: `1px solid ${colors.cardBorder}` }}
-              >
-                {/* Category Header */}
+      <>
+        <div className={cn('space-y-10 md:space-y-16', sectionSpacingClassName)}>
+          {resolvedSections.map((section, idx) => (
+            <section key={idx} className="px-4">
+              <div className="max-w-7xl tv:max-w-[1600px] mx-auto">
                 <div 
-                  className="px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: colors.neutralBackground }}
+                  className={cn('overflow-hidden', cardRadiusClassName)}
+                  style={{ border: `1px solid ${colors.cardBorder}` }}
                 >
-                  <div className="flex items-center gap-3">
-                    {section.category.image && (
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-white">
-                        <SiteImage 
-                          src={section.category.image} 
-                          alt={section.category.name} 
-                          className="w-full h-full object-cover" 
-                        />
-                      </div>
-                    )}
-                    <h2 className="text-lg font-bold" style={{ color: colors.heading }}>{section.category.name}</h2>
-                  </div>
-                  {showViewAll && (
-                    <a 
-                      href={`/products?category=${section.category.slug ?? section.category._id}`}
-                      className="text-sm font-medium flex items-center gap-1 hover:underline px-3 py-1.5 rounded-lg transition-colors"
-                      style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}`, color: colors.buttonText }}
-                    >
-                      Xem danh mục
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                      </svg>
-                    </a>
-                  )}
-                </div>
-                
-                {/* Products Grid */}
-                <div className="p-4" style={{ backgroundColor: colors.cardBackground }}>
-                  {section.products.length > 0 ? (
-                    <div className={`grid gap-4 ${getMobileGridCols()} ${getGridCols()}`}>
-                      {section.products.map((product) => (
-                        <ProductCard key={product._id} product={product} categoryId={section.category._id} />
-                      ))}
+                  {/* Category Header */}
+                  <div 
+                    className="px-4 py-3 flex items-center justify-between"
+                    style={{ backgroundColor: colors.neutralBackground }}
+                  >
+                    <div className="flex items-center gap-3">
+                      {section.category.image && (
+                        <div className={cn('w-10 h-10 overflow-hidden bg-white', imageRadiusClassName)}>
+                          <SiteImage 
+                            src={section.category.image} 
+                            alt={section.category.name} 
+                            className="w-full h-full object-cover" 
+                          />
+                        </div>
+                      )}
+                      <h2 className="text-lg font-bold" style={{ color: colors.heading }}>{section.category.name}</h2>
                     </div>
-                  ) : (
-                    <EmptyProductsState message="Chưa có sản phẩm" />
-                  )}
+                    {showViewAll && (
+                      <a 
+                        href={buildCategoryPath({ categorySlug: section.category.slug ?? section.category._id, mode: routeMode, moduleKey: 'products' })}
+                        className="text-sm font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors"
+                        style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}`, color: colors.buttonText }}
+                      >
+                        Xem danh mục
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
+                      </a>
+                    )}
+                  </div>
+                  
+                  {/* Products Grid */}
+                  <div className="p-4" style={{ backgroundColor: colors.cardBackground }}>
+                    {section.products.length > 0 ? (
+                      <div className={cn('grid gap-4', getGridCols())}>
+                        {section.products.map((product) => (
+                          <ProductCard key={product._id} product={product} categoryId={section.category._id} />
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyProductsState message="Chưa có sản phẩm" />
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
-        ))}
-      </div>
+            </section>
+          ))}
+        </div>
+        {renderQuickAddModal()}
+      </>
     );
   }
 
   // Style 4: Bento - Featured product với bento grid
   if (style === 'bento') {
     return (
-      <div className="py-8 md:py-12 space-y-10 md:space-y-16">
-        {resolvedSections.map((section, idx) => {
+      <>
+        <div className={cn('space-y-10 md:space-y-16', sectionSpacingClassName)}>
+          {resolvedSections.map((section, idx) => {
           const featured = section.products[0];
           const others = section.products.slice(1, 5);
           
           return (
             <section key={idx} className="px-4">
-              <div className="max-w-7xl mx-auto">
+              <div className="max-w-7xl tv:max-w-[1600px] mx-auto">
                 {/* Header với accent line */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
@@ -3618,7 +4492,7 @@ function CategoryProductsSection({
                   </div>
                   {showViewAll && (
                     <a 
-                      href={`/products?category=${section.category.slug ?? section.category._id}`}
+                      href={buildCategoryPath({ categorySlug: section.category.slug ?? section.category._id, mode: routeMode, moduleKey: 'products' })}
                       className="text-sm font-medium flex items-center gap-1.5 px-4 py-2 rounded-full transition-all hover:shadow-md"
                       style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}`, color: colors.buttonText }}
                     >
@@ -3644,77 +4518,116 @@ function CategoryProductsSection({
                     {/* Desktop: Bento grid */}
                     <div className="hidden md:grid grid-cols-4 gap-4 auto-rows-[180px]">
                       {/* Featured - 2x2 */}
-                      {featured && (
-                        <a 
-                          href={resolveProductHrefByCategory({ categoryId: section.category._id, product: featured })}
-                          className="col-span-2 row-span-2 group cursor-pointer relative rounded-2xl overflow-hidden"
+                        <ProductImageWithOverlay
+                          frameConfig={frameConfig}
+                          watermarkConfig={watermarkConfig}
+                          className={cn('col-span-2 row-span-2 group cursor-pointer relative overflow-hidden', cardRadiusClassName)}
                           style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}
                         >
-                          {featured.image ? (
-                            <SiteImage 
-                              src={featured.image} 
-                              alt={featured.name} 
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Package size={48} style={{ color: colors.emptyStateIcon }} />
+                          <a 
+                            href={resolveProductHrefByCategory({ categoryId: section.category._id, product: featured })}
+                            className="absolute inset-0 block w-full h-full"
+                          >
+                            {featured.image ? (
+                              <SiteImage 
+                                src={featured.image} 
+                                alt={featured.name} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={48} style={{ color: colors.emptyStateIcon }} />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-30" />
+                            <div className="absolute bottom-0 left-0 right-0 p-5 text-white z-30">
+                              <span
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mb-2"
+                                style={{ backgroundColor: colors.featuredBadgeBackground, color: colors.featuredBadgeText }}
+                              >
+                                Nổi bật
+                              </span>
+                              <h3 className="font-bold text-lg line-clamp-2 mb-1">{featured.name}</h3>
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0 mb-3">
+                                {(() => {
+                                  const priceDisplay = getPriceDisplay(featured?.price, featured?.salePrice, featured?.hasVariants);
+                                  if (priceDisplay.comparePrice) {
+                                    return (
+                                      <>
+                                        <span className="font-bold text-lg">{priceDisplay.label}</span>
+                                        <span className="text-xs text-white/60 line-through">{formatComparePrice(priceDisplay.comparePrice)}</span>
+                                      </>
+                                    );
+                                  }
+                                  return <span className="font-bold text-lg">{priceDisplay.label}</span>;
+                                })()}
+                              </div>
+                              {(showAddToCartButton || showBuyNowButton) && (
+                                <div className="mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                  <ProductCardActions
+                                    product={featured as any}
+                                    tokens={tokens}
+                                    showStock={showStock}
+                                    showAddToCartButton={showAddToCartButton}
+                                    showBuyNowButton={showBuyNowButton}
+                                    buyNowLabel="Mua ngay"
+                                    onAddToCart={handleAddToCart}
+                                    onBuyNow={handleBuyNow}
+                                    cartButtonsLayout={cartButtonsLayout}
+                                    isOnDarkBg={true}
+                                  />
+                                </div>
+                              )}
                             </div>
-                          )}
-                          <ProductImageFrameOverlay frame={frame} />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                          <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-                            <span
-                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mb-2"
-                              style={{ backgroundColor: colors.featuredBadgeBackground, color: colors.featuredBadgeText }}
-                            >
-                              Nổi bật
-                            </span>
-                            <h3 className="font-bold text-lg line-clamp-2 mb-1">{featured.name}</h3>
-                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-                              {(() => {
-                                const priceDisplay = getPriceDisplay(featured?.price, featured?.salePrice, featured?.hasVariants);
-                                if (priceDisplay.comparePrice) {
-                                  return (
-                                    <>
-                                      <span className="font-bold text-lg">{priceDisplay.label}</span>
-                                      <span className="text-xs text-white/60 line-through">{formatComparePrice(priceDisplay.comparePrice)}</span>
-                                    </>
-                                  );
-                                }
-                                return <span className="font-bold text-lg">{priceDisplay.label}</span>;
-                              })()}
-                            </div>
-                          </div>
-                        </a>
-                      )}
+                          </a>
+                        </ProductImageWithOverlay>
                       
-                      {/* Other products */}
                       {others.map((product) => (
-                        <a 
+                        <ProductImageWithOverlay
                           key={product._id}
-                          href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
-                          className="group cursor-pointer relative rounded-xl overflow-hidden"
+                          frameConfig={frameConfig}
+                          watermarkConfig={watermarkConfig}
+                          className={cn('group cursor-pointer relative overflow-hidden', imageRadiusClassName)}
                           style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}
                         >
-                          {product.image ? (
-                            <SiteImage 
-                              src={product.image} 
-                              alt={product.name} 
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Package size={24} style={{ color: colors.emptyStateIcon }} />
+                          <a 
+                            href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
+                            className="absolute inset-0 block w-full h-full"
+                          >
+                            {product.image ? (
+                              <SiteImage 
+                                src={product.image} 
+                                alt={product.name} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={24} style={{ color: colors.emptyStateIcon }} />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-20" />
+                            <div className="absolute bottom-0 left-0 right-0 p-3 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-30 flex flex-col justify-end bg-black/60 max-h-full overflow-y-auto">
+                              <h4 className="font-medium text-sm line-clamp-1">{product.name}</h4>
+                              <span className="font-bold text-sm mb-2">{getPriceDisplay(product.price, product.salePrice, product.hasVariants).label}</span>
+                              {(showAddToCartButton || showBuyNowButton) && (
+                                <div className="mt-1" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                  <ProductCardActions
+                                    product={product as any}
+                                    tokens={tokens}
+                                    showStock={showStock}
+                                    showAddToCartButton={showAddToCartButton}
+                                    showBuyNowButton={showBuyNowButton}
+                                    buyNowLabel="Mua ngay"
+                                    onAddToCart={handleAddToCart}
+                                    onBuyNow={handleBuyNow}
+                                    cartButtonsLayout={cartButtonsLayout}
+                                    isOnDarkBg={true}
+                                  />
+                                </div>
+                              )}
                             </div>
-                          )}
-                          <ProductImageFrameOverlay frame={frame} />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                          <div className="absolute bottom-0 left-0 right-0 p-3 text-white transform translate-y-full group-hover:translate-y-0 transition-transform">
-                            <h4 className="font-medium text-sm line-clamp-1">{product.name}</h4>
-                            <span className="font-bold text-sm">{getPriceDisplay(product.price, product.salePrice, product.hasVariants).label}</span>
-                          </div>
-                        </a>
+                          </a>
+                        </ProductImageWithOverlay>
                       ))}
                     </div>
                   </>
@@ -3724,20 +4637,23 @@ function CategoryProductsSection({
           );
         })}
       </div>
+      {renderQuickAddModal()}
+      </>
     );
   }
 
   // Style 5: Magazine - Editorial Grid với Featured Item + Grid nhỏ
   if (style === 'magazine') {
     return (
-      <div className="py-8 md:py-12 space-y-12 md:space-y-16">
-        {resolvedSections.map((section, sectionIdx) => {
+      <>
+        <div className={cn('space-y-12 md:space-y-16', sectionSpacingClassName)}>
+          {resolvedSections.map((section, sectionIdx) => {
           const featured = section.products[0];
           const gridItems = section.products.slice(1, 5);
           
           return (
             <section key={sectionIdx} className="px-4">
-              <div className="max-w-7xl mx-auto">
+              <div className="max-w-7xl tv:max-w-[1600px] mx-auto">
                 {/* Editorial Header */}
                 <div className="flex items-end justify-between mb-6 pb-4 border-b-2" style={{ borderColor: colors.neutralBorder }}>
                   <div>
@@ -3751,11 +4667,11 @@ function CategoryProductsSection({
                   </div>
                   {showViewAll && (
                     <a 
-                      href={`/products?category=${section.category.slug ?? section.category._id}`}
+                      href={buildCategoryPath({ categorySlug: section.category.slug ?? section.category._id, mode: routeMode, moduleKey: 'products' })}
                       className="font-semibold flex items-center gap-2 transition-all hover:gap-3"
                       style={{ color: colors.buttonText }}
                     >
-                      Xem tất cả
+                      Xem danh mục
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                       </svg>
@@ -3778,111 +4694,150 @@ function CategoryProductsSection({
                     <div className="hidden md:grid grid-cols-2 gap-6">
                       {/* Featured Item - Large */}
                       {featured && (
-                        <a 
-                          href={resolveProductHrefByCategory({ categoryId: section.category._id, product: featured })}
-                          className="group cursor-pointer relative rounded-2xl overflow-hidden"
+                        <ProductImageWithOverlay
+                          frameConfig={frameConfig}
+                          watermarkConfig={watermarkConfig}
+                          className={cn('group cursor-pointer relative overflow-hidden', cardRadiusClassName)}
                           style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}
                         >
-                          {featured.image ? (
-                            <SiteImage 
-                              src={featured.image} 
-                              alt={featured.name} 
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Package size={48} style={{ color: colors.emptyStateIcon }} />
+                          <a 
+                            href={resolveProductHrefByCategory({ categoryId: section.category._id, product: featured })}
+                            className="absolute inset-0 block w-full h-full"
+                          >
+                            {featured.image ? (
+                              <SiteImage 
+                                src={featured.image} 
+                                alt={featured.name} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={48} style={{ color: colors.emptyStateIcon }} />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent z-30" />
+                            <div className="absolute bottom-0 left-0 right-0 p-6 text-white z-30">
+                              <span
+                                className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3"
+                                style={{ backgroundColor: colors.featuredBadgeBackground, color: colors.featuredBadgeText }}
+                              >
+                                Nổi bật
+                              </span>
+                              <h3 className="font-bold text-xl md:text-2xl line-clamp-2 mb-2">{featured.name}</h3>
+                              <div className="flex items-baseline gap-3 mb-3">
+                                {(() => {
+                                  const priceDisplay = getPriceDisplay(featured?.price, featured?.salePrice, featured?.hasVariants);
+                                  if (priceDisplay.comparePrice) {
+                                    return (
+                                      <>
+                                        <span className="font-bold text-2xl">{priceDisplay.label}</span>
+                                        <span className="text-sm text-white/60 line-through">{formatComparePrice(priceDisplay.comparePrice)}</span>
+                                      </>
+                                    );
+                                  }
+                                  return <span className="font-bold text-2xl">{priceDisplay.label}</span>;
+                                })()}
+                              </div>
+                              {(showAddToCartButton || showBuyNowButton) && (
+                                <div className="mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                  <ProductCardActions
+                                    product={featured as any}
+                                    tokens={tokens}
+                                    showStock={showStock}
+                                    showAddToCartButton={showAddToCartButton}
+                                    showBuyNowButton={showBuyNowButton}
+                                    buyNowLabel="Mua ngay"
+                                    onAddToCart={handleAddToCart}
+                                    onBuyNow={handleBuyNow}
+                                    cartButtonsLayout={cartButtonsLayout}
+                                    isOnDarkBg={true}
+                                  />
+                                </div>
+                              )}
                             </div>
-                          )}
-                          <ProductImageFrameOverlay frame={frame} />
-                          {/* Gradient overlay */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                          {/* Content */}
-                          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                            <span
-                              className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3"
-                              style={{ backgroundColor: colors.featuredBadgeBackground, color: colors.featuredBadgeText }}
-                            >
-                              Nổi bật
-                            </span>
-                            <h3 className="font-bold text-xl md:text-2xl line-clamp-2 mb-2">{featured.name}</h3>
-                            <div className="flex items-baseline gap-3">
-                              {(() => {
-                                const priceDisplay = getPriceDisplay(featured?.price, featured?.salePrice, featured?.hasVariants);
-                                if (priceDisplay.comparePrice) {
-                                  return (
-                                    <>
-                                      <span className="font-bold text-2xl">{priceDisplay.label}</span>
-                                      <span className="text-sm text-white/60 line-through">{formatComparePrice(priceDisplay.comparePrice)}</span>
-                                    </>
-                                  );
-                                }
-                                return <span className="font-bold text-2xl">{priceDisplay.label}</span>;
-                              })()}
-                            </div>
-                          </div>
-                        </a>
+                          </a>
+                        </ProductImageWithOverlay>
                       )}
                       
                       {/* Grid 2x2 */}
                       <div className="grid grid-cols-2 gap-4">
                         {gridItems.map((product) => (
-                          <a 
+                          <div 
                             key={product._id}
-                            href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
-                            className="group cursor-pointer"
+                            className="group cursor-pointer flex flex-col justify-between"
                           >
-                            <div 
-                              className="rounded-xl overflow-hidden mb-3 relative"
-                              style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}
+                            <a 
+                              href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
+                              className="block mb-2"
                             >
-                              {product.image ? (
-                                <SiteImage 
-                                  src={product.image} 
-                                  alt={product.name} 
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                <Package size={24} style={{ color: colors.emptyStateIcon }} />
-                                </div>
-                              )}
-                              <ProductImageFrameOverlay frame={frame} />
-                              {/* Quick view overlay */}
-                              <div 
-                                className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              style={{ backgroundColor: colors.neutralSurface }}
+                              <ProductImageWithOverlay
+                                frameConfig={frameConfig}
+                                watermarkConfig={watermarkConfig}
+                                className={cn('overflow-hidden mb-3 relative', imageRadiusClassName)}
+                                style={{ ...imageAspectRatioStyle, backgroundColor: colors.imageBackground }}
                               >
-                                <span 
-                                className="px-4 py-2 rounded-full text-sm font-medium"
-                                style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}`, color: colors.buttonText }}
+                                {product.image ? (
+                                  <SiteImage 
+                                    src={product.image} 
+                                    alt={product.name} 
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                  <Package size={24} style={{ color: colors.emptyStateIcon }} />
+                                  </div>
+                                )}
+                                {/* Quick view overlay */}
+                                <div 
+                                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-30"
+                                  style={{ backgroundColor: colors.neutralSurface }}
                                 >
-                                  Xem nhanh
-                                </span>
-                              </div>
-                            </div>
-                          <h4 className="font-medium text-sm line-clamp-2 min-h-[2.5rem]" style={{ color: colors.bodyText }}>{product.name}</h4>
-                            <div className="flex items-baseline gap-2 mt-1">
-                              {(() => {
-                                const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
-                                if (priceDisplay.comparePrice) {
-                                  return (
-                                    <>
-                                    <span className="font-bold text-sm" style={{ color: colors.priceText }}>
-                                        {priceDisplay.label}
-                                      </span>
-                                    <span className="text-xs line-through" style={{ color: colors.mutedText }}>{formatComparePrice(priceDisplay.comparePrice)}</span>
-                                    </>
-                                  );
-                                }
-                                return (
-                                <span className="font-bold text-sm" style={{ color: colors.priceText }}>
-                                    {priceDisplay.label}
+                                  <span 
+                                    className="px-4 py-2 rounded-full text-sm font-medium"
+                                    style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}`, color: colors.buttonText }}
+                                  >
+                                    Xem nhanh
                                   </span>
-                                );
-                              })()}
-                            </div>
-                          </a>
+                                </div>
+                              </ProductImageWithOverlay>
+                              <h4 className="font-medium text-sm line-clamp-2 min-h-[2.5rem]" style={{ color: colors.bodyText }}>{product.name}</h4>
+                              <div className="flex items-baseline gap-2 mt-1">
+                                {(() => {
+                                  const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
+                                  if (priceDisplay.comparePrice) {
+                                    return (
+                                      <>
+                                        <span className="font-bold text-sm" style={{ color: colors.priceText }}>
+                                          {priceDisplay.label}
+                                        </span>
+                                        <span className="text-xs line-through" style={{ color: colors.mutedText }}>{formatComparePrice(priceDisplay.comparePrice)}</span>
+                                      </>
+                                    );
+                                  }
+                                  return (
+                                    <span className="font-bold text-sm" style={{ color: colors.priceText }}>
+                                      {priceDisplay.label}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </a>
+                            {(showAddToCartButton || showBuyNowButton) && (
+                              <div className="mt-auto" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                <ProductCardActions
+                                  product={product as any}
+                                  tokens={tokens}
+                                  showStock={showStock}
+                                  showAddToCartButton={showAddToCartButton}
+                                  showBuyNowButton={showBuyNowButton}
+                                  buyNowLabel="Mua ngay"
+                                  onAddToCart={handleAddToCart}
+                                  onBuyNow={handleBuyNow}
+                                  cartButtonsLayout={cartButtonsLayout}
+                                />
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -3893,29 +4848,49 @@ function CategoryProductsSection({
           );
         })}
       </div>
+      {renderQuickAddModal()}
+      </>
     );
   }
 
   if (style === 'wine-grid') {
     return (
-      <div className="w-full bg-white px-2 py-4">
+      <>
+      <div className={cn('w-full bg-white px-2', sectionSpacingClassName)}>
         <div className="mx-auto flex w-full max-w-[1152px] flex-col gap-6">
-          {resolvedSections.map((section, idx) => (
+          {resolvedSections.map((section, idx) => {
+            return (
             <section
               key={idx}
-              className="rounded-[24px] border border-[#f1f1f1] bg-white/[0.95]"
+              className={cn('border bg-white', cardRadiusClassName)}
+              style={{ borderColor: colors.cardBorder }}
             >
-              <div className="flex items-end justify-between px-4 py-5 md:px-6 md:py-6">
+              <div
+                className={cn(
+                  'flex flex-col gap-3 px-3 py-4 md:px-5 md:py-5 lg:px-6 lg:py-6',
+                  'sm:flex-row sm:items-end sm:justify-between'
+                )}
+              >
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-xl font-bold uppercase leading-8 tracking-[0.18em] text-[#1c1c1c] md:text-2xl">
+                  <h3 className="break-words text-base font-bold uppercase leading-6 tracking-[0.1em] md:text-xl md:leading-7 md:tracking-[0.14em] lg:text-2xl lg:leading-8 lg:tracking-[0.18em]" style={{ color: colors.heading }}>
                     {section.category.name}
                   </h3>
                 </div>
                 {showViewAll && (
                   <a
-                    href={`/products?category=${section.category.slug ?? section.category._id}`}
-                    aria-label="Xem thêm - Xem tất cả sản phẩm"
-                    className="group ml-4 flex h-10 shrink-0 items-center justify-center rounded-full border border-[#ECAA4D] bg-white px-5 py-2 text-xs font-semibold uppercase leading-4 tracking-[0.28em] text-[#1c1c1c] transition-colors hover:bg-[#ECAA4D] hover:text-white"
+                    href={buildCategoryPath({ categorySlug: section.category.slug ?? section.category._id, mode: routeMode, moduleKey: 'products' })}
+                    aria-label="Xem thêm - Xem danh mục"
+                    className={cn(
+                      'group flex h-9 shrink-0 items-center justify-center self-start rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase leading-4 tracking-[0.12em] transition-colors hover:bg-[var(--wine-button-hover-bg)] hover:text-[var(--wine-button-hover-text)] sm:self-auto md:h-10 md:px-4 md:text-xs md:tracking-[0.16em]',
+                      'lg:ml-4 lg:px-5'
+                    )}
+                    style={{
+                      '--wine-button-hover-bg': colors.sectionAccent,
+                      '--wine-button-hover-text': colors.featuredBadgeText,
+                      backgroundColor: colors.buttonBackground,
+                      borderColor: colors.sectionAccent,
+                      color: colors.sectionAccent,
+                    } as React.CSSProperties}
                   >
                     <span className="flex items-center gap-1.5 whitespace-nowrap">
                       Xem thêm
@@ -3925,11 +4900,14 @@ function CategoryProductsSection({
                 )}
               </div>
 
-              <div className="px-4 pb-5 md:px-6 md:pb-6">
+              <div className="px-3 pb-4 md:px-5 md:pb-5 lg:px-6 lg:pb-6">
                 {section.products.length === 0 ? (
                   <EmptyProductsState message="Chưa có sản phẩm trong danh mục này" />
                 ) : (
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div className={cn(
+                    'grid gap-2 md:gap-3',
+                    getGridCols()
+                  )}>
                     {section.products.map((product) => {
                       const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
                       const discount = getProductDiscount(product);
@@ -3937,19 +4915,24 @@ function CategoryProductsSection({
                       return (
                         <article
                           key={product._id}
-                          className="flex h-full flex-col overflow-hidden rounded-lg border border-[#f5f5f4] bg-white shadow-sm transition-all duration-300"
+                          className={cn('flex h-full flex-col overflow-hidden border shadow-sm transition-all duration-300', cardRadiusClassName)}
+                          style={{ backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }}
                         >
                           <a
                             href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
                             className="block"
                           >
-                            <div className="relative aspect-square overflow-hidden border-b border-[#fafaf9] bg-white">
+                            <div className="relative aspect-square overflow-hidden border-b" style={{ backgroundColor: colors.imageBackground, borderColor: colors.cardBorder }}>
                               {discount !== null && (
-                                <span className="absolute left-0 top-3 z-10 rounded-r-lg bg-[#9e1e2d] px-2.5 py-0.5 text-xs font-bold leading-4 text-white shadow-sm">
+                                <span className="absolute left-0 top-3 z-10 rounded-r-lg px-2.5 py-0.5 text-xs font-bold leading-4 shadow-sm" style={{ backgroundColor: colors.featuredBadgeBackground, color: colors.featuredBadgeText }}>
                                   -{discount}%
                                 </span>
                               )}
-                              <div className="relative h-full w-full">
+                              <ProductImageWithOverlay
+                                frameConfig={frameConfig}
+                                watermarkConfig={watermarkConfig}
+                                className="w-full h-full relative"
+                              >
                                 {product.image ? (
                                   <SiteImage
                                     src={product.image}
@@ -3958,37 +4941,57 @@ function CategoryProductsSection({
                                   />
                                 ) : (
                                   <div className="flex h-full w-full items-center justify-center">
-                                    <Package size={28} className="text-stone-300" />
+                                    <Package size={28} style={{ color: colors.emptyStateIcon }} />
                                   </div>
                                 )}
-                              </div>
+                              </ProductImageWithOverlay>
                             </div>
                           </a>
 
-                          <div className="flex flex-1 flex-col p-3">
+                          <div className="flex min-w-0 flex-1 flex-col p-2.5 md:p-3">
                             <a href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}>
-                              <h3 className="mb-2 line-clamp-2 font-bold leading-6 text-[#9b2c3b] transition-colors">
+                              <h3 className="mb-1.5 line-clamp-2 break-words text-[13px] font-bold leading-5 transition-colors md:mb-2 md:text-sm md:leading-5 lg:text-base lg:leading-6" style={{ color: colors.bodyText }}>
                                 {product.name || 'Tên sản phẩm'}
                               </h3>
                             </a>
                             <div className="mb-2 flex flex-col gap-1" />
-                            <div className="mt-auto flex items-end justify-between gap-2 border-t border-[#f5f5f4] pt-2">
-                              <div className="flex flex-col">
-                                {priceDisplay.comparePrice && (
-                                  <span className="text-xs font-medium leading-4 text-stone-400 line-through">
-                                    {formatComparePrice(priceDisplay.comparePrice)}
+                            <div className="mt-auto flex flex-col gap-2 border-t pt-2" style={{ borderColor: colors.cardBorder }}>
+                              <div className="flex min-w-0 flex-row items-end justify-between gap-1.5">
+                                <div className="min-w-0 flex flex-col">
+                                  {priceDisplay.comparePrice && (
+                                    <span className="max-w-full truncate text-xs font-medium leading-4 line-through" style={{ color: colors.mutedText }}>
+                                      {formatComparePrice(priceDisplay.comparePrice)}
+                                    </span>
+                                  )}
+                                  <span className="max-w-full truncate whitespace-nowrap text-[12px] font-bold leading-4 md:text-[13px] md:leading-5 lg:text-sm" style={{ color: colors.bodyText }}>
+                                    {priceDisplay.label}
                                   </span>
+                                </div>
+                                {!showAddToCartButton && !showBuyNowButton && (
+                                  <a
+                                    href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
+                                    className="inline-flex h-6 min-w-9 shrink-0 items-center justify-center whitespace-nowrap rounded px-2 text-[10px] font-medium leading-none transition-colors md:min-w-10 md:px-2.5 md:text-[11px]"
+                                    style={{ backgroundColor: colors.buttonSolidBackground, color: colors.buttonSolidText }}
+                                  >
+                                    Xem
+                                  </a>
                                 )}
-                                <span className="text-lg font-bold leading-7 text-[#9b2c3b]">
-                                  {priceDisplay.label}
-                                </span>
                               </div>
-                              <a
-                                href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
-                                className="shrink-0 rounded bg-[#9b2c3b] px-3 py-1.5 text-xs font-medium leading-4 text-white transition-colors"
-                              >
-                                Xem
-                              </a>
+                              {(showAddToCartButton || showBuyNowButton) && (
+                                <div className="mt-1" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                  <ProductCardActions
+                                    product={product as any}
+                                    tokens={tokens}
+                                    showStock={showStock}
+                                    showAddToCartButton={showAddToCartButton}
+                                    showBuyNowButton={showBuyNowButton}
+                                    buyNowLabel="Mua ngay"
+                                    onAddToCart={handleAddToCart}
+                                    onBuyNow={handleBuyNow}
+                                    cartButtonsLayout={cartButtonsLayout}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
                         </article>
@@ -3998,19 +5001,22 @@ function CategoryProductsSection({
                 )}
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
       </div>
+      {renderQuickAddModal()}
+      </>
     );
   }
 
   // Style 6: Showcase - Gradient overlay với hover effects lung linh
   return (
-    <div className="py-8 md:py-12 space-y-10 md:space-y-16">
+    <div className={cn('space-y-10 md:space-y-16', sectionSpacingClassName)}>
       {resolvedSections.map((section, idx) => (
         <section key={idx}>
-          <div className="max-w-7xl mx-auto px-4">
-            {/* Header với underline effect */}
+          <div className="max-w-7xl tv:max-w-[1600px] mx-auto px-4">
+            {/* Header */}
             <div className="flex items-end justify-between mb-8">
               <div>
                 <span 
@@ -4027,11 +5033,11 @@ function CategoryProductsSection({
               </div>
               {showViewAll && (
                 <a 
-                  href={`/products?category=${section.category.slug ?? section.category._id}`}
+                  href={buildCategoryPath({ categorySlug: section.category.slug ?? section.category._id, mode: routeMode, moduleKey: 'products' })}
                   className="group flex items-center gap-2 text-sm font-medium transition-colors"
                       style={{ color: colors.buttonText }}
                 >
-                  Xem tất cả 
+                  Xem danh mục 
                   <span 
                     className="w-8 h-8 rounded-full flex items-center justify-center group-hover:translate-x-1 transition-transform"
                         style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}` }}
@@ -4047,98 +5053,123 @@ function CategoryProductsSection({
             {section.products.length === 0 ? (
               <EmptyProductsState message="Chưa có sản phẩm" />
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+              <div className={cn('grid gap-5', getGridCols())}>
                 {section.products.map((product) => (
-                  <a 
+                  <div 
                     key={product._id}
-                    href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
-                    className="group cursor-pointer block"
+                    className="group cursor-pointer flex flex-col justify-between"
                   >
-                    {/* Image Container với effects */}
-                    <div className="relative rounded-2xl overflow-hidden mb-3" style={imageAspectRatioStyle}>
-                      {/* Background gradient on hover */}
-                      <div 
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"
-                        style={{ background: `linear-gradient(135deg, ${colors.neutralBorder} 0%, transparent 50%, ${colors.neutralBackground} 100%)` }}
-                      />
-                      
-                      {product.image ? (
-                        <SiteImage 
-                          src={product.image} 
-                          alt={product.name} 
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                    <a 
+                      href={resolveProductHrefByCategory({ categoryId: section.category._id, product })}
+                      className="block mb-2"
+                    >
+                      {/* Image Container với effects */}
+                      <ProductImageWithOverlay
+                        frameConfig={frameConfig}
+                        watermarkConfig={watermarkConfig}
+                        className={cn('relative overflow-hidden mb-3', cardRadiusClassName)}
+                        style={imageAspectRatioStyle}
+                      >
+                        {/* Background gradient on hover */}
+                        <div 
+                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-30"
+                          style={{ background: `linear-gradient(135deg, ${colors.neutralBorder} 0%, transparent 50%, ${colors.neutralBackground} 100%)` }}
                         />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.imageBackground }}>
-                          <Package size={32} style={{ color: colors.emptyStateIcon }} />
-                        </div>
-                      )}
-                      <ProductImageFrameOverlay frame={frame} />
-                      
-                      {/* Gradient overlay bottom */}
-                      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20" />
-                      
-                      {/* Quick action button */}
-                      <div className="absolute bottom-3 left-3 right-3 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 z-30">
-                        <span 
-                          className="block w-full py-2.5 rounded-xl text-sm font-medium text-center backdrop-blur-sm"
-                          style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}`, color: colors.buttonText }}
-                        >
-                          Xem chi tiết
-                        </span>
-                      </div>
-                      
-                      {/* Badge for sale */}
-                      {(() => {
-                        const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
-                        if (!priceDisplay.comparePrice) {return null;}
-                        return (
-                          <div className="absolute top-3 left-3 px-2 py-1 rounded-lg text-xs font-bold text-white bg-red-500 z-30">
-                            -{Math.round((1 - (product.price ?? 0) / priceDisplay.comparePrice) * 100)}%
+                        
+                        {product.image ? (
+                          <SiteImage 
+                            src={product.image} 
+                            alt={product.name} 
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: colors.imageBackground }}>
+                            <Package size={32} style={{ color: colors.emptyStateIcon }} />
                           </div>
-                        );
-                      })()}
-                    </div>
-                    
-                    {/* Product info */}
-                    <div className="space-y-1">
-                      <h4 className="font-medium text-sm line-clamp-2 group-hover:opacity-80 transition-opacity" style={{ color: colors.bodyText }}>{product.name}</h4>
-                      <div className="flex flex-col">
+                        )}
+                        
+                        {/* Gradient overlay bottom */}
+                        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20" />
+                        
+                        {/* Quick action button */}
+                        <div className="absolute bottom-3 left-3 right-3 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 z-30">
+                          <span 
+                            className="block w-full py-2.5 rounded-xl text-sm font-medium text-center backdrop-blur-sm"
+                            style={{ backgroundColor: colors.buttonBackground, border: `1px solid ${colors.buttonBorder}`, color: colors.buttonText }}
+                          >
+                            Xem chi tiết
+                          </span>
+                        </div>
+                        
+                        {/* Badge for sale */}
                         {(() => {
                           const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
-                          if (priceDisplay.comparePrice) {
-                            return (
-                              <>
-                                <span className="font-bold text-sm" style={{ color: colors.priceText }}>
-                                  {priceDisplay.label}
-                                </span>
-                                <span className="text-xs line-through" style={{ color: colors.mutedText }}>{formatComparePrice(priceDisplay.comparePrice)}</span>
-                              </>
-                            );
-                          }
+                          if (!priceDisplay.comparePrice) {return null;}
                           return (
-                            <span className="font-bold text-sm" style={{ color: colors.priceText }}>
-                              {priceDisplay.label}
-                            </span>
+                            <div className="absolute top-3 left-3 px-2 py-1 rounded-lg text-xs font-bold text-white bg-red-500 z-30">
+                              -{Math.round((1 - (product.price ?? 0) / priceDisplay.comparePrice) * 100)}%
+                            </div>
                           );
                         })()}
+                      </ProductImageWithOverlay>
+                      
+                      {/* Product info */}
+                      <div className="space-y-1">
+                        <h4 className="font-medium text-sm line-clamp-2 group-hover:opacity-80 transition-opacity" style={{ color: colors.bodyText }}>{product.name}</h4>
+                        <div className="flex flex-col">
+                          {(() => {
+                            const priceDisplay = getPriceDisplay(product.price, product.salePrice, product.hasVariants);
+                            if (priceDisplay.comparePrice) {
+                              return (
+                                <>
+                                  <span className="font-bold text-sm" style={{ color: colors.priceText }}>
+                                    {priceDisplay.label}
+                                  </span>
+                                  <span className="text-xs line-through" style={{ color: colors.mutedText }}>{formatComparePrice(priceDisplay.comparePrice)}</span>
+                                </>
+                              );
+                            }
+                            return (
+                              <span className="font-bold text-sm" style={{ color: colors.priceText }}>
+                                {priceDisplay.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </div>
-                    </div>
-                  </a>
+                    </a>
+                    {(showAddToCartButton || showBuyNowButton) && (
+                      <div className="mt-auto" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                        <ProductCardActions
+                          product={product as any}
+                          tokens={tokens}
+                          showStock={showStock}
+                          showAddToCartButton={showAddToCartButton}
+                          showBuyNowButton={showBuyNowButton}
+                          buyNowLabel="Mua ngay"
+                          onAddToCart={handleAddToCart}
+                          onBuyNow={handleBuyNow}
+                          cartButtonsLayout={cartButtonsLayout}
+                        />
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
           </div>
         </section>
       ))}
+      
+      {renderQuickAddModal()}
     </div>
   );
 }
 
 // ============ FEATURES SECTION ============
 // Shared renderer parity with admin preview (6 styles)
-function FeaturesSection({ config, brandColor, secondary, mode, title }: { config: Record<string, unknown>; brandColor: string;
-  secondary: string; mode: 'single' | 'dual'; title: string }) {
+function FeaturesSection({ config, brandColor, secondary, mode, title, isDark }: { config: Record<string, unknown>; brandColor: string;
+  secondary: string; mode: 'single' | 'dual'; title: string; isDark?: boolean }) {
   const rawItems = config.items as unknown;
   const items = Array.isArray(rawItems)
     ? rawItems
@@ -4166,9 +5197,10 @@ function FeaturesSection({ config, brandColor, secondary, mode, title }: { confi
     if (value === 'iconGrid' || value === 'alternating' || value === 'compact' || value === 'cards' || value === 'carousel' || value === 'timeline' || value === 'carousel6') {
       return value;
     }
-    return 'iconGrid';
+    return 'carousel6';
   })();
   const showIcons = config.showIcons !== false;
+  const headerConfig = extractSectionHeaderConfig(config);
 
   return (
     <FeaturesSectionShared
@@ -4180,18 +5212,35 @@ function FeaturesSection({ config, brandColor, secondary, mode, title }: { confi
       brandColor={brandColor}
       secondary={secondary}
       mode={mode}
+      hideHeader={headerConfig.hideHeader}
+      showTitle={headerConfig.showTitle}
+      subtitle={headerConfig.subtitle}
+      showSubtitle={headerConfig.showSubtitle}
+      headerAlign={headerConfig.headerAlign}
+      titleColorPrimary={headerConfig.titleColorPrimary}
+      subtitleAboveTitle={headerConfig.subtitleAboveTitle}
+      uppercaseText={headerConfig.uppercaseText}
+      showBadge={headerConfig.showBadge}
+      badgeText={headerConfig.badgeText}
+      spacing={headerConfig.spacing}
+      desktopColumns={config.desktopColumns === 4 ? 4 : 3}
+      cornerRadius={config.cornerRadius === 'none' || config.cornerRadius === 'sm' || config.cornerRadius === 'lg' ? config.cornerRadius : 'lg'}
+      isDark={isDark}
     />
   );
 }
 
 // ============ PROCESS SECTION ============
 // 7 Professional Styles: Horizontal, Stepper, Cards, Accordion, Minimal, Grid, Alternating
-function ProcessSection({ config, brandColor, secondary, mode, title }: { config: Record<string, unknown>; brandColor: string;
-  secondary: string; mode: ProcessBrandMode; title: string }) {
+function ProcessSection({ config, brandColor, secondary, mode, title, isDark }: { config: Record<string, unknown>; brandColor: string;
+  secondary: string; mode: ProcessBrandMode; title: string; isDark?: boolean }) {
   const steps = normalizeProcessRenderSteps(config.steps);
   if (steps.length === 0) {return null;}
 
   const style = normalizeProcessStyle(config.style);
+  const normalizedConfig = normalizeProcessConfig(config);
+  const rawDesktopCols = config.desktopColumns;
+  const desktopColumns: 3 | 4 = rawDesktopCols === 3 ? 3 : 4;
 
   return (
     <ProcessSectionShared
@@ -4202,6 +5251,20 @@ function ProcessSection({ config, brandColor, secondary, mode, title }: { config
       secondary={secondary}
       mode={mode}
       context="site"
+      hideHeader={normalizedConfig.hideHeader}
+      showTitle={normalizedConfig.showTitle}
+      showSubtitle={normalizedConfig.showSubtitle}
+      subtitle={normalizedConfig.subtitle}
+      headerAlign={normalizedConfig.headerAlign}
+      titleColorPrimary={normalizedConfig.titleColorPrimary}
+      subtitleAboveTitle={normalizedConfig.subtitleAboveTitle}
+      uppercaseText={normalizedConfig.uppercaseText}
+      showBadge={normalizedConfig.showBadge}
+      badgeText={normalizedConfig.badgeText}
+      desktopColumns={desktopColumns}
+      spacing={normalizedConfig.spacing}
+      cornerRadius={normalizedConfig.cornerRadius}
+      isDark={isDark}
     />
   );
 }
@@ -4213,22 +5276,26 @@ function ClientsSection({
   secondary,
   mode,
   title,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: ClientsBrandMode;
   title: string;
+  isDark?: boolean;
 }) {
   const items = normalizeClientItems(config.items);
   if (items.length === 0) {return null;}
 
   const style = normalizeClientsStyleSafe(config.style);
-  const tokens = getClientsColorTokens({
+  const spacing = normalizeSectionSpacing(config.spacing);
+  const cornerRadius = normalizeClientsCornerRadius(config.cornerRadius, config.noBorderRadius);
+  const tokens = adaptTokensForDarkMode(getClientsColorTokens({
     primary: brandColor,
     secondary,
     mode,
-  });
+  }), isDark ?? false);
 
   return (
     <ClientsSectionShared
@@ -4248,7 +5315,8 @@ function ClientsSection({
       uppercaseText={config.uppercaseText as boolean | undefined}
       showBadge={config.showBadge as boolean | undefined}
       badgeText={config.badgeText as string | undefined}
-      noBorderRadius={config.noBorderRadius === true}
+      spacing={spacing}
+      cornerRadius={cornerRadius}
       brandColor={brandColor}
     />
   );
@@ -4257,17 +5325,17 @@ function ClientsSection({
 // ============ VIDEO SECTION ============
 // 6 Styles: centered, split, fullwidth, cinema, minimal, parallax
 
-function VideoSection({ config, brandColor, secondary, mode, title }: { config: Record<string, unknown>; brandColor: string;
-  secondary: string; mode: VideoBrandMode; title: string }) {
+function VideoSection({ config, brandColor, secondary, mode, title, isDark }: { config: Record<string, unknown>; brandColor: string;
+  secondary: string; mode: VideoBrandMode; title: string; isDark?: boolean }) {
   const normalizedConfig = normalizeVideoConfig(config);
   const style = normalizeVideoStyle(normalizedConfig.style);
 
-  const tokens = React.useMemo(() => getVideoColorTokens({
+  const tokens = React.useMemo(() => adaptTokensForDarkMode(getVideoColorTokens({
     primary: brandColor,
     secondary,
     mode,
     style,
-  }), [brandColor, secondary, mode, style]);
+  }), isDark ?? false), [brandColor, secondary, mode, style, isDark]);
 
   return (
     <VideoSectionShared
@@ -4578,7 +5646,7 @@ function _CountdownSection({ config, brandColor, secondary, title }: { config: R
         role="banner"
         aria-label="Khuyến mãi có thời hạn"
       >
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl tv:max-w-[1600px] mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
             <div className="flex flex-col md:flex-row items-center gap-2 md:gap-4 text-center md:text-left">
               {discountText && (
@@ -4719,11 +5787,13 @@ function FooterSection({
   brandColor,
   secondary,
   mode,
+  isDark,
 }: {
   config: Record<string, unknown>;
   brandColor: string;
   secondary: string;
   mode: FooterBrandMode;
+  isDark?: boolean;
 }) {
   const style = (config.style as FooterStyle) || 'classic';
   const logo = (config.logo as string) || '';
@@ -4744,10 +5814,15 @@ function FooterSection({
   const bctLogoSrc = bctLogoType === 'dang-ky'
     ? '/images/bct/logo-da-dang-ky-bct.webp'
     : '/images/bct/logo-da-thong-bao-bct.png';
-  const colors: FooterLayoutColors = getFooterLayoutColors(style, brandColor, secondary, mode);
+  const colors: FooterLayoutColors = getFooterThemeColors(style, brandColor, secondary, mode, isDark ?? false);
   const logoSizeLevel = typeof config.logoSizeLevel === 'number' ? config.logoSizeLevel : 1;
   const resolveLogoSize = (baseSize: number) => getFooterLogoSize(baseSize, logoSizeLevel);
   const logoBackgroundStyle = typeof config.logoBackgroundStyle === 'string' ? config.logoBackgroundStyle as FooterLogoBackgroundStyle : 'none';
+  const cornerRadius = config.noBorderRadius === true ? 'none' : config.cornerRadius as FooterCornerRadius | undefined;
+  const maxWidthClass = getFooterMaxWidthClass(config.maxWidth as FooterConfig['maxWidth']);
+  const waveMaxWidthClass = maxWidthClass === 'max-w-6xl' || maxWidthClass === 'max-w-7xl' ? 'max-w-8xl' : maxWidthClass;
+  const sectionSpacingClassName = getFooterSectionSpacingClassName(config.spacing, config.noVerticalMargin);
+  const socialRadiusClassName = getFooterCornerRadiusClassName(cornerRadius, 'icon');
   const useOriginalSocialIconColors = config.useOriginalSocialIconColors !== false;
   const resolveSocialStyles = (platform: string, fallbackBg: string, fallbackText: string) => {
     if (!useOriginalSocialIconColors) {
@@ -4779,7 +5854,7 @@ function FooterSection({
     const size = resolveLogoSize(baseSize);
     const content = logo
       ? <SiteImage src={logo} alt={logoAlt} className={imageClassName} style={{ width: size, height: 'auto' }} mode="logo" />
-      : <div className="rounded-lg flex items-center justify-center text-xs font-bold" style={{ backgroundColor: colors.primary, color: fallbackColor, width: size, height: size }}>{logoInitial}</div>;
+      : <div className={cn('flex items-center justify-center text-xs font-bold', getFooterCornerRadiusClassName(cornerRadius))} style={{ backgroundColor: colors.primary, color: fallbackColor, width: size, height: size }}>{logoInitial}</div>;
 
     if (logoBackgroundStyle === 'none') {
       return content;
@@ -4787,7 +5862,7 @@ function FooterSection({
 
     return (
       <span
-        className={getFooterLogoBackgroundClassName(logoBackgroundStyle)}
+        className={getFooterLogoBackgroundClassName(logoBackgroundStyle, cornerRadius)}
         style={getFooterLogoBackgroundStyle(logoBackgroundStyle, colors.primary)}
       >
         {content}
@@ -4845,7 +5920,7 @@ function FooterSection({
   if (style === 'classic') {
     return (
       <footer className="w-full" style={{ backgroundColor: colors.classicBg }}>
-        <div className="max-w-7xl mx-auto px-3 md:px-4 py-8 md:py-12">
+        <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4', sectionSpacingClassName)}>
           <div className="grid gap-6 md:gap-8 grid-cols-1 md:grid-cols-12">
             <div className="md:col-span-4 space-y-3">
               {renderLogoMark(28)}
@@ -4870,7 +5945,7 @@ function FooterSection({
                 <div className="flex flex-wrap gap-2 mt-2">
                   {getSocials().map((s, idx) => {
                     const st = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
-                    return <span key={idx} className="h-8 w-8 flex items-center justify-center rounded-full" style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
+                    return <span key={idx} className={cn('h-8 w-8 flex items-center justify-center', socialRadiusClassName)} style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
                   })}
                 </div>
               )}
@@ -4880,7 +5955,7 @@ function FooterSection({
         </div>
         {config.showCopyright !== false && (
           <div style={{ borderTop: `1px solid ${colors.borderSoft}` }}>
-            <div className="max-w-7xl mx-auto px-3 md:px-4 py-3 flex items-center justify-center">
+            <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4 py-3 flex items-center justify-center')}>
               <p className="text-[10px] opacity-70" style={{ color: colors.textSubtle }}>{copyright || `© ${currentYear} ${siteName}. All rights reserved.`}</p>
             </div>
           </div>
@@ -4896,7 +5971,7 @@ function FooterSection({
     return (
       <footer className="w-full relative" style={{ backgroundColor: colors.bg }}>
         <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: seigaihaUrl, backgroundSize: '56px 28px' }} />
-        <div className="max-w-7xl mx-auto px-3 md:px-4 py-8 md:py-12 relative">
+        <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4 relative', sectionSpacingClassName)}>
           <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-12">
             <div className="md:col-span-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -4908,7 +5983,7 @@ function FooterSection({
                 <div className="flex flex-wrap gap-2 pt-1">
                   {getSocials().map((s, idx) => {
                     const st = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
-                    return <span key={idx} className="h-8 w-8 flex items-center justify-center rounded-full" style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
+                    return <span key={idx} className={cn('h-8 w-8 flex items-center justify-center', socialRadiusClassName)} style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
                   })}
                 </div>
               )}
@@ -4932,7 +6007,7 @@ function FooterSection({
         </div>
         {config.showCopyright !== false && (
           <div className="w-full relative" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <div className="max-w-7xl mx-auto px-3 md:px-4 py-3 flex items-center justify-center">
+            <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4 py-3 flex items-center justify-center')}>
               <p className="text-[10px]" style={{ color: colors.textSubtle }}>{copyright || `© ${currentYear} ${siteName}. All rights reserved.`}</p>
             </div>
           </div>
@@ -4944,8 +6019,8 @@ function FooterSection({
   // Style 3: Corporate — Split Horizontal Zones
   if (style === 'corporate') {
     return (
-      <footer className="w-full py-8 md:py-12" style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
-        <div className="max-w-7xl mx-auto px-3 md:px-4">
+      <footer className={cn('w-full', sectionSpacingClassName)} style={{ backgroundColor: colors.bg, borderTop: `1px solid ${colors.border}` }}>
+        <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4')}>
           <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-12 pb-6" style={{ borderBottom: `1px solid ${colors.border}` }}>
             <div className="md:col-span-5 space-y-2">
               <div className="flex items-center gap-2">
@@ -4962,7 +6037,7 @@ function FooterSection({
                   <div className="flex flex-wrap gap-2">
                     {getSocials().map((s, idx) => {
                       const st = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
-                      return <span key={idx} className="h-8 w-8 flex items-center justify-center rounded-lg" style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
+                      return <span key={idx} className={cn('h-8 w-8 flex items-center justify-center', socialRadiusClassName)} style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
                     })}
                   </div>
                 </>
@@ -4998,7 +6073,7 @@ function FooterSection({
     return (
       <footer className="w-full relative" style={{ backgroundColor: colors.bg }}>
         <div className="absolute inset-0 pointer-events-none opacity-40" style={{ backgroundImage: stripeBg }} />
-        <div className="max-w-7xl mx-auto px-3 md:px-4 py-8 md:py-12 relative">
+        <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4 relative', sectionSpacingClassName)}>
           <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-12">
             <div className="md:col-span-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -5010,7 +6085,7 @@ function FooterSection({
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {getSocials().map((s, idx) => {
                     const st = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
-                    return <span key={idx} className="h-7 w-7 flex items-center justify-center rounded-full" style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 14)}</span>;
+                    return <span key={idx} className={cn('h-7 w-7 flex items-center justify-center', socialRadiusClassName)} style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 14)}</span>;
                   })}
                 </div>
               )}
@@ -5032,7 +6107,7 @@ function FooterSection({
         </div>
         {config.showCopyright !== false && (
           <div className="w-full relative" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}>
-            <div className="max-w-7xl mx-auto px-3 md:px-4 py-3 flex items-center justify-center">
+            <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4 py-3 flex items-center justify-center')}>
               <p className="text-[10px]" style={{ color: colors.textSubtle }}>{copyright || `© ${currentYear} ${siteName}. All rights reserved.`}</p>
             </div>
           </div>
@@ -5045,7 +6120,7 @@ function FooterSection({
   if (style === 'centered') {
     return (
       <footer className="w-full" style={{ backgroundColor: colors.magazineBg }}>
-        <div className="max-w-7xl mx-auto px-3 md:px-4 py-8 md:py-12">
+        <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4', sectionSpacingClassName)}>
           <div className="grid gap-6 grid-cols-1 md:grid-cols-5">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -5057,7 +6132,7 @@ function FooterSection({
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {getSocials().map((s, idx) => {
                     const st = resolveSocialStyles(s.platform, colors.socialBg, colors.socialText);
-                    return <span key={idx} className="h-7 w-7 flex items-center justify-center rounded-full" style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 14)}</span>;
+                    return <span key={idx} className={cn('h-7 w-7 flex items-center justify-center', socialRadiusClassName)} style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 14)}</span>;
                   })}
                 </div>
               )}
@@ -5077,7 +6152,7 @@ function FooterSection({
         </div>
         {config.showCopyright !== false && (
           <div className="w-full" style={{ backgroundColor: colors.primary }}>
-            <div className="max-w-7xl mx-auto px-3 md:px-4 py-3 flex items-center justify-center">
+            <div className={cn(maxWidthClass, 'mx-auto px-3 md:px-4 py-3 flex items-center justify-center')}>
               <p className="text-[10px] font-medium" style={{ color: colors.textOnPrimary }}>{copyright || `© ${currentYear} ${siteName}. All rights reserved.`}</p>
             </div>
           </div>
@@ -5118,7 +6193,7 @@ function FooterSection({
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='600' height='600' viewBox='0 0 600 600' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23fff' stroke-width='1'%3E%3Cellipse cx='300' cy='300' rx='280' ry='200'/%3E%3Cellipse cx='300' cy='300' rx='220' ry='160'/%3E%3Cellipse cx='300' cy='300' rx='160' ry='120'/%3E%3Cellipse cx='300' cy='300' rx='100' ry='80'/%3E%3C/g%3E%3C/svg%3E")`,
           backgroundSize: '300px 300px',
         }} />
-        <div className="max-w-8xl mx-auto px-3 md:px-4 py-8 md:py-10 relative z-10">
+        <div className={cn(waveMaxWidthClass, 'mx-auto px-3 md:px-4 relative z-10', sectionSpacingClassName)}>
           <div className="grid gap-4 md:gap-5 grid-cols-1 md:grid-cols-12">
             <div className="md:col-span-3 space-y-2.5">
               {renderLogoMark(24, 'object-contain brightness-110', colors.stackedTextOnBg)}
@@ -5144,7 +6219,7 @@ function FooterSection({
                   <div className="flex flex-wrap gap-1.5">
                     {getSocials().map((s, idx) => {
                       const st = resolveSocialStyles(s.platform, colors.stackedSocialBg, colors.stackedSocialText);
-                      return <span key={idx} className="h-8 w-8 flex items-center justify-center rounded-lg" style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
+                      return <span key={idx} className={cn('h-8 w-8 flex items-center justify-center', socialRadiusClassName)} style={{ backgroundColor: st.bg, color: st.color, ...(st.border ? { border: st.border } : {}) }}>{renderSocialIcon(s.platform, 16)}</span>;
                     })}
                   </div>
                 </>
@@ -5155,7 +6230,7 @@ function FooterSection({
         </div>
         {config.showCopyright !== false && (
           <div className="relative z-10" style={{ borderTop: '0.8px solid rgba(255,255,255,0.3)' }}>
-            <div className="max-w-8xl mx-auto px-3 md:px-4 py-2.5 flex items-center justify-center">
+            <div className={cn(waveMaxWidthClass, 'mx-auto px-3 md:px-4 py-2.5 flex items-center justify-center')}>
               <p className="text-[10px] text-center opacity-70" style={{ color: colors.stackedTextOnBg }}>{copyright || `© ${currentYear} ${siteName}. All rights reserved.`}</p>
             </div>
           </div>
@@ -5166,9 +6241,20 @@ function FooterSection({
 }
 
 // ============ MARQUEE SECTION ============
-function MarqueeSection({ config, brandColor, secondary, mode, title }: { config: Record<string, unknown>; brandColor: string; secondary: string; mode: 'single' | 'dual'; title: string }) {
+function MarqueeSection({
+  config, brandColor, secondary, mode, title, fontStyle, fontClassName, isDark
+}: {
+  config: Record<string, unknown>;
+  brandColor: string;
+  secondary: string;
+  mode: 'single' | 'dual';
+  title: string;
+  fontStyle?: React.CSSProperties;
+  fontClassName?: string;
+  isDark?: boolean;
+}) {
   const marqueeMode: MarqueeBrandMode = mode === 'single' ? 'single' : 'dual';
-  const tokens = getMarqueeSectionColors({ primary: brandColor, secondary, mode: marqueeMode });
+  const tokens = adaptTokensForDarkMode(getMarqueeSectionColors({ primary: brandColor, secondary, mode: marqueeMode }), isDark ?? false);
   const rawItems = Array.isArray(config.items) ? config.items : [];
   const items = rawItems.map((item, idx) => normalizeMarqueeItem(item, idx));
   const style = normalizeMarqueeStyle(config.style);
@@ -5178,6 +6264,9 @@ function MarqueeSection({ config, brandColor, secondary, mode, title }: { config
   const scale = normalizeMarqueeScale(config.scale);
   const uppercase = config.uppercase === true;
   const headerConfig = extractSectionHeaderConfig(config);
+  const spacing = normalizeMarqueeSpacing(headerConfig.spacing, config.noVerticalMargin);
+  const cornerRadius = normalizeMarqueeCornerRadius(config.cornerRadius, config.noBorderRadius);
+
 
   return (
     <MarqueeSectionShared
@@ -5192,6 +6281,8 @@ function MarqueeSection({ config, brandColor, secondary, mode, title }: { config
       mode={marqueeMode}
       title={title}
       context="site"
+      fontStyle={fontStyle}
+      fontClassName={fontClassName}
       hideHeader={headerConfig.hideHeader}
       showTitle={headerConfig.showTitle}
       showSubtitle={headerConfig.showSubtitle}
@@ -5202,6 +6293,8 @@ function MarqueeSection({ config, brandColor, secondary, mode, title }: { config
       uppercaseText={headerConfig.uppercaseText}
       showBadge={headerConfig.showBadge}
       badgeText={headerConfig.badgeText}
+      spacing={spacing}
+      cornerRadius={cornerRadius}
     />
   );
 }

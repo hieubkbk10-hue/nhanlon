@@ -6,9 +6,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
+import type { Id } from '@/convex/_generated/dataModel';
+import { Card, CardContent, CardHeader, CardTitle, Label } from '../../../../components/ui';
+import { CopyableInput } from '../../../../components/CopyTextButton';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
+import { HomeComponentDisplaySettingsSection } from '../../../_shared/components/HomeComponentDisplaySettingsSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -27,26 +30,56 @@ const createSnapshot = (title: string, active: boolean, config: CountdownConfigS
   config,
 });
 
-export default function EditCountdownPage() {
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type CountdownEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function EditCountdownPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  snapshotComponent,
+  snapshotLabel,
+}: CountdownEditPageProps) {
   const params = useParams<{ id: string }>();
-  const id = params.id;
+  const id = snapshotComponent?._id ?? params.id ?? '';
   const router = useRouter();
   const updateMutation = useMutation(api.homeComponents.update);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
 
-  const component = useQuery(api.homeComponents.getById, id ? { id: id as any } : 'skip');
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent || !id ? 'skip' : { id: id as any });
+  const component = snapshotComponent ?? liveComponent;
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
 
   const [title, setTitle] = React.useState('Khuyến mãi đặc biệt');
   const [active, setActive] = React.useState(true);
   const [config, setConfig] = React.useState<CountdownConfigState>(() => normalizeCountdownConfig(DEFAULT_COUNTDOWN_CONFIG));
+  const [displayOpen, setDisplayOpen] = React.useState(false);
   const [initialSnapshot, setInitialSnapshot] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     if (!component) {
+      return;
+    }
+
+    if (!snapshotComponent && component.type !== 'Countdown') {
+      router.replace(`/admin/home-components/${id}/edit`);
       return;
     }
 
@@ -63,13 +96,13 @@ export default function EditCountdownPage() {
   );
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
@@ -83,13 +116,18 @@ export default function EditCountdownPage() {
 
     setIsSubmitting(true);
     try {
-      await updateMutation({
-        id: component._id,
-        title,
-        active,
-        config: toCountdownPersistConfig(config),
-      });
-      if (showCustomBlock) {
+      const persistConfig = toCountdownPersistConfig(config);
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: persistConfig, title });
+      } else {
+        await updateMutation({
+          id: component._id as Id<'homeComponents'>,
+          title,
+          active,
+          config: persistConfig,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -99,7 +137,7 @@ export default function EditCountdownPage() {
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -108,7 +146,7 @@ export default function EditCountdownPage() {
       }
 
       setInitialSnapshot(currentSnapshot);
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -116,7 +154,7 @@ export default function EditCountdownPage() {
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -145,7 +183,8 @@ export default function EditCountdownPage() {
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Countdown</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">
           ← Quay lại danh sách
         </Link>
       </div>
@@ -158,15 +197,27 @@ export default function EditCountdownPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
+              <CopyableInput
                 value={title}
                 onChange={(event) => { setTitle(event.target.value); }}
+                copyLabel="tiêu đề hiển thị"
                 required
                 placeholder="Nhập tiêu đề component..."
               />
             </div>
           </CardContent>
         </Card>
+
+        <div className="mb-6">
+          <HomeComponentDisplaySettingsSection
+            open={displayOpen}
+            onOpenChange={setDisplayOpen}
+            cornerRadius={config.cornerRadius}
+            onCornerRadiusChange={(cornerRadius) => setConfig((prev) => ({ ...prev, cornerRadius }))}
+            spacing={config.spacing ?? 'normal'}
+            onSpacingChange={(spacing) => setConfig((prev) => ({ ...prev, spacing }))}
+          />
+        </div>
 
         <CountdownForm
           value={config}
@@ -179,7 +230,7 @@ export default function EditCountdownPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Countdown"
                 enabled={customState.enabled}
@@ -207,7 +258,7 @@ export default function EditCountdownPage() {
               }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Countdown"
                 enabled={customFontState.enabled}
@@ -240,7 +291,7 @@ export default function EditCountdownPage() {
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() => { router.push('/admin/home-components'); }}
+          onCancel={() => { router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}

@@ -1,12 +1,17 @@
 'use client';
 
 import React from 'react';
-import { Bell, ChevronDown, Clock, Image as ImageIcon, MousePointerClick, Search, Type, icons } from 'lucide-react';
+import { Bell, Clock, Image as ImageIcon, MousePointerClick, Search, Type, icons } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
+import { ToggleSwitch } from '@/components/modules/shared';
 import { AVAILABLE_SERVICE_ICONS } from '../../services/_lib/constants';
 import { AiPopupImport } from './AiPopupImport';
-import type { PopupConfig, PopupCornerRadius, PopupFrequency, PopupTrigger } from '../_types';
+import type { PopupConfig, PopupFrequency, PopupStyle, PopupTrigger } from '../_types';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 interface PopupFormProps {
   config: PopupConfig;
@@ -24,50 +29,25 @@ const updateConfig = <K extends keyof PopupConfig>(
 };
 
 const frequencyOptions: Array<{ value: PopupFrequency; label: string }> = [
-  { value: 'always', label: 'Luôn hiện' },
-  { value: 'oncePerPageView', label: 'Một lần / lượt mở trang' },
-  { value: 'oncePerSession', label: 'Một lần / phiên tab' },
-  { value: 'oncePerDevice', label: 'Một lần / thiết bị' },
+  { value: 'always', label: 'Hiện mỗi lần vào trang' },
+  { value: 'oncePerPageView', label: 'Chỉ hiện 1 lần khi mở trang' },
+  { value: 'oncePerSession', label: 'Chỉ hiện 1 lần đến khi đóng tab' },
+  { value: 'oncePerDevice', label: 'Chỉ hiện 1 lần trên máy này' },
 ];
 
-const cornerRadiusOptions: Array<{ value: PopupCornerRadius; label: string }> = [
-  { value: 'none', label: 'Bỏ bo góc' },
-  { value: 'sm', label: 'Bo góc ít' },
-  { value: 'lg', label: 'Bo góc nhiều' },
-];
+const resolvePopupImageCropAspectRatio = (style: PopupStyle) => {
+  if (style === 'image-only' || style === 'full-screen') {
+    return 'wide169' as const;
+  }
+  if (style === 'split-visual' || style === 'bottom-sheet') {
+    return 'landscape43' as const;
+  }
+  return 'square' as const;
+};
 
 const IconFallback = icons.Bell;
 const iconOptions = AVAILABLE_SERVICE_ICONS.map((icon) => ({ label: icon, value: icon }));
 const getIconComponent = (iconName: string) => icons[iconName as keyof typeof icons] || IconFallback;
-
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="overflow-visible rounded-lg border border-slate-200 dark:border-slate-700">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center gap-2 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:bg-slate-800/50 dark:text-slate-200 dark:hover:bg-slate-800"
-      >
-        <Icon size={15} className="shrink-0 text-slate-400" />
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown size={15} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && <div className="space-y-3 bg-white p-3 dark:bg-slate-900">{children}</div>}
-    </div>
-  );
-}
 
 function IconCombobox({
   value,
@@ -109,7 +89,7 @@ function IconCombobox({
       >
         <span className="flex min-w-0 items-center gap-2">
           <SelectedIcon size={16} />
-          <span className="truncate">{selectedValue}</span>
+          <span className="break-words leading-tight">{selectedValue}</span>
         </span>
         <Search size={14} className="text-slate-400" />
       </button>
@@ -144,7 +124,7 @@ function IconCombobox({
                   <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
                     <IconComponent size={15} />
                   </span>
-                  <span className="w-full truncate leading-tight">{option.label}</span>
+                  <span className="w-full break-words leading-tight">{option.label}</span>
                 </button>
               );
             })}
@@ -155,9 +135,15 @@ function IconCombobox({
   );
 }
 
+const activeSections = ['settings', 'content', 'cta', 'image', 'schedule'];
+
 export function PopupForm({ config, onChange, defaultExpanded = true }: PopupFormProps) {
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(activeSections, defaultExpanded);
+
   return (
-    <Card>
+    <>
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+      <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -168,7 +154,69 @@ export function PopupForm({ config, onChange, defaultExpanded = true }: PopupFor
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <SubSection icon={Type} title="Nội dung" defaultOpen={defaultExpanded}>
+        <HomeComponentDisplaySettingsSection
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+          cornerRadius={config.cornerRadius}
+          onCornerRadiusChange={(cornerRadius) => updateConfig(config, onChange, 'cornerRadius', cornerRadius)}
+          spacing={config.spacing}
+          onSpacingChange={(spacing) => updateConfig(config, onChange, 'spacing', spacing)}
+        >
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 md:col-span-2">
+              <div className="space-y-0.5">
+                <Label className="text-sm">Hiện icon</Label>
+                <p className="text-xs text-slate-500">Bật để hiển thị icon trong các layout hỗ trợ</p>
+              </div>
+              <ToggleSwitch enabled={config.showIcon} onChange={() => updateConfig(config, onChange, 'showIcon', !config.showIcon)} />
+            </div>
+
+            <div className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 md:col-span-2">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <Label className="text-sm">Độ đậm màu</Label>
+                <span className="text-xs tabular-nums text-slate-500">{config.colorIntensity}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={config.colorIntensity}
+                onChange={(event) => updateConfig(config, onChange, 'colorIntensity', Number(event.target.value))}
+                className="h-1.5 w-full cursor-pointer accent-blue-500"
+              />
+            </div>
+
+            {config.style === 'centered-advertisement' && (
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-sm">Kiểu nền (Background Mode)</Label>
+                <select
+                  value={config.backgroundMode ?? 'solid'}
+                  onChange={(event) => updateConfig(config, onChange, 'backgroundMode', event.target.value as any)}
+                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  <option value="solid">Mặc định (Nền trắng)</option>
+                  <option value="brand">Màu chính thương hiệu</option>
+                  <option value="secondary-solid">Màu phụ thương hiệu</option>
+                  <option value="gradient-brand-to-secondary">Gradient Màu chính → Màu phụ</option>
+                  <option value="gradient-secondary-to-brand">Gradient Màu phụ → Màu chính</option>
+                  <option value="gradient-brand-dark">Gradient Màu chính → Đen huyền bí</option>
+                  <option value="gradient-secondary-dark">Gradient Màu phụ → Đen huyền bí</option>
+                  <option value="pattern-sunburst">Màu chính + Quạt mặt trời</option>
+                  <option value="pattern-sunburst-secondary">Màu phụ + Quạt mặt trời</option>
+                  <option value="pattern-sunburst-gradient">Gradient + Quạt mặt trời</option>
+                  <option value="glassmorphism">Glassmorphism (Kính mờ thời thượng)</option>
+                  <option value="dark-aesthetic">Dark Aesthetic (Tối sang trọng)</option>
+                </select>
+              </div>
+            )}
+        </HomeComponentDisplaySettingsSection>
+
+        <SubSection
+          icon={Type}
+          title="Nội dung"
+          open={openSections.content}
+          onOpenChange={(open) => toggleSection('content', open)}
+          className="overflow-visible"
+        >
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Badge / Nhãn</Label>
@@ -202,50 +250,25 @@ export function PopupForm({ config, onChange, defaultExpanded = true }: PopupFor
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700">
-              <input type="checkbox" checked={config.showIcon} onChange={(event) => updateConfig(config, onChange, 'showIcon', event.target.checked)} />
-              Hiện icon
-            </label>
             {config.showIcon && (
               <div className="space-y-2">
                 <Label>Icon</Label>
                 <IconCombobox value={config.icon} onChange={(icon) => updateConfig(config, onChange, 'icon', icon)} />
               </div>
             )}
-            <div className="space-y-2">
-              <Label>Bo góc</Label>
-              <select
-                value={config.cornerRadius}
-                onChange={(event) => updateConfig(config, onChange, 'cornerRadius', event.target.value as PopupCornerRadius)}
-                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              >
-                {cornerRadiusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
             <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700">
               <input type="checkbox" checked={config.showDoNotShowToday} onChange={(event) => updateConfig(config, onChange, 'showDoNotShowToday', event.target.checked)} />
               Hiện nút không hiện lại hôm nay
             </label>
-            <div className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <Label className="text-sm">Độ đậm màu</Label>
-                <span className="text-xs tabular-nums text-slate-500">{config.colorIntensity}%</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={config.colorIntensity}
-                onChange={(event) => updateConfig(config, onChange, 'colorIntensity', Number(event.target.value))}
-                className="h-1.5 w-full cursor-pointer accent-blue-500"
-              />
-            </div>
           </div>
         </SubSection>
 
-        <SubSection icon={MousePointerClick} title="CTA" defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={MousePointerClick}
+          title="CTA"
+          open={openSections.cta}
+          onOpenChange={(open) => toggleSection('cta', open)}
+        >
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
               <div className="space-y-2">
@@ -254,7 +277,7 @@ export function PopupForm({ config, onChange, defaultExpanded = true }: PopupFor
               </div>
               <div className="space-y-2">
                 <Label>Link nút phụ</Label>
-                <Input value={config.secondaryButtonLink} onChange={(event) => updateConfig(config, onChange, 'secondaryButtonLink', event.target.value)} placeholder="Để trống để đóng popup" />
+                <Input value={config.secondaryButtonLink} onChange={(event) => updateConfig(config, onChange, 'secondaryButtonLink', event.target.value)} placeholder="#" />
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={config.secondaryButtonDisabled} onChange={(event) => updateConfig(config, onChange, 'secondaryButtonDisabled', event.target.checked)} />
@@ -268,7 +291,7 @@ export function PopupForm({ config, onChange, defaultExpanded = true }: PopupFor
               </div>
               <div className="space-y-2">
                 <Label>Link nút chính</Label>
-                <Input value={config.primaryButtonLink} onChange={(event) => updateConfig(config, onChange, 'primaryButtonLink', event.target.value)} placeholder="Để trống để đóng popup" />
+                <Input value={config.primaryButtonLink} onChange={(event) => updateConfig(config, onChange, 'primaryButtonLink', event.target.value)} placeholder="#" />
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={config.primaryButtonDisabled} onChange={(event) => updateConfig(config, onChange, 'primaryButtonDisabled', event.target.checked)} />
@@ -278,18 +301,29 @@ export function PopupForm({ config, onChange, defaultExpanded = true }: PopupFor
           </div>
         </SubSection>
 
-        <SubSection icon={ImageIcon} title="Ảnh" defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={ImageIcon}
+          title="Ảnh"
+          open={openSections.image}
+          onOpenChange={(open) => toggleSection('image', open)}
+        >
           <SettingsImageUploader
             label="Ảnh popup"
             value={config.imageUrl}
-            onChange={(url) => updateConfig(config, onChange, 'imageUrl', url ?? '')}
+            onChange={(url, storageId) => onChange({ ...config, imageUrl: url ?? '', storageId: storageId ?? null })}
             folder="home-components/popup"
             naming={{ entityName: config.heading || 'popup', field: 'image', index: 1 }}
             previewSize="md"
+            cropAspectRatio={resolvePopupImageCropAspectRatio(config.style)}
           />
         </SubSection>
 
-        <SubSection icon={Clock} title="Hiển thị" defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={Clock}
+          title="Hiển thị"
+          open={openSections.schedule}
+          onOpenChange={(open) => toggleSection('schedule', open)}
+        >
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label>Thời điểm</Label>
@@ -329,5 +363,6 @@ export function PopupForm({ config, onChange, defaultExpanded = true }: PopupFor
         </SubSection>
       </CardContent>
     </Card>
+    </>
   );
 }

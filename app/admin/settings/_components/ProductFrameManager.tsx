@@ -670,7 +670,7 @@ export function ProductFrameManager() {
           <div className="space-y-2">
             <Label>Preview active</Label>
             <ProductImageFrameBox
-              frame={previewFrame}
+              overlayUrl={previewFrame?.overlayImageUrl}
               className="rounded-lg border border-slate-200 overflow-hidden"
               style={imageAspectRatioStyle}
             >
@@ -819,7 +819,7 @@ export function ProductFrameManager() {
                     </Button>
                     {previewImage && (
                       <ProductImageFrameBox
-                        frame={linePreviewFrame}
+                        overlayUrl={linePreviewFrame?.overlayImageUrl}
                         className="rounded-lg border border-slate-200 overflow-hidden"
                         style={imageAspectRatioStyle}
                       >
@@ -945,7 +945,7 @@ export function ProductFrameManager() {
                   {filteredFrames.map((frame) => (
                     <div key={frame._id} className="border rounded-lg p-3 flex gap-3 items-center">
                       <ProductImageFrameBox
-                        frame={frame}
+                        overlayUrl={frame.overlayImageUrl}
                         className="w-20 rounded-md border border-slate-200 overflow-hidden"
                         style={imageAspectRatioStyle}
                       >

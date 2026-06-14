@@ -2,9 +2,9 @@
 
 import React from 'react';
 import {
-  Bot, ChevronDown, GripVertical, Plus, Trash2, Type,
+  Bot, GripVertical, Plus, Trash2, Type,
 } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, cn } from '../../../components/ui';
+import { Button, Input, cn } from '../../../components/ui';
 import {
   createMarqueeItem,
   type MarqueeItem,
@@ -12,6 +12,10 @@ import {
 } from '../_types';
 import { DEMO_MARQUEE_ITEMS, SEPARATOR_OPTIONS, TEXT_STYLE_OPTIONS } from '../_lib/constants';
 import { AiDemoMarqueeImport } from '../../product-list/_components/AiDemoProductsImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+
 
 // ── Separator popup picker ───────────────────────────────────────
 function SeparatorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -35,7 +39,7 @@ function SeparatorPicker({ value, onChange }: { value: string; onChange: (v: str
         className="h-8 w-10 rounded border border-slate-200 bg-white flex items-center justify-center text-base hover:bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-900"
         title="Ký tự phân cách"
       >
-        {value}
+        {value === '  ' ? '␣' : value}
       </button>
       {open && (
         <div className="absolute right-0 top-9 z-50 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900 animate-in fade-in-0 zoom-in-95"
@@ -52,7 +56,7 @@ function SeparatorPicker({ value, onChange }: { value: string; onChange: (v: str
                 )}
                 title={opt.label}
               >
-                {opt.value}
+                {opt.value === '  ' ? '␣' : opt.value}
               </button>
             ))}
           </div>
@@ -107,8 +111,12 @@ interface MarqueeFormProps {
 }
 
 export function MarqueeForm({ items, setItems, defaultExpanded = true }: MarqueeFormProps) {
-  const [expanded, setExpanded] = React.useState(defaultExpanded);
   const { draggedId, dragOverId, dragProps } = useDragReorder(items, setItems);
+
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['marquee'],
+    defaultExpanded
+  );
 
   const addItem = () => { setItems((prev) => [...prev, createMarqueeItem(Date.now())]); };
 
@@ -125,29 +133,29 @@ export function MarqueeForm({ items, setItems, defaultExpanded = true }: Marquee
   };
 
   return (
-    <Card className="mb-6">
-      <CardHeader className={cn('transition-all', expanded ? 'pb-0' : 'py-3')}>
-        <div className="flex cursor-pointer items-center justify-between" onClick={() => setExpanded((p) => !p)}>
-          <CardTitle className="text-base">Nội dung chạy chữ ({items.length})</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
-              onClick={(e) => { e.stopPropagation(); loadDemo(); }}>
+    <div className="mb-6">
+      <FormSectionsToggleAllButton
+        hasClosedSection={hasClosedSection}
+        onToggleAll={handleToggleAll}
+      />
+      <SubSection
+        icon={Type}
+        title={`Nội dung chạy chữ (${items.length})`}
+        open={openSections.marquee}
+        onOpenChange={(open) => toggleSection('marquee', open)}
+        actions={(
+          <>
+            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={loadDemo}>
               <Bot size={11} /> Demo
             </Button>
-            <span onClick={(e) => e.stopPropagation()}>
-              <AiDemoMarqueeImport onApply={setItems} />
-            </span>
-            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
-              onClick={(e) => { e.stopPropagation(); addItem(); }}>
+            <AiDemoMarqueeImport onApply={setItems} />
+            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addItem}>
               <Plus size={12} /> Thêm
             </Button>
-            <ChevronDown size={16} className={cn('transition-transform duration-200 text-slate-400', expanded ? 'rotate-180' : '')} />
-          </div>
-        </div>
-      </CardHeader>
-
-      {expanded && (
-        <CardContent className="space-y-2 pt-4">
+          </>
+        )}
+      >
+        <div className="space-y-2">
           {items.length === 0 && (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 py-8 text-center dark:border-slate-700">
               <Type size={24} className="mb-2 text-slate-300" />
@@ -214,8 +222,8 @@ export function MarqueeForm({ items, setItems, defaultExpanded = true }: Marquee
               </div>
             </div>
           ))}
-        </CardContent>
-      )}
-    </Card>
+        </div>
+      </SubSection>
+    </div>
   );
 }

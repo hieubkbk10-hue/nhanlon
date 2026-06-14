@@ -1,19 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, CaseSensitive, Pause, Play } from 'lucide-react';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 import { MarqueePreview } from '../../marquee/_components/MarqueePreview';
 import { MarqueeForm } from '../../marquee/_components/MarqueeForm';
-import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../components/ui';
-import { SCALE_OPTIONS, SPEED_OPTIONS } from '../../marquee/_lib/constants';
+import { MarqueeDisplayConfig } from '../../marquee/_components/MarqueeDisplayConfig';
+import {
+  DEFAULT_MARQUEE_CONFIG,
+} from '../../marquee/_lib/constants';
 import {
   createMarqueeItem, toMarqueePersistItem,
-  type MarqueeBrandMode, type MarqueeDirection, type MarqueeItem,
+  type MarqueeBrandMode, type MarqueeCornerRadius, type MarqueeDirection, type MarqueeItem,
   type MarqueeScale, type MarqueeSpeed, type MarqueeStyle,
 } from '../../marquee/_types';
 
@@ -30,9 +33,9 @@ export default function MarqueeCreatePage() {
     hideHeader, setHideHeader, showTitle: showTitleHeader, setShowTitle: setShowTitleHeader,
     showSubtitle, setShowSubtitle, subtitle, setSubtitle, headerAlign, setHeaderAlign,
     titleColorPrimary, setTitleColorPrimary, subtitleAboveTitle, setSubtitleAboveTitle,
-    uppercaseText, setUppercaseText, showBadge, setShowBadge, badgeText, setBadgeText,
-  } = useSectionHeaderState({ hideHeader: true, showBadge: false });
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+    uppercaseText, setUppercaseText, showBadge, setShowBadge, badgeText, setBadgeText, spacing, setSpacing,
+  } = useSectionHeaderState({ hideHeader: true, showBadge: true });
+  const { openSections, toggleSection } = useFormSectionsState(['header', 'display'], true);
 
   const [items, setItems] = useState<MarqueeItem[]>([
     { ...createMarqueeItem(1), text: 'Chào mừng đến với cửa hàng', separator: '✦', textStyle: 'normal' },
@@ -45,12 +48,14 @@ export default function MarqueeCreatePage() {
   const [pauseOnHover, setPauseOnHover] = useState(true);
   const [scale, setScale] = useState<MarqueeScale>(2);
   const [uppercase, setUppercase] = useState(false);
+  const [cornerRadius, setCornerRadius] = useState<MarqueeCornerRadius>(DEFAULT_MARQUEE_CONFIG.cornerRadius ?? 'none');
 
   const onSubmit = (event: React.FormEvent) => {
     void handleSubmit(event, {
       items: items.map(toMarqueePersistItem), style, direction, speed, pauseOnHover, scale, uppercase,
       hideHeader, showTitle: showTitleHeader, showSubtitle, subtitle, headerAlign,
       titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText,
+      spacing, cornerRadius,
     });
   };
 
@@ -68,66 +73,31 @@ export default function MarqueeCreatePage() {
         onHideHeaderChange={setHideHeader} onTitleChange={setTitle} onShowTitleChange={setShowTitleHeader}
         onSubtitleChange={setSubtitle} onShowSubtitleChange={setShowSubtitle} onHeaderAlignChange={setHeaderAlign}
         onTitleColorPrimaryChange={setTitleColorPrimary} onSubtitleAboveTitleChange={setSubtitleAboveTitle}
-        onUppercaseTextChange={setUppercaseText} onShowBadgeChange={setShowBadge} onBadgeTextChange={setBadgeText}
-        expanded={headerExpanded} onExpandedChange={setHeaderExpanded}
+        onUppercaseTextChange={setUppercaseText} onShowBadgeChange={setShowBadge}
+        onBadgeTextChange={(value) => { setBadgeText(value); if (value.trim()) { setShowBadge(true); } }}
+        expanded={openSections.header} onExpandedChange={(open) => toggleSection('header', open)}
       />
+
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.display}
+          onOpenChange={(open) => toggleSection('display', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={(value) => setCornerRadius(value as MarqueeCornerRadius)}
+          spacing={spacing}
+          onSpacingChange={setSpacing}
+        />
+      </div>
 
       <MarqueeForm items={items} setItems={setItems} defaultExpanded={true} />
 
-      <Card className="mb-6">
-        <CardHeader className="pb-0"><CardTitle className="text-base">Cấu hình hiệu ứng</CardTitle></CardHeader>
-        <CardContent className="pt-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {/* Direction */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Hướng chạy</Label>
-              <div className="flex gap-1">
-                {(['left', 'right'] as const).map((d) => (
-                  <button key={d} type="button" onClick={() => setDirection(d)}
-                    className={cn('flex-1 flex items-center justify-center gap-1 h-8 rounded-md border text-xs transition-all',
-                      direction === d ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
-                    {d === 'left' ? <><ArrowLeft size={12} /> Trái</> : <>Phải <ArrowRight size={12} /></>}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Speed */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tốc độ</Label>
-              <select className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
-                value={speed} onChange={(e) => setSpeed(e.target.value as MarqueeSpeed)}>
-                {SPEED_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            {/* Pause on hover */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Dừng khi hover</Label>
-              <button type="button" onClick={() => setPauseOnHover(!pauseOnHover)}
-                className={cn('flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs transition-all w-full',
-                  pauseOnHover ? 'bg-green-50 border-green-300 text-green-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
-                {pauseOnHover ? <Pause size={12} /> : <Play size={12} />} {pauseOnHover ? 'Bật' : 'Tắt'}
-              </button>
-            </div>
-            {/* Scale */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Kích thước</Label>
-              <select className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
-                value={scale} onChange={(e) => setScale(Number(e.target.value) as MarqueeScale)}>
-                {SCALE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            {/* Uppercase */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Chữ in hoa</Label>
-              <button type="button" onClick={() => setUppercase(!uppercase)}
-                className={cn('flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs transition-all w-full',
-                  uppercase ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
-                <CaseSensitive size={14} /> {uppercase ? 'Bật' : 'Tắt'}
-              </button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <MarqueeDisplayConfig
+        direction={direction} setDirection={setDirection}
+        speed={speed} setSpeed={setSpeed}
+        pauseOnHover={pauseOnHover} setPauseOnHover={setPauseOnHover}
+        scale={scale} setScale={setScale}
+        uppercase={uppercase} setUppercase={setUppercase}
+      />
 
       <MarqueePreview
         items={items} brandColor={primary} secondary={secondary} mode={brandMode} selectedStyle={style}
@@ -136,6 +106,8 @@ export default function MarqueeCreatePage() {
         title={title} subtitle={subtitle} hideHeader={hideHeader} showTitle={showTitleHeader}
         showSubtitle={showSubtitle} headerAlign={headerAlign} titleColorPrimary={titleColorPrimary}
         subtitleAboveTitle={subtitleAboveTitle} uppercaseText={uppercaseText} showBadge={showBadge} badgeText={badgeText}
+        spacing={spacing}
+        cornerRadius={cornerRadius}
       />
     </ComponentFormWrapper>
   );

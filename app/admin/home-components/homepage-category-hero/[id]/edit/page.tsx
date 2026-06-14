@@ -1,5 +1,9 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,6 +13,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { LayoutTemplate, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, Label } from '../../../../components/ui';
+import { CopyTextButton } from '../../../../components/CopyTextButton';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -24,17 +29,46 @@ import type {
   HomepageCategoryHeroBrandMode,
   HomepageCategoryHeroCategoryItem,
   HomepageCategoryHeroConfig,
+  HomepageCategoryHeroCornerRadius,
   HomepageCategoryHeroSelectionMode,
   HomepageCategoryHeroSlide,
 } from '../../_types';
+import { DEFAULT_HOMEPAGE_CATEGORY_HERO_CORNER_RADIUS, normalizeHomepageCategoryHeroCornerRadius } from '../../_types';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
+import { normalizeSectionSpacing, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
 
 const COMPONENT_TYPE = 'HomepageCategoryHero';
 
-export default function HomepageCategoryHeroEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type HomepageCategoryHeroEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function HomepageCategoryHeroEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: HomepageCategoryHeroEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const {
     autoGenerateConfig,
     setAutoGenerateConfig,
@@ -59,7 +93,15 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
   const [ctaText, setCtaText] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.ctaText);
   const [ctaUrl, setCtaUrl] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.ctaUrl);
   const [style, setStyle] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.style);
-  const [heroSlides, setHeroSlides] = useState<HomepageCategoryHeroSlide[]>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.heroSlides);
+  const {
+    state: heroSlides,
+    set: setHeroSlides,
+    undo: undoheroSlides,
+    redo: redoheroSlides,
+    canUndo: canUndoheroSlides,
+    canRedo: canRedoheroSlides,
+    reset: resetheroSlides,
+  } = useUndoRedo<HomepageCategoryHeroSlide[]>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.heroSlides, { maxHistory: 15 });
   const [selectionMode, setSelectionMode] = useState<HomepageCategoryHeroSelectionMode>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.selectionMode);
   const [categoryItems, setCategoryItems] = useState<HomepageCategoryHeroCategoryItem[]>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.categories);
   const [hideEmptyCategories, setHideEmptyCategories] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.hideEmptyCategories);
@@ -72,8 +114,9 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
   const [maxCategoriesMobile, setMaxCategoriesMobile] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.maxCategoriesMobile);
   const [attachToHeader, setAttachToHeader] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.attachToHeader);
   const [tabletBehavior, setTabletBehavior] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.tabletBehavior);
-  const [noBorderRadius, setNoBorderRadius] = useState(false);
+  const [cornerRadius, setCornerRadius] = useState<HomepageCategoryHeroCornerRadius>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CORNER_RADIUS);
   const [noVerticalMargin, setNoVerticalMargin] = useState(false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.spacing ?? 'normal');
   const [bannerImageFit, setBannerImageFit] = useState<'cover' | 'contain'>('cover');
   const [demoCategoriesData, setDemoCategoriesData] = useState<DemoCategoryDataItem[]>(DEMO_CATEGORIES_DATA);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -102,8 +145,9 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
     autoGenerateConfig: HomepageCategoryHeroAutoGenerateConfig;
     autoGenerateMeta?: HomepageCategoryHeroAutoGenerateMeta;
     demoCategoriesData: DemoCategoryDataItem[];
-    noBorderRadius: boolean;
+    cornerRadius: HomepageCategoryHeroCornerRadius;
     noVerticalMargin: boolean;
+    spacing: SectionSpacing;
     bannerImageFit: 'cover' | 'contain';
   } | null>(null);
 
@@ -126,7 +170,7 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
       ...s,
       id: s.id ?? `slide-${i}`,
     }));
-    setHeroSlides(resolvedHeroSlides);
+    resetheroSlides(resolvedHeroSlides);
     setSelectionMode((config.selectionMode as HomepageCategoryHeroSelectionMode | undefined) ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.selectionMode);
     const resolvedCategories = normalizeHomepageCategoryHeroCategories(
       (config.categories as HomepageCategoryHeroCategoryItem[] | undefined) ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.categories
@@ -142,8 +186,11 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
     setMaxCategoriesMobile(config.maxCategoriesMobile ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.maxCategoriesMobile);
     setAttachToHeader(config.attachToHeader ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.attachToHeader);
     setTabletBehavior(config.tabletBehavior ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.tabletBehavior);
-    setNoBorderRadius(config.noBorderRadius ?? false);
-    setNoVerticalMargin(config.noVerticalMargin ?? false);
+    const resolvedSpacing = config.noVerticalMargin === true ? 'none' : normalizeSectionSpacing(config.spacing);
+    const resolvedCornerRadius = normalizeHomepageCategoryHeroCornerRadius(config.cornerRadius, config.noBorderRadius);
+    setCornerRadius(resolvedCornerRadius);
+    setNoVerticalMargin(resolvedSpacing === 'none');
+    setSpacing(resolvedSpacing);
     setBannerImageFit((config.bannerImageFit as 'cover' | 'contain' | undefined) ?? 'cover');
     setAutoGenerateConfig((config.autoGenerateConfig as HomepageCategoryHeroAutoGenerateConfig | undefined) ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.autoGenerateConfig);
     setAutoGenerateMeta((config.autoGenerateMeta as HomepageCategoryHeroAutoGenerateMeta | undefined) ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.autoGenerateMeta);
@@ -173,8 +220,9 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
       autoGenerateConfig: (config.autoGenerateConfig as HomepageCategoryHeroAutoGenerateConfig | undefined) ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.autoGenerateConfig,
       autoGenerateMeta: (config.autoGenerateMeta as HomepageCategoryHeroAutoGenerateMeta | undefined) ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.autoGenerateMeta,
       demoCategoriesData: (config.demoCategoriesData as DemoCategoryDataItem[] | undefined) ?? DEMO_CATEGORIES_DATA,
-      noBorderRadius: config.noBorderRadius ?? false,
-      noVerticalMargin: config.noVerticalMargin ?? false,
+      cornerRadius: resolvedCornerRadius,
+      noVerticalMargin: resolvedSpacing === 'none',
+      spacing: resolvedSpacing,
       bannerImageFit: (config.bannerImageFit as 'cover' | 'contain' | undefined) ?? 'cover',
     });
     setHasChanges(false);
@@ -201,8 +249,9 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
     maxCategoriesMobile,
     attachToHeader,
     tabletBehavior,
-    noBorderRadius,
+    cornerRadius,
     noVerticalMargin,
+    spacing,
     bannerImageFit,
     autoGenerateConfig,
     demoCategoriesData,
@@ -221,13 +270,13 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
 
     const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
     const resolvedInitialSecondary = resolveSecondaryByMode(initialCustom.mode, initialCustom.primary, initialCustom.secondary);
-    const customChanged = showCustomBlock
+    const customChanged = enableTypeOverrides && showCustomBlock
       ? customState.enabled !== initialCustom.enabled
         || customState.mode !== initialCustom.mode
         || customState.primary !== initialCustom.primary
         || resolvedCustomSecondary !== resolvedInitialSecondary
       : false;
-    const customFontChanged = showFontCustomBlock
+    const customFontChanged = enableTypeOverrides && showFontCustomBlock
       ? customFontState.enabled !== initialFontCustom.enabled
         || customFontState.fontKey !== initialFontCustom.fontKey
       : false;
@@ -252,8 +301,9 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
       || maxCategoriesMobile !== initialData.maxCategoriesMobile
       || attachToHeader !== initialData.attachToHeader
       || tabletBehavior !== initialData.tabletBehavior
-      || noBorderRadius !== initialData.noBorderRadius
+      || cornerRadius !== initialData.cornerRadius
       || noVerticalMargin !== initialData.noVerticalMargin
+      || spacing !== initialData.spacing
       || bannerImageFit !== initialData.bannerImageFit
       || JSON.stringify(autoGenerateConfig) !== JSON.stringify(initialData.autoGenerateConfig)
       || JSON.stringify(autoGenerateMeta) !== JSON.stringify(initialData.autoGenerateMeta)
@@ -289,44 +339,54 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
     toast.success('Tải dữ liệu demo thành công!');
   };
 
+  useUnsavedGuard(hasChanges);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) {return;}
 
     setIsSubmitting(true);
     try {
-      await updateMutation({
-        id: id as Id<'homeComponents'>,
-        title,
-        active,
-        config: {
-          heading,
-          subheading,
-          ctaText,
-          ctaUrl,
-          style,
-          heroSlides,
-          selectionMode,
-          categories: normalizeHomepageCategoryHeroCategories(categoryItems),
-          autoGenerateConfig,
-          autoGenerateMeta,
-          hideEmptyCategories,
-          showCategoryImage,
-          categoryVisualMode,
-          categoryImageSize,
-          categoryImageShape,
-          maxCategoriesDesktop,
-          maxCategoriesTablet,
-          maxCategoriesMobile,
-          attachToHeader,
-          tabletBehavior,
-          noBorderRadius,
-          noVerticalMargin,
-          bannerImageFit,
-          demoCategoriesData,
-        },
-      });
-      if (showCustomBlock) {
+      const nextConfig = {
+        heading,
+        subheading,
+        ctaText,
+        ctaUrl,
+        style,
+        heroSlides,
+        selectionMode,
+        categories: normalizeHomepageCategoryHeroCategories(categoryItems),
+        autoGenerateConfig,
+        autoGenerateMeta,
+        hideEmptyCategories,
+        showCategoryImage,
+        categoryVisualMode,
+        categoryImageSize,
+        categoryImageShape,
+        maxCategoriesDesktop,
+        maxCategoriesTablet,
+        maxCategoriesMobile,
+        attachToHeader,
+        tabletBehavior,
+        cornerRadius,
+        noBorderRadius: cornerRadius === 'none',
+        noVerticalMargin: spacing === 'none',
+        spacing,
+        bannerImageFit,
+        demoCategoriesData,
+      };
+
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig, title });
+      } else {
+        await updateMutation({
+          id: id as Id<'homeComponents'>,
+          title,
+          active,
+          config: nextConfig,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -336,7 +396,7 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -368,11 +428,12 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
         autoGenerateConfig,
         autoGenerateMeta,
         demoCategoriesData,
-        noBorderRadius,
-        noVerticalMargin,
+        cornerRadius,
+        noVerticalMargin: spacing === 'none',
+        spacing,
         bannerImageFit,
       });
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -380,7 +441,7 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -413,7 +474,8 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
             <LayoutTemplate className="w-5 h-5 text-cyan-600" />
             <h1 className="text-2xl font-bold">Hero khám phá danh mục</h1>
           </div>
-          <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">
+          {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+          <Link href={backHref} className="text-sm text-blue-600 hover:underline">
             ← Quay lại danh sách
           </Link>
         </div>
@@ -430,7 +492,12 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <ClearableInput value={title} onChange={setTitle} required />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <ClearableInput value={title} onChange={setTitle} required />
+                </div>
+                <CopyTextButton value={title} label="tiêu đề hiển thị" className="shrink-0" />
+              </div>
             </div>
 </CardContent>
         </Card>
@@ -439,6 +506,7 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
           <HomepageCategoryHeroForm
             heroSlides={heroSlides}
             setHeroSlides={setHeroSlides}
+            style={style}
             categoryItems={categoryItems}
             setCategoryItems={setCategoryItems}
             categoriesData={categoriesData}
@@ -461,15 +529,17 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
             defaultExpanded={false}
             demoCategoriesData={demoCategoriesData}
             setDemoCategoriesData={setDemoCategoriesData}
-            noBorderRadius={noBorderRadius}
-            setNoBorderRadius={setNoBorderRadius}
+            cornerRadius={cornerRadius}
+            setCornerRadius={setCornerRadius}
             noVerticalMargin={noVerticalMargin}
             setNoVerticalMargin={setNoVerticalMargin}
+            spacing={spacing}
+            setSpacing={setSpacing}
             bannerImageFit={bannerImageFit}
             setBannerImageFit={setBannerImageFit}
           />
 
-          {showCustomBlock && (
+          {enableTypeOverrides && showCustomBlock && (
             <TypeColorOverrideCard
               title="Màu custom Hero danh mục"
               enabled={customState.enabled}
@@ -501,7 +571,7 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
             />
           )}
 
-          {showFontCustomBlock && (
+          {enableTypeOverrides && showFontCustomBlock && (
             <TypeFontOverrideCard
               title="Font custom Hero danh mục"
               enabled={customFontState.enabled}
@@ -536,8 +606,10 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
               maxCategoriesMobile,
               attachToHeader,
               tabletBehavior,
-              noBorderRadius,
-              noVerticalMargin,
+              cornerRadius,
+              noBorderRadius: cornerRadius === 'none',
+              noVerticalMargin: spacing === 'none',
+              spacing,
               bannerImageFit,
               demoCategoriesData,
             }}
@@ -553,10 +625,17 @@ export default function HomepageCategoryHeroEditPage({ params }: { params: Promi
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndoheroSlides,
+          canRedo: canRedoheroSlides,
+          onUndo: undoheroSlides,
+          onRedo: redoheroSlides,
+        }}
         />
       </form>
     </div>

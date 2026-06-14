@@ -1,14 +1,18 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import React, { useState } from 'react';
+import { AlertTriangle, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { PricingPreview } from '../../pricing/_components/PricingPreview';
-import { getPricingValidationResult } from '../../pricing/_lib/colors';
 import { DEFAULT_PRICING_CONFIG } from '../../pricing/_lib/constants';
 import type {
   PricingConfig,
@@ -56,16 +60,16 @@ const DEFAULT_PLANS: PricingEditorPlan[] = [
 
 type PricingMetaConfig = Pick<
   PricingConfig,
-  'subtitle' | 'showBillingToggle' | 'monthlyLabel' | 'yearlyLabel' | 'yearlySavingText' | 'gridCols'
+  'showBillingToggle' | 'monthlyLabel' | 'yearlyLabel' | 'yearlySavingText' | 'gridCols' | 'cornerRadius'
 >;
 
 const DEFAULT_META_CONFIG: PricingMetaConfig = {
   monthlyLabel: 'Hàng tháng',
   showBillingToggle: true,
-  subtitle: 'Chọn gói phù hợp với nhu cầu của bạn',
   yearlyLabel: 'Hàng năm',
   yearlySavingText: 'Tiết kiệm 17%',
   gridCols: 3,
+  cornerRadius: DEFAULT_PRICING_CONFIG.cornerRadius,
 };
 
 const sanitizeFeatures = (value: string) => (
@@ -91,7 +95,7 @@ export default function PricingCreatePage() {
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   
   // Header config state
-  const [expandedSections, setExpandedSections] = useState({ header: true, pricing: true, plans: true });
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header', 'pricing', 'plans'], true);
   const [hideHeader, setHideHeader] = useState(DEFAULT_PRICING_CONFIG.hideHeader ?? false);
   const [showTitle, setShowTitle] = useState(DEFAULT_PRICING_CONFIG.showTitle ?? true);
   const [subtitle, setSubtitle] = useState(DEFAULT_PRICING_CONFIG.subtitle ?? '');
@@ -102,30 +106,19 @@ export default function PricingCreatePage() {
   const [uppercaseText, setUppercaseText] = useState(DEFAULT_PRICING_CONFIG.uppercaseText ?? false);
   const [showBadge, setShowBadge] = useState(DEFAULT_PRICING_CONFIG.showBadge ?? true);
   const [badgeText, setBadgeText] = useState(DEFAULT_PRICING_CONFIG.badgeText ?? '');
-
-  const validation = useMemo(() => getPricingValidationResult({
-    primary,
-    secondary,
-    mode,
-  }), [primary, secondary, mode]);
-
-  const warningMessages = useMemo(() => {
-    const messages: string[] = [];
-    if (mode === 'dual' && validation.harmonyStatus.isTooSimilar) {
-      messages.push(`Màu phụ đang khá gần màu chính (deltaE = ${validation.harmonyStatus.deltaE}). Nên tăng độ tách biệt.`);
-    }
-    return messages;
-  }, [mode, validation]);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
 
   const onSubmit = (event: React.FormEvent) => {
     void handleSubmit(event, {
       style: pricingStyle,
-      subtitle: pricingConfig.subtitle,
+      subtitle,
       showBillingToggle: pricingConfig.showBillingToggle,
       monthlyLabel: pricingConfig.monthlyLabel,
       yearlyLabel: pricingConfig.yearlyLabel,
       yearlySavingText: pricingConfig.yearlySavingText,
       gridCols: pricingConfig.gridCols,
+      cornerRadius: pricingConfig.cornerRadius,
+      noBorderRadius: pricingConfig.cornerRadius === 'none',
       plans: pricingPlans.map((plan) => ({
         name: plan.name,
         price: plan.price,
@@ -146,6 +139,8 @@ export default function PricingCreatePage() {
       uppercaseText,
       showBadge,
       badgeText,
+      spacing,
+      noVerticalMargin: spacing === 'none',
     });
   };
 
@@ -204,6 +199,8 @@ export default function PricingCreatePage() {
       setCustomFontState={setCustomFontState}
       skipTitleInput={true}
     >
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+
       <HeaderConfigSection
         hideHeader={hideHeader}
         title={title}
@@ -227,28 +224,22 @@ export default function PricingCreatePage() {
         onUppercaseTextChange={setUppercaseText}
         onShowBadgeChange={setShowBadge}
         onBadgeTextChange={setBadgeText}
-        expanded={expandedSections.header}
-        onExpandedChange={(value) => setExpandedSections((prev) => ({ ...prev, header: value }))}
+        expanded={openSections.header}
+        onExpandedChange={(value) => toggleSection('header', value)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <Card className="mb-6">
-        <CardHeader
-          className="cursor-pointer"
-          onClick={() => setExpandedSections((prev) => ({ ...prev, pricing: !prev.pricing }))}
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.pricing}
+          onOpenChange={(value) => toggleSection('pricing', value)}
+          cornerRadius={pricingConfig.cornerRadius ?? 'lg'}
+          onCornerRadiusChange={(cornerRadius) => setPricingConfig((prev) => ({ ...prev, cornerRadius }))}
+          spacing={spacing}
+          onSpacingChange={setSpacing}
         >
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Cấu hình chung</CardTitle>
-            <ChevronDown
-              size={16}
-              className={cn('transition-transform duration-200', expandedSections.pricing ? 'rotate-180' : '')}
-            />
-          </div>
-        </CardHeader>
-        {expandedSections.pricing && (
-        <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
             <Label>Hiển thị toggle Hàng tháng / Hàng năm:</Label>
             <div
@@ -265,32 +256,32 @@ export default function PricingCreatePage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Số cột desktop</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {[3, 4].map((option) => {
-                const selected = pricingConfig.gridCols === option;
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setPricingConfig((prev) => ({ ...prev, gridCols: option as 3 | 4 }))}
-                    className={cn(
-                      'h-9 rounded-md border text-xs transition-colors',
-                      selected
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                        : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
-                    )}
-                  >
-                    {option} cột
-                  </button>
-                );
-              })}
+            <div className="space-y-2">
+              <Label>Số cột desktop</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[3, 4].map((option) => {
+                  const selected = pricingConfig.gridCols === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setPricingConfig((prev) => ({ ...prev, gridCols: option as 3 | 4 }))}
+                      className={cn(
+                        'h-9 rounded-md border text-xs transition-colors',
+                        selected
+                          ? 'border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950'
+                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      )}
+                    >
+                      {option} cột
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
           {pricingConfig.showBillingToggle && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 md:col-span-2 md:grid-cols-3">
               <div className="space-y-2">
                 <Label>Label Hàng tháng</Label>
                 <Input
@@ -317,23 +308,17 @@ export default function PricingCreatePage() {
               </div>
             </div>
           )}
-        </CardContent>
-        )}
-      </Card>
+        </HomeComponentDisplaySettingsSection>
+      </div>
 
-      <Card className="mb-6">
-        <CardHeader
-          className="cursor-pointer flex flex-row items-center justify-between"
-          onClick={() => setExpandedSections((prev) => ({ ...prev, plans: !prev.plans }))}
-        >
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-base">Các gói giá</CardTitle>
-            <ChevronDown
-              size={16}
-              className={cn('transition-transform duration-200', expandedSections.plans ? 'rotate-180' : '')}
-            />
-          </div>
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-6">
+        <SubSection
+          icon={AlertTriangle}
+          title="Các gói giá"
+          open={openSections.plans}
+          onOpenChange={(value) => toggleSection('plans', value)}
+          actions={(
+            <>
             <AiDemoPricingImport onApply={(items) => setPricingPlans(items as PricingEditorPlan[])} />
             <Button
               type="button"
@@ -362,10 +347,10 @@ export default function PricingCreatePage() {
             >
               <Plus size={14} /> Thêm gói
             </Button>
-          </div>
-        </CardHeader>
-        {expandedSections.plans && (
-        <CardContent className="space-y-4">
+            </>
+          )}
+        >
+        <div className="space-y-4">
           {pricingPlans.map((plan) => (
             <div
               key={plan.id}
@@ -376,7 +361,7 @@ export default function PricingCreatePage() {
               onDragEnd={handleDragEnd}
               className={cn(
                 'p-4 bg-slate-50 dark:bg-slate-800 rounded-lg space-y-3 cursor-move',
-                dragOverId === plan.id && 'ring-2 ring-blue-500',
+                dragOverId === plan.id && 'ring-2 ring-slate-950 dark:ring-white',
               )}
             >
               <div className="flex items-center justify-between">
@@ -392,7 +377,7 @@ export default function PricingCreatePage() {
                     onClick={() => {
                       setPricingPlans((prev) => prev.map((p) => (p.id === plan.id ? { ...p, isPopular: !p.isPopular } : p)));
                     }}
-                    className={cn('text-xs', plan.isPopular && 'text-blue-600')}
+                    className={cn('text-xs', plan.isPopular && 'text-slate-950 dark:text-white')}
                   >
                     {plan.isPopular ? 'Phổ biến ✓' : 'Đánh dấu phổ biến'}
                   </Button>
@@ -478,23 +463,9 @@ export default function PricingCreatePage() {
               </div>
             </div>
           ))}
-        </CardContent>
-        )}
-      </Card>
-
-      {warningMessages.length > 0 && (
-        <div className="mb-6 space-y-2">
-          {warningMessages.map((message) => (
-            <div
-              key={message}
-              className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700"
-            >
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-              <p>{message}</p>
-            </div>
-          ))}
         </div>
-      )}
+        </SubSection>
+      </div>
 
       <PricingPreview
         plans={pricingPlans}
@@ -505,11 +476,11 @@ export default function PricingCreatePage() {
         onStyleChange={setPricingStyle}
         title={title}
         config={{
-          subtitle: pricingConfig.subtitle,
           showBillingToggle: pricingConfig.showBillingToggle,
           monthlyLabel: pricingConfig.monthlyLabel,
           yearlyLabel: pricingConfig.yearlyLabel,
           yearlySavingText: pricingConfig.yearlySavingText,
+          cornerRadius: pricingConfig.cornerRadius,
           plans: pricingPlans.map((plan) => ({
             name: plan.name,
             price: plan.price,
@@ -534,6 +505,7 @@ export default function PricingCreatePage() {
           uppercaseText,
           showBadge,
           badgeText,
+          spacing,
         }}
         gridCols={pricingConfig.gridCols}
       />

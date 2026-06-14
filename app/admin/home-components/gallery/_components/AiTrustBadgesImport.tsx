@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { AiDirectGeneratePanel } from '@/app/admin/components/AiDirectGenerateButton';
 import { Bot, Check, Copy, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Label, cn } from '../../../components/ui';
 import type { GalleryItem } from '../_types';
+import { useTypeAiImportEnabled } from '../../_shared/hooks/useTypeAiImportEnabled';
+import { HomeComponentFooterActionPortal } from '../../_shared/components/HomeComponentFooterActions';
 
 const MAX_ITEMS = 20;
 
@@ -119,17 +122,21 @@ const parseAiTrustBadges = (raw: string): ParseResult => {
 };
 
 export function AiTrustBadgesImport({
-  buttonClassName,
   onApply,
 }: {
   buttonClassName?: string;
   onApply: (items: GalleryItem[]) => void;
 }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
   const result = useMemo(() => parseAiTrustBadges(rawInput), [rawInput]);
   const canApply = rawInput.trim().length > 0 && result.items !== null && result.items.length > 0;
+
+  if (!isAiImportEnabled) {
+    return null;
+  }
 
   const copyText = async (value: string, type: 'prompt' | 'sample') => {
     await navigator.clipboard.writeText(value);
@@ -148,9 +155,11 @@ export function AiTrustBadgesImport({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={cn('h-7 gap-1 text-xs', buttonClassName)} onClick={() => setOpen(true)}>
-        <Bot size={11} /> Import AI
-      </Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> Import AI
+        </Button>
+      </HomeComponentFooterActionPortal>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -181,6 +190,12 @@ export function AiTrustBadgesImport({
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={AI_TRUST_BADGES_PROMPT}
+                  sessionId="admin-trust-badges-import"
+                  onGenerated={setRawInput}
+                  placeholder="Ví dụ: Tạo 6 cam kết uy tín cho website bán phụ kiện tủ bếp: chính hãng, bảo hành, đổi trả, tư vấn, giao hàng."
+                />
                 <textarea className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder={SAMPLE_TRUST_BADGES_JSON} value={rawInput} onChange={(event) => setRawInput(event.target.value)} />
               </div>
               {rawInput.trim().length > 0 && (

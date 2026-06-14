@@ -5,11 +5,25 @@ import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { contentStatus } from "./lib/validators";
 import { rankByFuzzyMatches } from "./lib/search";
+import { countPublishedPosts, recordPostAggregates } from "./lib/aggregates/publicContent";
+import { requireAdminPermission } from "./lib/permissions";
 import * as PostsModel from "./model/posts";
 import type { Doc } from "./_generated/dataModel";
+import {
+  isBrokenStorageBackedUrl,
+  removeOwnerFilesAndCleanup,
+  syncOwnerFilesAndCleanup,
+} from "./lib/fileService";
 import { generateArticlePayload } from "../lib/posts/generator/assembler";
+import { getGeneratorKeywordPhrase, getGeneratorKeywords } from "../lib/posts/generator/keywords";
 import { getMacroTemplate } from "../lib/posts/generator/macro-templates";
 import type { GeneratorProduct, GeneratorSettings, GeneratorRequest } from "../lib/posts/generator/types";
+import {
+  isMultiCategoryEnabled,
+  listPostAdditionalCategoryIds,
+  mergePostsByCategoryAssignments,
+  syncPostCategoryAssignments,
+} from "./lib/multiCategory";
 
 const postDoc = v.object({
   _creationTime: v.number(),
@@ -37,6 +51,29 @@ const postDoc = v.object({
   title: v.string(),
   views: v.number(),
 });
+
+const POSTS_AGGREGATES_READY_KEY = "postsPublishedAggregatesReady";
+const POSTS_AGGREGATES_BACKFILLED_AT_KEY = "postsPublishedAggregatesBackfilledAt";
+
+async function isPostsAggregateReady(ctx: QueryCtx) {
+  const setting = await ctx.db
+    .query("settings")
+    .withIndex("by_key", (q) => q.eq("key", POSTS_AGGREGATES_READY_KEY))
+    .unique();
+  return setting?.value === true;
+}
+
+async function upsertPostsAggregateSetting(ctx: MutationCtx, key: string, value: unknown) {
+  const existing = await ctx.db
+    .query("settings")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  if (existing) {
+    await ctx.db.patch(existing._id, { group: "contentAggregates", value });
+    return;
+  }
+  await ctx.db.insert("settings", { group: "contentAggregates", key, value });
+}
 
 // Pagination result validator - includes new Convex pagination fields
 const paginatedPosts = v.object({
@@ -91,8 +128,8 @@ export const listAdminWithOffset = query({
     } else {
       posts = await ctx.db
         .query("posts")
-        .order("desc")
-        .take(fetchLimit);
+        .take(500);
+      posts.sort((a, b) => a.order - b.order);
     }
 
     if (args.search?.trim() && posts.length > 0) {
@@ -210,6 +247,18 @@ export const getBySlug = query({
   returns: v.union(postDoc, v.null()),
 });
 
+export const getAdditionalCategoryIds = query({
+  args: { id: v.id("posts") },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.id);
+    if (!post) {
+      return [];
+    }
+    return listPostAdditionalCategoryIds(ctx, args.id, post.categoryId);
+  },
+  returns: v.array(v.id("postCategories")),
+});
+
 export const listByCategory = query({
   args: {
     categoryId: v.id("postCategories"),
@@ -228,9 +277,12 @@ export const listByCategory = query({
         return result;
       }
       const now = Date.now();
+      const page = await isMultiCategoryEnabled(ctx, "posts")
+        ? await mergePostsByCategoryAssignments(ctx, args.categoryId, result.page, args.paginationOpts.numItems)
+        : result.page;
       return {
         ...result,
-        page: result.page.filter((post) => !post.publishedAt || post.publishedAt <= now),
+        page: page.filter((post) => post.status === "Published" && (!post.publishedAt || post.publishedAt <= now)),
       };
     }
     return  ctx.db
@@ -316,7 +368,8 @@ export const searchPublished = query({
       v.literal("newest"),
       v.literal("oldest"),
       v.literal("popular"),
-      v.literal("title")
+      v.literal("title"),
+      v.literal("title_desc")
     )),
   },
   handler: async (ctx, args) => {
@@ -333,6 +386,10 @@ export const searchPublished = query({
           q.eq("categoryId", args.categoryId!).eq("status", "Published")
         )
         .take(limit * 2); // Get more for client-side filtering
+      if (await isMultiCategoryEnabled(ctx, "posts")) {
+        posts = await mergePostsByCategoryAssignments(ctx, args.categoryId, posts, limit * 2);
+        posts = posts.filter((post) => post.status === "Published");
+      }
     } else {
       // Get all published posts
       if (sortBy === "popular") {
@@ -377,12 +434,18 @@ export const searchPublished = query({
           posts.sort((a, b) => a.title.localeCompare(b.title, 'vi'));
           break;
         }
+        case "title_desc": {
+          posts.sort((a, b) => b.title.localeCompare(a.title, 'vi'));
+          break;
+        }
         default: { // Newest
           posts.sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));
         }
       }
     } else if (sortBy === "title") {
       posts.sort((a, b) => a.title.localeCompare(b.title, 'vi'));
+    } else if (sortBy === "title_desc") {
+      posts.sort((a, b) => b.title.localeCompare(a.title, 'vi'));
     }
     
     return posts.slice(0, limit);
@@ -408,9 +471,36 @@ export const listFeatured = query({
 
 // Count published posts (for result display)
 export const countPublished = query({
-  args: { categoryId: v.optional(v.id("postCategories")) },
+  args: {
+    categoryId: v.optional(v.id("postCategories")),
+    search: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const now = Date.now();
+    
+    if (args.search?.trim()) {
+      const searchLower = args.search.toLowerCase().trim();
+      const searchQuery = ctx.db
+        .query("posts")
+        .withSearchIndex("search_title", (q) => {
+          const builder = q.search("title", searchLower).eq("status", "Published");
+          return args.categoryId ? builder.eq("categoryId", args.categoryId) : builder;
+        });
+      let posts = await searchQuery.take(1000);
+      posts = posts.filter((post) => !post.publishedAt || post.publishedAt <= now);
+      
+      const ranked = rankByFuzzyMatches(
+        posts,
+        args.search,
+        (post) => [post.title ?? "", post.excerpt ?? ""],
+        42,
+      );
+      return ranked.length;
+    }
+
+    if (await isPostsAggregateReady(ctx)) {
+      return countPublishedPosts(ctx, { categoryId: args.categoryId, now });
+    }
     if (args.categoryId) {
       const posts = await ctx.db
         .query("posts")
@@ -418,7 +508,10 @@ export const countPublished = query({
           q.eq("categoryId", args.categoryId!).eq("status", "Published")
         )
         .take(1000);
-      return posts.filter((post) => !post.publishedAt || post.publishedAt <= now).length;
+      const mergedPosts = await isMultiCategoryEnabled(ctx, "posts")
+        ? await mergePostsByCategoryAssignments(ctx, args.categoryId, posts, 1000)
+        : posts;
+      return mergedPosts.filter((post) => post.status === "Published" && (!post.publishedAt || post.publishedAt <= now)).length;
     }
     const posts = await ctx.db
       .query("posts")
@@ -496,7 +589,8 @@ export const listPublishedWithOffset = query({
       v.literal("newest"),
       v.literal("oldest"),
       v.literal("popular"),
-      v.literal("title")
+      v.literal("title"),
+      v.literal("title_desc")
     )),
   },
   handler: async (ctx, args) => {
@@ -525,6 +619,10 @@ export const listPublishedWithOffset = query({
           q.eq("categoryId", args.categoryId!).eq("status", "Published")
         )
         .take(fetchLimit);
+      if (await isMultiCategoryEnabled(ctx, "posts")) {
+        posts = await mergePostsByCategoryAssignments(ctx, args.categoryId, posts, fetchLimit);
+        posts = posts.filter((post) => post.status === "Published");
+      }
     } else if (sortBy === "popular") {
       posts = await ctx.db
         .query("posts")
@@ -552,6 +650,8 @@ export const listPublishedWithOffset = query({
       posts = ranked.map((entry) => entry.item);
     } else if (sortBy === "title") {
       posts.sort((a, b) => a.title.localeCompare(b.title, 'vi'));
+    } else if (sortBy === "title_desc") {
+      posts.sort((a, b) => b.title.localeCompare(a.title, 'vi'));
     } else if (args.categoryId) {
       // Re-sort if filtered by category
       switch (sortBy) {
@@ -583,7 +683,8 @@ export const searchPublishedPaginated = query({
       v.literal("newest"),
       v.literal("oldest"),
       v.literal("popular"),
-      v.literal("title")
+      v.literal("title"),
+      v.literal("title_desc")
     )),
   },
   handler: async (ctx, args) => {
@@ -635,6 +736,8 @@ export const searchPublishedPaginated = query({
     // Sort by title if needed (other sorts handled by index)
     if (sortBy === "title") {
       posts.sort((a, b) => a.title.localeCompare(b.title, 'vi'));
+    } else if (sortBy === "title_desc") {
+      posts.sort((a, b) => b.title.localeCompare(a.title, 'vi'));
     }
     
     return {
@@ -654,6 +757,7 @@ export const create = mutation({
   args: {
     authorName: v.optional(v.string()),
     categoryId: v.id("postCategories"),
+    additionalCategoryIds: v.optional(v.array(v.id("postCategories"))),
     content: v.string(),
     renderType: v.optional(v.union(
       v.literal("content"),
@@ -676,6 +780,17 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const id = await PostsModel.create(ctx, args);
+    if (await isMultiCategoryEnabled(ctx, "posts")) {
+      await syncPostCategoryAssignments(ctx, id, args.categoryId, args.additionalCategoryIds);
+    }
+    if (args.thumbnailStorageId) {
+      await syncOwnerFilesAndCleanup(ctx, {
+        ownerField: "thumbnail",
+        ownerId: id,
+        ownerTable: "posts",
+        purpose: "post-thumbnail",
+      }, [args.thumbnailStorageId]);
+    }
     await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "post" });
     return id;
   },
@@ -686,6 +801,7 @@ export const update = mutation({
   args: {
     authorName: v.optional(v.string()),
     categoryId: v.optional(v.id("postCategories")),
+    additionalCategoryIds: v.optional(v.array(v.id("postCategories"))),
     content: v.optional(v.string()),
     renderType: v.optional(v.union(
       v.literal("content"),
@@ -709,22 +825,82 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const previous = await ctx.db.get(args.id);
-    await PostsModel.update(ctx, args);
+    const nextArgs = { ...args };
+    if (
+      Object.prototype.hasOwnProperty.call(args, "thumbnailStorageId")
+      && args.thumbnailStorageId === null
+      && !Object.prototype.hasOwnProperty.call(args, "thumbnail")
+    ) {
+      nextArgs.thumbnail = "";
+    }
+    const modelArgs = { ...nextArgs };
+    delete (modelArgs as { additionalCategoryIds?: unknown }).additionalCategoryIds;
+    await PostsModel.update(ctx, modelArgs);
+    if (previous && await isMultiCategoryEnabled(ctx, "posts")) {
+      await syncPostCategoryAssignments(ctx, args.id, args.categoryId ?? previous.categoryId, args.additionalCategoryIds);
+    }
     const shouldCheckStorage = Object.prototype.hasOwnProperty.call(args, "thumbnailStorageId");
-    if (shouldCheckStorage && previous?.thumbnailStorageId) {
+    if (shouldCheckStorage && previous) {
       const nextThumbnailStorageId = Object.prototype.hasOwnProperty.call(args, "thumbnailStorageId")
         ? args.thumbnailStorageId ?? null
         : previous.thumbnailStorageId ?? null;
-      if (!nextThumbnailStorageId || nextThumbnailStorageId !== previous.thumbnailStorageId) {
-        await ctx.runMutation(api.storage.cleanupStorageIfUnreferenced, {
-          storageId: previous.thumbnailStorageId,
-        });
-      }
+      await syncOwnerFilesAndCleanup(ctx, {
+        ownerField: "thumbnail",
+        ownerId: args.id,
+        ownerTable: "posts",
+        purpose: "post-thumbnail",
+      }, [nextThumbnailStorageId], {
+        previousStorageIds: [previous.thumbnailStorageId],
+      });
     }
     await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "post" });
     return null;
   },
   returns: v.null(),
+});
+
+export const bulkClearBrokenMedia = mutation({
+  args: { ids: v.array(v.id("posts")) },
+  handler: async (ctx, args) => {
+    let checked = 0;
+    let updated = 0;
+    let cleared = 0;
+    let skipped = 0;
+
+    for (const id of args.ids) {
+      const post = await ctx.db.get(id);
+      if (!post) {
+        skipped += 1;
+        continue;
+      }
+      checked += 1;
+      if (await isBrokenStorageBackedUrl(ctx, post.thumbnail, post.thumbnailStorageId)) {
+        await ctx.db.patch(id, { thumbnail: "", thumbnailStorageId: null });
+        await syncOwnerFilesAndCleanup(ctx, {
+          ownerField: "thumbnail",
+          ownerId: id,
+          ownerTable: "posts",
+          purpose: "post-thumbnail",
+        }, [], {
+          previousStorageIds: [post.thumbnailStorageId],
+        });
+        updated += 1;
+        cleared += 1;
+      }
+    }
+
+    if (updated > 0) {
+      await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "post" });
+    }
+
+    return { checked, cleared, skipped, updated };
+  },
+  returns: v.object({
+    checked: v.number(),
+    cleared: v.number(),
+    skipped: v.number(),
+    updated: v.number(),
+  }),
 });
 
 export const incrementViews = mutation({
@@ -739,7 +915,14 @@ export const incrementViews = mutation({
 export const remove = mutation({
   args: { cascade: v.optional(v.boolean()), id: v.id("posts") },
   handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.id);
     await PostsModel.remove(ctx, args);
+    await removeOwnerFilesAndCleanup(ctx, {
+      ownerId: args.id,
+      ownerTable: "posts",
+    }, {
+      previousStorageIds: [post?.thumbnailStorageId],
+    });
     await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "post" });
     return null;
   },
@@ -760,6 +943,15 @@ export const getDeleteInfo = query({
   }),
 });
 
+export const reorder = mutation({
+  args: { items: v.array(v.object({ id: v.id("posts"), order: v.number() })) },
+  handler: async (ctx, args) => {
+    await Promise.all(args.items.map(async (item) => ctx.db.patch(item.id, { order: item.order })));
+    return null;
+  },
+  returns: v.null(),
+});
+
 // ============================================================
 // AUTO GENERATOR (PREVIEW/REGENERATE)
 // ============================================================
@@ -771,6 +963,8 @@ const generatorRequestValidator = v.object({
   budgetMin: v.optional(v.number()),
   budgetMax: v.optional(v.number()),
   keyword: v.optional(v.string()),
+  secondaryKeyword: v.optional(v.string()),
+  keywords: v.optional(v.array(v.string())),
   compareSlugs: v.optional(v.array(v.string())),
   selectedProductSlugs: v.optional(v.array(v.string())),
   categoryId: v.optional(v.string()),
@@ -844,6 +1038,9 @@ const buildGeneratorProducts = async (
   const categoryNameMap = new Map(
     categories.filter(Boolean).map((category) => [category!._id, category!.name]),
   );
+  const categorySlugMap = new Map(
+    categories.filter(Boolean).map((category) => [category!._id, category!.slug]),
+  );
   const categoryImageMap = new Map(
     categories.filter(Boolean).map((category) => [category!._id, category!.image]),
   );
@@ -859,6 +1056,7 @@ const buildGeneratorProducts = async (
       sales: item.sales,
       image: normalizeProductImage(item),
       affiliateLink: item.affiliateLink,
+      categorySlug: categorySlugMap.get(item.categoryId),
     }));
     const categoryImage = categoryImageMap.get(product.categoryId) ?? relatedItems[0]?.image;
     return {
@@ -873,6 +1071,7 @@ const buildGeneratorProducts = async (
       affiliateLink: product.affiliateLink,
       categoryId: product.categoryId,
       categoryName: categoryNameMap.get(product.categoryId),
+      categorySlug: categorySlugMap.get(product.categoryId),
       categoryImage,
       description: product.description,
       relatedProducts: relatedItems,
@@ -963,15 +1162,26 @@ const fetchProductsForRequest = async (
   }
 
   if (template.productStrategy === "use_case" || template.productStrategy === "value_popular") {
-    const keyword = request.useCase ?? request.keyword;
-    if (template.productStrategy === "use_case" && !keyword?.trim()) {
+    const keywordPhrase = getGeneratorKeywordPhrase(request);
+    const keywords = getGeneratorKeywords(request);
+    const searchTerms = keywords.length > 0 ? keywords : keywordPhrase ? [keywordPhrase] : [];
+    if (template.productStrategy === "use_case" && searchTerms.length === 0) {
       throw new Error("Cần nhập nhu cầu/keyword");
     }
-    if (keyword?.trim()) {
-      return ctx.db
-        .query("products")
-        .withSearchIndex("search_name", (q) => q.search("name", keyword.toLowerCase()).eq("status", "Active"))
-        .take(limit);
+    if (searchTerms.length > 0) {
+      const batches = await Promise.all(searchTerms.map((term) =>
+        ctx.db
+          .query("products")
+          .withSearchIndex("search_name", (q) => q.search("name", term.toLowerCase()).eq("status", "Active"))
+          .take(limit)
+      ));
+      const uniqueProducts = new Map<Doc<"products">["_id"], Doc<"products">>();
+      batches.flat().forEach((product) => {
+        if (!uniqueProducts.has(product._id)) {
+          uniqueProducts.set(product._id, product);
+        }
+      });
+      return Array.from(uniqueProducts.values()).slice(0, limit);
     }
   }
 
@@ -1063,4 +1273,113 @@ export const createFromGeneratedPayload = mutation({
     return id;
   },
   returns: v.id("posts"),
+});
+
+export const duplicate = mutation({
+  args: { id: v.id("posts") },
+  handler: async (ctx, args) => {
+    const source = await ctx.db.get(args.id);
+    if (!source) {
+      throw new Error("Post not found");
+    }
+
+    const buildCopiedName = (base: string, attempt: number) =>
+      attempt <= 1 ? `${base} (copy)` : `${base} (copy ${attempt})`;
+      
+    let copiedTitle = "";
+    for (let attempt = 1; attempt <= 100; attempt += 1) {
+      const candidate = buildCopiedName(source.title, attempt);
+      const existing = await ctx.db
+        .query("posts")
+        .filter((q) => q.eq(q.field("title"), candidate))
+        .first();
+      if (!existing) {
+        copiedTitle = candidate;
+        break;
+      }
+    }
+    if (!copiedTitle) {
+      copiedTitle = `${source.title} (copy ${Date.now()})`;
+    }
+
+    const additionalCategoryIds = await listPostAdditionalCategoryIds(ctx, source._id, source.categoryId);
+
+    const newPostId = await PostsModel.create(ctx, {
+      authorName: source.authorName,
+      categoryId: source.categoryId,
+      content: source.content,
+      renderType: source.renderType,
+      markdownRender: source.markdownRender,
+      htmlRender: source.htmlRender,
+      excerpt: source.excerpt,
+      metaDescription: source.metaDescription,
+      metaTitle: source.metaTitle,
+      order: await PostsModel.getNextOrder(ctx),
+      slug: source.slug,
+      status: source.status,
+      thumbnail: source.thumbnail,
+      thumbnailStorageId: source.thumbnailStorageId,
+      title: copiedTitle,
+    });
+
+    if (await isMultiCategoryEnabled(ctx, "posts")) {
+      await syncPostCategoryAssignments(ctx, newPostId, source.categoryId, additionalCategoryIds);
+    }
+
+    if (source.thumbnailStorageId) {
+      await syncOwnerFilesAndCleanup(ctx, {
+        ownerField: "thumbnail",
+        ownerId: newPostId,
+        ownerTable: "posts",
+        purpose: "post-thumbnail",
+      }, [source.thumbnailStorageId]);
+    }
+
+    const newPost = await ctx.db.get(newPostId);
+    if (!newPost) {
+      throw new Error("Failed to duplicate post");
+    }
+    return newPost;
+  },
+});
+
+async function backfillPostAggregateBatch(
+  ctx: MutationCtx,
+  paginationOpts: {
+    cursor: string | null;
+    numItems: number;
+  }
+) {
+  if (paginationOpts.cursor === null) {
+    await upsertPostsAggregateSetting(ctx, POSTS_AGGREGATES_READY_KEY, false);
+  }
+  const result = await ctx.db.query("posts").paginate(paginationOpts);
+  for (const doc of result.page) {
+    await recordPostAggregates(ctx, doc);
+  }
+  if (result.isDone) {
+    await upsertPostsAggregateSetting(ctx, POSTS_AGGREGATES_READY_KEY, true);
+    await upsertPostsAggregateSetting(ctx, POSTS_AGGREGATES_BACKFILLED_AT_KEY, Date.now());
+  }
+  return {
+    continueCursor: result.continueCursor,
+    isDone: result.isDone,
+    processed: result.page.length,
+  };
+}
+
+export const backfillPublishedAggregatesForAdmin = mutation({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireAdminPermission(ctx, args.token, "posts", "edit");
+    return backfillPostAggregateBatch(ctx, args.paginationOpts);
+  },
+  returns: v.object({
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+    processed: v.number(),
+  }),
 });

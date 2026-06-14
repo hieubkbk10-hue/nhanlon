@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { CopyableInput } from '../../../components/CopyTextButton';
 import type { ImageItem } from '../../../components/MultiImageUploader';
 import { MultiImageUploader } from '../../../components/MultiImageUploader';
 import { ImageFieldWithUpload } from '../../../components/ImageFieldWithUpload';
@@ -635,9 +636,8 @@ export default function HomeComponentEditPage({
     switch (component.type) {
       case 'Banner':
       case 'Hero': {
-        const needsContent = ['fullscreen', 'split', 'parallax'].includes(heroStyle);
         return { 
-          content: needsContent ? heroContent : undefined, 
+          content: heroContent, 
           slides: heroSlides.map(s => ({ image: s.url, link: s.link })),
           style: heroStyle,
         };
@@ -802,9 +802,10 @@ export default function HomeComponentEditPage({
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input 
+              <CopyableInput
                 value={title} 
                 onChange={(e) =>{  setTitle(e.target.value); }} 
+                copyLabel="tiêu đề hiển thị"
                 required 
                 placeholder="Nhập tiêu đề component..." 
               />
@@ -848,12 +849,13 @@ export default function HomeComponentEditPage({
                   aspectRatio="banner"
                   columns={1}
                   showReorder={true}
+                  deleteMode="defer"
                   addButtonText="Thêm Banner"
                 />
               </CardContent>
             </Card>
-            {/* Form nội dung cho styles: fullscreen, split, parallax */}
-            {['fullscreen', 'split', 'parallax'].includes(heroStyle) && (
+            {/* Form nội dung cho styles: fullscreen, conquest, split, parallax */}
+            {['fullscreen', 'conquest', 'split', 'parallax'].includes(heroStyle) && (
               <Card className="mb-6">
                 <CardHeader>
                   <CardTitle className="text-base">Nội dung Hero ({heroStyle})</CardTitle>
@@ -895,7 +897,7 @@ export default function HomeComponentEditPage({
                         placeholder="VD: Khám phá ngay, Mua ngay..."
                       />
                     </div>
-                    {heroStyle === 'fullscreen' && (
+                    {(heroStyle === 'fullscreen' || heroStyle === 'conquest') && (
                       <div className="space-y-2">
                         <Label>Nút phụ</Label>
                         <Input 
@@ -2321,6 +2323,7 @@ export default function HomeComponentEditPage({
                   addButtonText="Thêm logo"
                   emptyText="Chưa có logo nào (tối thiểu 3)"
                   layout="vertical"
+                  deleteMode="defer"
                 />
               </CardContent>
             </Card>

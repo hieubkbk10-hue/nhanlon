@@ -6,6 +6,7 @@ import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverr
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { AboutForm } from '../../about/_components/AboutForm';
 import { AboutPreview } from '../../about/_components/AboutPreview';
 import {
@@ -38,7 +39,7 @@ export default function AboutCreatePage() {
     badgeText: '',
   });
 
-  const [headerExpanded, setHeaderExpanded] = React.useState(true);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], true);
 
   const [state, setState] = React.useState(DEFAULT_ABOUT_EDITOR_STATE);
 
@@ -67,6 +68,8 @@ export default function AboutCreatePage() {
       features: toAboutPersistFeatures(state.features),
       stats: toAboutPersistStats(state.stats),
       style: state.style,
+      cornerRadius: state.cornerRadius,
+      noBorderRadius: state.cornerRadius === 'none',
       hideHeader: headerState.hideHeader,
       showTitle: headerState.showTitle,
       subtitle: headerState.subtitle,
@@ -77,6 +80,8 @@ export default function AboutCreatePage() {
       uppercaseText: headerState.uppercaseText,
       showBadge: headerState.showBadge,
       badgeText: headerState.badgeText,
+      spacing: headerState.spacing,
+      noVerticalMargin: headerState.spacing === 'none',
     });
   };
 
@@ -121,14 +126,25 @@ export default function AboutCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={headerOpenSections.header}
+        onExpandedChange={(open) => toggleHeaderSection('header', open)}
+        className="mb-3"
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <AboutForm state={state} previewStyle={state.style} onChange={setState} />
+      <AboutForm
+        state={state}
+        previewStyle={state.style}
+        onChange={setState}
+        spacing={headerState.spacing}
+        onSpacingChange={headerState.setSpacing}
+        cornerRadius={state.cornerRadius ?? 'lg'}
+        onCornerRadiusChange={(cornerRadius) => {
+          setState((prev) => ({ ...prev, cornerRadius }));
+        }}
+      />
 
       <AboutPreview
         config={{
@@ -145,6 +161,9 @@ export default function AboutCreatePage() {
           features: toAboutPersistFeatures(state.features),
           stats: toAboutPersistStats(state.stats),
           style: state.style,
+          cornerRadius: state.cornerRadius,
+          noBorderRadius: state.cornerRadius === 'none',
+          noVerticalMargin: headerState.spacing === 'none',
         }}
         brandColor={validation.tokens.primary}
         secondary={validation.tokens.secondary}
@@ -166,6 +185,8 @@ export default function AboutCreatePage() {
         uppercaseText={headerState.uppercaseText}
         showBadge={headerState.showBadge}
         badgeText={headerState.badgeText}
+        spacing={headerState.spacing}
+        cornerRadius={state.cornerRadius ?? 'lg'}
       />
     </ComponentFormWrapper>
   );

@@ -8,14 +8,16 @@ import {
   GripVertical,
   Plus,
   Trash2,
-  ChevronDown,
   Search,
   X,
 } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import type { ServiceEditorItem, ServiceItemMediaAlign, ServiceItemMediaPlacement, ServiceItemMediaType } from '../_types';
 import { AVAILABLE_SERVICE_ICONS } from '../_lib/constants';
 import { AiServicesImport } from './AiServicesImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 const ImageIcon = icons.Image;
 const StarIcon = icons.Star;
@@ -172,9 +174,13 @@ export const ServicesForm = ({
   defaultExpanded?: boolean;
   onAiImport?: (items: ServiceEditorItem[]) => void;
 }) => {
-  const [expanded, setExpanded] = React.useState(defaultExpanded);
   const [draggedId, setDraggedId] = React.useState<number | null>(null);
   const [dragOverId, setDragOverId] = React.useState<number | null>(null);
+
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['services'],
+    defaultExpanded
+  );
 
   const handleAdd = () => {
     if (items.length >= maxItems) {return;}
@@ -237,37 +243,33 @@ export const ServicesForm = ({
   );
 
   return (
-    <Card className="mb-6">
-      <CardHeader className={expanded ? 'pb-0' : ''}>
-        <div
-          className="flex cursor-pointer items-center justify-between"
-          onClick={() => setExpanded((prev) => !prev)}
-        >
-          <CardTitle className="text-base">Dịch vụ ({items.length}/{maxItems})</CardTitle>
-          <div className="flex items-center gap-2">
-              {expanded && onAiImport && (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <AiServicesImport onApply={onAiImport} />
-                </div>
-              )}
-              <Button
+    <div className="mb-6">
+      <FormSectionsToggleAllButton
+        hasClosedSection={hasClosedSection}
+        onToggleAll={handleToggleAll}
+      />
+      <SubSection
+        icon={ImageIcon}
+        title={`Dịch vụ (${items.length}/${maxItems})`}
+        open={openSections.services}
+        onOpenChange={(open) => toggleSection('services', open)}
+        actions={(
+          <>
+            {onAiImport && <AiServicesImport onApply={onAiImport} />}
+            <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={(e) => { e.stopPropagation(); handleAdd(); }}
+              onClick={handleAdd}
               className="gap-2"
               disabled={items.length >= maxItems}
             >
               <Plus size={14} /> Thêm
             </Button>
-            <ChevronDown
-              size={16}
-              className={cn('transition-transform duration-200 text-slate-400', expanded ? 'rotate-180' : '')}
-            />
-          </div>
-        </div>
-      </CardHeader>
-      {expanded && <CardContent className="space-y-3 pt-4">
+          </>
+        )}
+      >
+      <div className="space-y-3">
         <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
           <Label className="text-sm font-medium">Căn icon/ảnh cho toàn bộ component</Label>
           <div className="grid grid-cols-2 gap-2">
@@ -386,8 +388,11 @@ export const ServicesForm = ({
                       value={item.image}
                       onChange={(url) => handleUpdate(item.id, 'image', url ?? '')}
                       folder="services"
+                      naming={{ entityName: 'services', field: 'image', index: idx + 1 }}
                       label=""
                       previewSize="sm"
+                      cropAspectRatio="square"
+                      smartLogoCrop
                     />
                   ) : (
                     <IconCombobox
@@ -430,7 +435,8 @@ export const ServicesForm = ({
             </div>
           );
         })}
-      </CardContent>}
-    </Card>
+      </div>
+      </SubSection>
+    </div>
   );
 };

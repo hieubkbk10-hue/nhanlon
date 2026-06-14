@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { seedPresetProductOptions } from "./seeders/productOptions.seeder";
 
 const displayType = v.union(
@@ -53,14 +53,76 @@ export const listActive = query({
   returns: v.array(optionDoc),
 });
 
+export const listActiveWithValues = query({
+  args: {},
+  handler: async (ctx) => {
+    const options = await ctx.db
+      .query("productOptions")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    const result = await Promise.all(
+      options.map(async (option) => {
+        const values = await ctx.db
+          .query("productOptionValues")
+          .withIndex("by_option_active", (q) => q.eq("optionId", option._id).eq("active", true))
+          .collect();
+        return {
+          ...option,
+          values: values.sort((a, b) => a.order - b.order),
+        };
+      })
+    );
+
+    return result;
+  },
+  returns: v.array(
+    v.object({
+      _creationTime: v.number(),
+      _id: v.id("productOptions"),
+      active: v.boolean(),
+      compareUnit: v.optional(v.string()),
+      displayType,
+      inputType: v.optional(inputType),
+      isPreset: v.boolean(),
+      name: v.string(),
+      order: v.number(),
+      showPriceCompare: v.optional(v.boolean()),
+      slug: v.string(),
+      unit: v.optional(v.string()),
+      values: v.array(
+        v.object({
+          _creationTime: v.number(),
+          _id: v.id("productOptionValues"),
+          active: v.boolean(),
+          badge: v.optional(v.string()),
+          colorCode: v.optional(v.string()),
+          image: v.optional(v.string()),
+          isLifetime: v.optional(v.boolean()),
+          label: v.optional(v.string()),
+          numericValue: v.optional(v.number()),
+          optionId: v.id("productOptions"),
+          order: v.number(),
+          value: v.string(),
+        })
+      ),
+    })
+  ),
+});
+
+
 export const listByIds = query({
-  args: { ids: v.array(v.id("productOptions")) },
+  args: { ids: v.array(v.string()) },
   handler: async (ctx, args) => {
-    if (args.ids.length === 0) {
+    const ids = args.ids
+      .map((id) => ctx.db.normalizeId("productOptions", id))
+      .filter((id): id is Id<"productOptions"> => id !== null);
+
+    if (ids.length === 0) {
       return [];
     }
 
-    const items = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
+    const items = await Promise.all(ids.map((id) => ctx.db.get(id)));
     return items.filter((item): item is Doc<"productOptions"> => item !== null).sort((a, b) => a.order - b.order);
   },
   returns: v.array(optionDoc),

@@ -1,18 +1,32 @@
 'use client';
 
 import React from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
 import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import Link from 'next/link';
 import useEmblaCarousel from 'embla-carousel-react';
 import { ArrowRight, ArrowUpRight, Briefcase, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '../../../components/ui';
+import { SectionHeader } from '../../_shared/components/SectionHeader';
 import type { ServiceListColorTokens } from '../_lib/colors';
+import {
+  DEFAULT_SERVICE_LIST_CARD_RADIUS,
+  DEFAULT_SERVICE_LIST_DESKTOP_COLUMNS,
+  getServiceListCardRadiusClassName,
+  getServiceListImageRadiusClassName,
+  getServiceListSectionSpacingClassName,
+  normalizeServiceListCardRadius,
+  normalizeServiceListDesktopColumns,
+} from '../_types';
 import type {
   ServiceListBrandMode,
+  ServiceListCardRadius,
+  ServiceListDesktopColumns,
   ServiceListPreviewItem,
   ServiceListStyle,
 } from '../_types';
-
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 type ServiceListSharedContext = 'preview' | 'site';
 type ServiceListPreviewDevice = 'mobile' | 'tablet' | 'desktop';
 
@@ -39,6 +53,9 @@ interface ServiceListSectionSharedProps {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  cardRadius?: ServiceListCardRadius;
+  desktopColumns?: ServiceListDesktopColumns;
   imagePriorityCount?: number;
 }
 
@@ -162,14 +179,75 @@ export function ServiceListSectionShared({
   uppercaseText = false,
   showBadge = true,
   badgeText = '',
+  spacing,
+  cardRadius = DEFAULT_SERVICE_LIST_CARD_RADIUS,
+  desktopColumns = DEFAULT_SERVICE_LIST_DESKTOP_COLUMNS,
   imagePriorityCount = 0,
 }: ServiceListSectionSharedProps) {
   const isPreview = context === 'preview';
   const isMobilePreview = isPreview && device === 'mobile';
   const isTabletPreview = isPreview && device === 'tablet';
+
+  const systemConfig = useQuery(api.homeComponentSystemConfig.getConfig);
+
+  const isDarkBg = React.useMemo(() => {
+    if (!systemConfig?.homePageBackground) {return false;}
+    const { type, customColor } = systemConfig.homePageBackground;
+    if (type === 'black') {return true;}
+    if (type === 'custom' && customColor) {
+      const color = customColor.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+        const r = Number.parseInt(color.slice(1, 3), 16);
+        const g = Number.parseInt(color.slice(3, 5), 16);
+        const b = Number.parseInt(color.slice(5, 7), 16);
+        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return luma < 128;
+      }
+    }
+    return false;
+  }, [systemConfig?.homePageBackground]);
+
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: 'start',
+    dragFree: true,
+    containScroll: 'trimSnaps',
+  });
+  const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+  const [canScrollNext, setCanScrollNext] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!emblaApi) { return; }
+    const update = () => {
+      setCanScrollPrev(emblaApi.canScrollPrev());
+      setCanScrollNext(emblaApi.canScrollNext());
+    };
+    update();
+    emblaApi.on('select', update);
+    emblaApi.on('reInit', update);
+    return () => { emblaApi.off('select', update); emblaApi.off('reInit', update); };
+  }, [emblaApi]);
   const heading = sectionTitle.trim() || 'Dịch vụ';
   const shouldShowViewAll = showViewAll && items.length >= 3;
-  const shouldRenderHeaderContent = !hideHeader && (showTitle || showSubtitle || showBadge);
+  const shouldRenderHeaderContent = !hideHeader && (
+    (showTitle && heading.length > 0)
+    || (showSubtitle && subtitle.trim().length > 0)
+    || (showBadge && badgeText.trim().length > 0)
+  );
+  const normalizedCardRadius = normalizeServiceListCardRadius(cardRadius);
+  const normalizedDesktopColumns = normalizeServiceListDesktopColumns(desktopColumns);
+  const cardRadiusClassName = getServiceListCardRadiusClassName(normalizedCardRadius);
+  const imageRadiusClassName = getServiceListImageRadiusClassName(normalizedCardRadius);
+  const getResponsiveGridClassName = () => {
+    if (isPreview) {
+      if (isMobilePreview) { return normalizedDesktopColumns === 4 ? 'grid-cols-2' : 'grid-cols-1'; }
+      if (isTabletPreview) { return normalizedDesktopColumns === 4 ? 'grid-cols-2' : 'grid-cols-3'; }
+      return normalizedDesktopColumns === 4 ? 'grid-cols-4' : 'grid-cols-3';
+    }
+
+    return normalizedDesktopColumns === 4
+      ? 'grid-cols-2 md:grid-cols-2 lg:grid-cols-4'
+      : 'grid-cols-1 md:grid-cols-3';
+  };
 
 
   const showcasePageSize = 8;
@@ -208,9 +286,10 @@ export function ServiceListSectionShared({
 
 
 
-  const baseSectionPadding = isPreview
-    ? cn('py-7 md:py-8', isMobilePreview ? 'px-3' : 'px-4 md:px-6')
-    : 'py-12 md:py-16 px-4 md:px-6';
+  const baseSectionPadding = cn(
+    getServiceListSectionSpacingClassName(spacing, isPreview ? 'preview' : 'site'),
+    isPreview ? (isMobilePreview ? 'px-3' : 'px-4 md:px-6') : 'px-4 md:px-6',
+  );
 
   const viewAllAction = shouldShowViewAll
     ? (
@@ -235,7 +314,6 @@ export function ServiceListSectionShared({
     )
     : null;
 
-  const alignClass = headerAlign === 'center' ? 'text-center' : headerAlign === 'right' ? 'text-right' : 'text-left';
   const flexAlignClass = headerAlign === 'center' ? 'justify-center' : headerAlign === 'right' ? 'justify-end' : 'justify-start';
 
   const renderHeader = ({
@@ -247,57 +325,23 @@ export function ServiceListSectionShared({
   }) => {
     if (!shouldRenderHeaderContent) {return null;}
 
-    const textTransform = uppercaseText ? 'uppercase' as const : undefined;
-
-    const titleEl = showTitle && (
-      <h2
-        className={cn(
-          'tracking-tight font-bold leading-tight text-balance',
-          isPreview
-            ? (isMobilePreview ? 'text-xl' : 'text-2xl')
-            : 'text-2xl md:text-3xl',
-        )}
-        style={{ color: titleColorPrimary ? tokens.primary : tokens.heading, textTransform }}
-      >
-        {heading}
-      </h2>
-    );
-
-    const subtitleEl = showSubtitle && subtitle && (
-      <p
-        className="text-sm leading-relaxed"
-        style={{ color: tokens.descriptionText, textTransform }}
-      >
-        {subtitle}
-      </p>
-    );
-
-    const badgeEl = showBadge && badgeText && (
-      <span
-        className="inline-block rounded-full px-3 py-0.5 text-xs font-semibold uppercase tracking-wider"
-        style={{ backgroundColor: `${tokens.primary}15`, color: tokens.primary }}
-      >
-        {badgeText}
-      </span>
-    );
-
     return (
-      <div className={cn(maxWidthClass, 'mx-auto', marginClass, alignClass)}>
-        <div className={cn('space-y-2', headerAlign === 'center' ? 'mx-auto max-w-2xl' : '')}>
-          {subtitleAboveTitle ? (
-            <>
-              {badgeEl}
-              {subtitleEl}
-              {titleEl}
-            </>
-          ) : (
-            <>
-              {badgeEl}
-              {titleEl}
-              {subtitleEl}
-            </>
-          )}
-        </div>
+      <div className={cn(maxWidthClass, 'mx-auto', marginClass)}>
+        <SectionHeader
+          title={heading}
+          subtitle={subtitle}
+          badgeText={badgeText}
+          hideHeader={hideHeader}
+          showTitle={showTitle}
+          showSubtitle={showSubtitle}
+          showBadge={showBadge}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          brandColor={tokens.primary}
+          className="mb-0"
+        />
         {shouldShowViewAll && headerAlign !== 'center' && (
           <div className={cn('mt-3 flex', flexAlignClass)}>
             {viewAllAction}
@@ -353,11 +397,11 @@ export function ServiceListSectionShared({
     const description = stripHtml(item.description);
     return (
       <>
-        <h3 className="font-semibold leading-tight line-clamp-2" style={{ color: tokens.titleText }}>
+        <h3 className="font-semibold leading-tight break-words" style={{ color: tokens.titleText }}>
           {item.name}
         </h3>
         {description ? (
-          <p className="mt-1 text-sm line-clamp-2" style={{ color: tokens.descriptionText }}>
+          <p className="mt-1 text-sm leading-relaxed break-words" style={{ color: tokens.descriptionText }}>
             {description}
           </p>
         ) : null}
@@ -380,10 +424,8 @@ export function ServiceListSectionShared({
 
         <div
           className={cn(
-            'max-w-7xl mx-auto grid gap-4 md:gap-6',
-            isPreview
-              ? (isMobilePreview ? 'grid-cols-1' : (isTabletPreview ? 'grid-cols-2' : 'grid-cols-3'))
-              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+          'max-w-7xl mx-auto grid gap-4 md:gap-6',
+          getResponsiveGridClassName(),
           )}
         >
           {gridItems.map((item, index) => wrapItem({
@@ -391,13 +433,13 @@ export function ServiceListSectionShared({
             className: 'group block',
             children: (
               <article
-                className="relative h-full rounded-xl border p-3 md:p-4"
+                className={cn('relative h-full border p-3 md:p-4', cardRadiusClassName)}
                 style={{
                   backgroundColor: tokens.cardBackground,
                   borderColor: tokens.cardBorder,
                 }}
               >
-                <div className="relative mb-3 overflow-hidden rounded-lg aspect-[4/3]">
+                <div className={cn('relative mb-3 overflow-hidden aspect-[4/3]', imageRadiusClassName)}>
                   {item.image ? (
                     <ServiceImage
                       context={context}
@@ -439,13 +481,13 @@ export function ServiceListSectionShared({
               className: 'group block',
               children: (
                 <article
-                  className="relative rounded-xl border p-2.5"
+                  className={cn('relative border p-2.5', cardRadiusClassName)}
                   style={{
                     backgroundColor: tokens.cardBackground,
                     borderColor: tokens.cardBorder,
                   }}
                 >
-                  <div className="relative mb-2 overflow-hidden rounded-lg aspect-square">
+                  <div className={cn('relative mb-2 overflow-hidden aspect-square', imageRadiusClassName)}>
                     {item.image ? (
                       <ServiceImage
                         context={context}
@@ -464,7 +506,7 @@ export function ServiceListSectionShared({
                     ) : null}
                   </div>
 
-                  <h3 className="text-sm font-semibold line-clamp-2" style={{ color: tokens.titleText }}>
+                  <h3 className="text-sm font-semibold leading-tight break-words" style={{ color: tokens.titleText }}>
                     {item.name}
                   </h3>
                   <span className="mt-1 block text-xs font-semibold" style={{ color: tokens.priceText }}>
@@ -504,13 +546,13 @@ export function ServiceListSectionShared({
               ),
               children: (
                 <article
-                  className="relative h-full rounded-xl border p-3 md:p-4"
+                  className={cn('relative h-full border p-3 md:p-4', cardRadiusClassName)}
                   style={{
                     backgroundColor: tokens.cardBackground,
                     borderColor: tokens.cardBorder,
                   }}
                 >
-                  <div className={cn('relative mb-3 overflow-hidden rounded-lg', isFeatured ? 'h-[65%] md:h-[70%]' : 'h-[58%]')}>
+                  <div className={cn('relative mb-3 overflow-hidden', imageRadiusClassName, isFeatured ? 'h-[65%] md:h-[70%]' : 'h-[58%]')}>
                     {item.image ? (
                       <ServiceImage
                         context={context}
@@ -543,12 +585,12 @@ export function ServiceListSectionShared({
                     ) : null}
                   </div>
 
-                  <h3 className={cn('font-semibold line-clamp-2', isFeatured ? 'text-base md:text-lg' : 'text-sm md:text-base')} style={{ color: tokens.titleText }}>
+                  <h3 className={cn('font-semibold leading-tight break-words', isFeatured ? 'text-base md:text-lg' : 'text-sm md:text-base')} style={{ color: tokens.titleText }}>
                     {item.name}
                   </h3>
 
                   {isFeatured && item.description ? (
-                    <p className="mt-1 text-sm line-clamp-2" style={{ color: tokens.descriptionText }}>
+                    <p className="mt-1 text-sm leading-relaxed break-words" style={{ color: tokens.descriptionText }}>
                       {stripHtml(item.description)}
                     </p>
                   ) : null}
@@ -581,14 +623,14 @@ export function ServiceListSectionShared({
             className: 'group block',
             children: (
               <article
-                className="rounded-xl border p-3 md:p-4"
+                className={cn('border p-3 md:p-4', cardRadiusClassName)}
                 style={{
                   backgroundColor: tokens.cardBackground,
                   borderColor: tokens.cardBorder,
                 }}
               >
                 <div className="flex items-center gap-3 md:gap-4">
-                  <div className="relative h-20 w-20 md:h-24 md:w-24 overflow-hidden rounded-lg flex-shrink-0">
+                  <div className={cn('relative h-20 w-20 md:h-24 md:w-24 overflow-hidden flex-shrink-0', imageRadiusClassName)}>
                     {item.image ? (
                       <ServiceImage
                         context={context}
@@ -608,12 +650,12 @@ export function ServiceListSectionShared({
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-sm md:text-base line-clamp-2" style={{ color: tokens.titleText }}>
+                    <h3 className="font-semibold text-sm md:text-base leading-tight break-words" style={{ color: tokens.titleText }}>
                       {item.name}
                     </h3>
 
                     {item.description ? (
-                      <p className="mt-1 text-xs md:text-sm line-clamp-2" style={{ color: tokens.descriptionText }}>
+                      <p className="mt-1 text-xs md:text-sm leading-relaxed break-words" style={{ color: tokens.descriptionText }}>
                         {stripHtml(item.description)}
                       </p>
                     ) : null}
@@ -637,127 +679,103 @@ export function ServiceListSectionShared({
   const renderCarousel = () => {
     const displayedItems = items.slice(0, 8);
 
-    const EmblaServiceCarousel = () => {
-      const [emblaRef, emblaApi] = useEmblaCarousel({
-        align: 'start',
-        dragFree: true,
-        containScroll: 'trimSnaps',
-      });
-      const [canScrollPrev, setCanScrollPrev] = React.useState(false);
-      const [canScrollNext, setCanScrollNext] = React.useState(false);
-
-      React.useEffect(() => {
-        if (!emblaApi) { return; }
-        const update = () => {
-          setCanScrollPrev(emblaApi.canScrollPrev());
-          setCanScrollNext(emblaApi.canScrollNext());
-        };
-        update();
-        emblaApi.on('select', update);
-        emblaApi.on('reInit', update);
-        return () => { emblaApi.off('select', update); emblaApi.off('reInit', update); };
-      }, [emblaApi]);
-
-      return (
-        <section className={baseSectionPadding} data-mode={mode}>
-          <div className="max-w-7xl mx-auto">
-            <div className={cn('flex items-end justify-between gap-3', (shouldRenderHeaderContent || canScrollPrev || canScrollNext) && 'mb-4 md:mb-6')}>
-              <div className="min-w-0 flex-1">
-                {renderHeader({ maxWidthClass: '', marginClass: 'mb-0' })}
-              </div>
-              {(canScrollPrev || canScrollNext) ? (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    disabled={!canScrollPrev}
-                    onClick={() => emblaApi?.scrollPrev()}
-                    className={cn(
-                      'inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all',
-                      canScrollPrev
-                        ? 'hover:shadow-sm'
-                        : 'cursor-not-allowed opacity-40',
-                    )}
-                    style={{
-                      backgroundColor: tokens.navButtonBg,
-                      borderColor: tokens.navButtonBorder,
-                      color: tokens.navButtonText,
-                    }}
-                    aria-label="Cuộn trái"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!canScrollNext}
-                    onClick={() => emblaApi?.scrollNext()}
-                    className={cn(
-                      'inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all',
-                      canScrollNext
-                        ? 'hover:shadow-sm'
-                        : 'cursor-not-allowed opacity-40',
-                    )}
-                    style={{
-                      backgroundColor: tokens.navButtonBg,
-                      borderColor: tokens.navButtonBorder,
-                      color: tokens.navButtonText,
-                    }}
-                    aria-label="Cuộn phải"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              ) : null}
+    return (
+      <section className={baseSectionPadding} data-mode={mode}>
+        <div className="max-w-7xl mx-auto">
+          <div className={cn('flex items-end justify-between gap-3', (shouldRenderHeaderContent || canScrollPrev || canScrollNext) && 'mb-4 md:mb-6')}>
+            <div className="min-w-0 flex-1">
+              {renderHeader({ maxWidthClass: '', marginClass: 'mb-0' })}
             </div>
-
-            <div className="overflow-hidden" ref={emblaRef}>
-              <div className="flex gap-3 md:gap-4 backface-hidden touch-pan-y">
-                {displayedItems.map((item, index) => wrapItem({
-                  item,
-                  className: cn(
-                    'group flex-none block select-none',
-                    isPreview
-                      ? (isMobilePreview ? 'w-[72%]' : (isTabletPreview ? 'w-[260px]' : 'w-[290px]'))
-                      : 'w-[76vw] sm:w-[280px] lg:w-[300px]',
-                  ),
-                  children: (
-                    <article
-                      className="h-full rounded-xl border p-3"
-                      style={{
-                        backgroundColor: tokens.cardBackground,
-                        borderColor: tokens.cardBorder,
-                      }}
-                    >
-                      <div className="relative mb-3 overflow-hidden rounded-lg aspect-[4/3]">
-                        {item.image ? (
-                          <ServiceImage
-                            context={context}
-                            src={item.image}
-                            alt={item.name}
-                            className="h-full w-full object-cover"
-                            sizes="(max-width: 768px) 100vw, 300px"
-                            priority={!isPreview && index < imagePriorityCount}
-                          />
-                        ) : renderFallback(28)}
-
-                        {item.tag ? (
-                          <div className="absolute left-2 top-2 z-10">
-                            <ServiceBadge tag={item.tag} tokens={tokens} />
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {renderCardContent(item)}
-                    </article>
-                  ),
-                }))}
+            {(canScrollPrev || canScrollNext) ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={!canScrollPrev}
+                  onClick={() => emblaApi?.scrollPrev()}
+                  className={cn(
+                    'inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all',
+                    canScrollPrev
+                      ? 'hover:shadow-sm'
+                      : 'cursor-not-allowed opacity-40',
+                  )}
+                  style={{
+                    backgroundColor: tokens.navButtonBg,
+                    borderColor: tokens.navButtonBorder,
+                    color: tokens.navButtonText,
+                  }}
+                  aria-label="Cuộn trái"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  disabled={!canScrollNext}
+                  onClick={() => emblaApi?.scrollNext()}
+                  className={cn(
+                    'inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all',
+                    canScrollNext
+                      ? 'hover:shadow-sm'
+                      : 'cursor-not-allowed opacity-40',
+                  )}
+                  style={{
+                    backgroundColor: tokens.navButtonBg,
+                    borderColor: tokens.navButtonBorder,
+                    color: tokens.navButtonText,
+                  }}
+                  aria-label="Cuộn phải"
+                >
+                  <ChevronRight size={18} />
+                </button>
               </div>
+            ) : null}
+          </div>
+
+          <div className="overflow-hidden" ref={emblaRef}>
+            <div className="flex gap-3 md:gap-4 backface-hidden touch-pan-y">
+              {displayedItems.map((item, index) => wrapItem({
+                item,
+                className: cn(
+                  'group flex-none block select-none',
+                  isPreview
+                    ? (isMobilePreview ? 'w-[72%]' : (isTabletPreview ? 'w-[260px]' : 'w-[290px]'))
+                    : 'w-[76vw] sm:w-[280px] lg:w-[300px]',
+                ),
+                children: (
+                  <article
+                    className={cn('h-full border p-3', cardRadiusClassName)}
+                    style={{
+                      backgroundColor: tokens.cardBackground,
+                      borderColor: tokens.cardBorder,
+                    }}
+                  >
+                    <div className={cn('relative mb-3 overflow-hidden aspect-[4/3]', imageRadiusClassName)}>
+                      {item.image ? (
+                        <ServiceImage
+                          context={context}
+                          src={item.image}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                          sizes="(max-width: 768px) 100vw, 300px"
+                          priority={!isPreview && index < imagePriorityCount}
+                        />
+                      ) : renderFallback(28)}
+
+                      {item.tag ? (
+                        <div className="absolute left-2 top-2 z-10">
+                          <ServiceBadge tag={item.tag} tokens={tokens} />
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {renderCardContent(item)}
+                  </article>
+                ),
+              }))}
             </div>
           </div>
-        </section>
-      );
-    };
-
-    return <EmblaServiceCarousel />;
+        </div>
+      </section>
+    );
   };
 
   const renderMinimal = () => {
@@ -770,9 +788,7 @@ export function ServiceListSectionShared({
         <div
           className={cn(
             'max-w-7xl mx-auto grid gap-5 md:gap-6',
-            isPreview
-              ? (isMobilePreview ? 'grid-cols-1' : (isTabletPreview ? 'grid-cols-2' : 'grid-cols-3'))
-              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+            getResponsiveGridClassName(),
           )}
         >
           {minimalItems.map((item, index) => wrapItem({
@@ -781,7 +797,7 @@ export function ServiceListSectionShared({
             children: (
               <article>
                 <div
-                  className="relative mb-4 overflow-hidden rounded-2xl border aspect-[3/2]"
+                  className={cn('relative mb-4 overflow-hidden border aspect-[3/2]', cardRadiusClassName)}
                   style={{
                     borderColor: tokens.cardBorder,
                     backgroundColor: tokens.imageFallbackBg,
@@ -805,12 +821,12 @@ export function ServiceListSectionShared({
                   ) : null}
                 </div>
 
-                <h3 className="text-base md:text-lg font-semibold line-clamp-2" style={{ color: tokens.titleText }}>
+                <h3 className="text-base md:text-lg font-semibold leading-tight break-words" style={{ color: tokens.titleText }}>
                   {item.name}
                 </h3>
 
                 {item.description ? (
-                  <p className="mt-1 text-sm line-clamp-2" style={{ color: tokens.descriptionText }}>
+                  <p className="mt-1 text-sm leading-relaxed break-words" style={{ color: tokens.descriptionText }}>
                     {stripHtml(item.description)}
                   </p>
                 ) : null}
@@ -822,6 +838,119 @@ export function ServiceListSectionShared({
                   <span className="inline-flex items-center gap-1 text-sm font-medium" style={{ color: tokens.inlineMetaText }}>
                     Chi tiết <ArrowUpRight size={15} />
                   </span>
+                </div>
+              </article>
+            ),
+          }))}
+        </div>
+      </section>
+    );
+  };
+
+  const renderKanban = () => {
+    const kanbanItems = items.slice(0, isPreview ? (isMobilePreview ? 3 : 6) : 6);
+
+    return (
+      <section className={baseSectionPadding} data-mode={mode}>
+        {renderHeader({})}
+
+        <div
+          className={cn(
+            'max-w-7xl mx-auto grid gap-2 md:gap-3',
+            getResponsiveGridClassName(),
+          )}
+        >
+          {kanbanItems.map((item) => wrapItem({
+            item,
+            className: 'group block select-none',
+            children: (
+              <article
+                className={cn(
+                  'relative h-full flex flex-col border p-3 transition-all duration-200 rounded-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:border-zinc-400 dark:hover:border-zinc-600',
+                )}
+                style={{
+                  backgroundColor: isDarkBg ? 'rgba(24, 24, 27, 0.65)' : '#ffffff',
+                  borderColor: isDarkBg ? '#27272a' : '#e4e4e7',
+                }}
+              >
+                <div 
+                  className={cn('relative mb-3 overflow-hidden aspect-[16/10] rounded-sm')}
+                  style={{
+                    backgroundColor: isDarkBg ? '#18181b' : '#f4f4f5',
+                  }}
+                >
+                  {item.image ? (
+                    <Image
+                      src={item.image}
+                      alt={item.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      draggable={false}
+                      unoptimized={context === 'preview'}
+                    />
+                  ) : renderFallback(28)}
+
+                  {item.tag ? (
+                    <div className="absolute left-2 top-2 z-10">
+                      {item.tag === 'hot' ? (
+                        <span
+                          className="inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                          style={{
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderColor: 'rgba(239, 68, 68, 0.2)',
+                            color: '#ef4444',
+                          }}
+                        >
+                          Hot
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                          style={{
+                            backgroundColor: isDarkBg ? 'rgba(255, 255, 255, 0.08)' : 'rgba(9, 9, 11, 0.05)',
+                            borderColor: isDarkBg ? 'rgba(255, 255, 255, 0.15)' : 'rgba(9, 9, 11, 0.1)',
+                            color: isDarkBg ? '#a1a1aa' : '#71717a',
+                          }}
+                        >
+                          New
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col flex-1">
+                  <h3 
+                    className="text-xs font-semibold leading-snug break-words" 
+                    style={{ color: isDarkBg ? '#f4f4f5' : '#09090b' }}
+                  >
+                    {item.name}
+                  </h3>
+                  
+                  {item.description ? (
+                    <p 
+                      className="mt-1 text-[11px] leading-relaxed break-words line-clamp-2" 
+                      style={{ color: isDarkBg ? '#a1a1aa' : '#71717a' }}
+                    >
+                      {stripHtml(item.description)}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-auto pt-3 flex items-center justify-between gap-2">
+                    <span 
+                      className="text-xs font-semibold" 
+                      style={{ color: tokens.priceText }}
+                    >
+                      {formatServicePrice(item.price)}
+                    </span>
+                    <span 
+                      className="inline-flex items-center gap-1 text-[11px] font-medium transition-all opacity-0 group-hover:opacity-100" 
+                      style={{ color: tokens.inlineMetaText }}
+                    >
+                      Chi tiết <ArrowUpRight size={13} />
+                    </span>
+                  </div>
                 </div>
               </article>
             ),
@@ -847,13 +976,11 @@ export function ServiceListSectionShared({
       ? (isMobilePreview ? 'text-sm' : 'text-base')
       : 'text-sm md:text-base';
 
-    const showcaseGridClassName = isPreview
-      ? (isMobilePreview ? 'grid-cols-2' : (isTabletPreview ? 'grid-cols-3' : 'grid-cols-4'))
-      : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
+    const showcaseGridClassName = getResponsiveGridClassName();
 
     return (
       <section className={baseSectionPadding} data-mode={mode}>
-        <div className={cn('max-w-7xl mx-auto rounded-md border bg-white shadow-sm', showcaseWrapperPaddingClassName)} style={{ borderColor: `${tokens.cardBorder}80`, backgroundColor: tokens.cardBackground }}>
+        <div className={cn('max-w-7xl mx-auto bg-white', showcaseWrapperPaddingClassName)} style={{ backgroundColor: tokens.cardBackground }}>
           <div className={cn('flex items-start justify-between gap-3', (shouldRenderHeaderContent || showcaseCanPaginate) && 'mb-6 md:mb-8')}>
             <div className="min-w-0 flex-1">
               {renderHeader({ maxWidthClass: '', marginClass: 'mb-0' })}
@@ -867,8 +994,13 @@ export function ServiceListSectionShared({
                   aria-label="Trang trước"
                   className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
-                    canGoToPreviousShowcasePage ? 'bg-gray-200 text-gray-500 hover:bg-gray-300' : 'cursor-not-allowed bg-gray-200 text-gray-500 opacity-50',
+                    canGoToPreviousShowcasePage ? 'border' : 'cursor-not-allowed border opacity-50',
                   )}
+                  style={{
+                    backgroundColor: tokens.navButtonBg,
+                    borderColor: tokens.navButtonBorder,
+                    color: tokens.navButtonText,
+                  }}
                 >
                   <ChevronRight size={18} className="rotate-180" />
                 </button>
@@ -879,8 +1011,13 @@ export function ServiceListSectionShared({
                   aria-label="Trang sau"
                   className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
-                    canGoToNextShowcasePage ? 'bg-gray-300 text-gray-700 hover:bg-gray-400' : 'cursor-not-allowed bg-gray-300 text-gray-700 opacity-50',
+                    canGoToNextShowcasePage ? 'border' : 'cursor-not-allowed border opacity-50',
                   )}
+                  style={{
+                    backgroundColor: tokens.navButtonBg,
+                    borderColor: tokens.navButtonBorder,
+                    color: tokens.navButtonText,
+                  }}
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -894,7 +1031,7 @@ export function ServiceListSectionShared({
               className: 'group cursor-pointer',
               children: (
                 <article className="flex flex-col">
-                  <div className="relative mb-3 aspect-[16/10] w-full overflow-hidden rounded-md bg-slate-100">
+                  <div className={cn('relative mb-3 aspect-[16/10] w-full overflow-hidden', imageRadiusClassName)} style={{ backgroundColor: tokens.imageFallbackBg }}>
                     {item.image ? (
                       <ServiceImage
                         context={context}
@@ -913,7 +1050,7 @@ export function ServiceListSectionShared({
                     ) : null}
                   </div>
                   <div className="flex flex-1 flex-col">
-                    <h3 className={cn('mb-2 line-clamp-2 font-semibold leading-snug', showcaseTitleClassName)} style={{ color: tokens.titleText }}>
+                    <h3 className={cn('mb-2 font-semibold leading-snug break-words', showcaseTitleClassName)} style={{ color: tokens.titleText }}>
                       {item.name}
                     </h3>
                     <div className="mt-auto inline-flex items-center gap-1.5 text-[13px]" style={{ color: tokens.priceText }}>
@@ -928,13 +1065,13 @@ export function ServiceListSectionShared({
           {shouldShowViewAll ? (
             context === 'site' ? (
               <Link href={viewAllHref} className="flex justify-center pt-2">
-                <div className="rounded px-6 py-2.5 text-white" style={{ backgroundColor: tokens.ctaSolidBg }}>
+                <div className="rounded px-6 py-2.5" style={{ backgroundColor: tokens.ctaSolidBg, color: tokens.ctaSolidText }}>
                   Xem tất cả
                 </div>
               </Link>
             ) : (
               <div className="flex justify-center pt-2">
-                <div className="rounded px-6 py-2.5 text-white" style={{ backgroundColor: tokens.ctaSolidBg }}>
+                <div className="rounded px-6 py-2.5" style={{ backgroundColor: tokens.ctaSolidBg, color: tokens.ctaSolidText }}>
                   Xem tất cả
                 </div>
               </div>
@@ -948,7 +1085,7 @@ export function ServiceListSectionShared({
   if (items.length === 0) {
     return (
       <section className={baseSectionPadding} data-mode={mode}>
-        <div className="max-w-7xl mx-auto text-center py-10 rounded-xl border" style={{ borderColor: tokens.neutralBorder, backgroundColor: tokens.neutralBackground }}>
+        <div className={cn('max-w-7xl mx-auto text-center py-10 border', cardRadiusClassName)} style={{ borderColor: tokens.neutralBorder, backgroundColor: tokens.neutralBackground }}>
           {shouldRenderHeaderContent ? (
             <h2 className="text-xl font-semibold" style={{ color: tokens.heading }}>{heading}</h2>
           ) : null}
@@ -963,6 +1100,7 @@ export function ServiceListSectionShared({
   if (style === 'list') {return renderList();}
   if (style === 'carousel') {return renderCarousel();}
   if (style === 'minimal') {return renderMinimal();}
+  if (style === 'kanban') {return renderKanban();}
   return renderShowcase();
 }
 

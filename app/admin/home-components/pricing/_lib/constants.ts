@@ -3,14 +3,18 @@ import type {
   PricingPlan,
   PricingStyle,
 } from '../_types';
+import { DEFAULT_PRICING_CORNER_RADIUS, normalizePricingCornerRadius } from '../_types';
+import { DEFAULT_SECTION_SPACING, normalizeSectionSpacing, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 
 export const PRICING_STYLES: Array<{ id: PricingStyle; label: string }> = [
-  { id: 'cards', label: 'Cards' },
-  { id: 'horizontal', label: 'Ngang' },
-  { id: 'minimal', label: 'Minimal' },
-  { id: 'comparison', label: 'So sánh' },
-  { id: 'featured', label: 'Nổi bật' },
-  { id: 'compact', label: 'Gọn' },
+  { id: 'cards', label: '(1) Dạng thẻ' },
+  { id: 'horizontal', label: '(2) Hàng ngang' },
+  { id: 'minimal', label: '(3) Tối giản' },
+  { id: 'comparison', label: '(4) So sánh' },
+  { id: 'featured', label: '(5) Nổi bật' },
+  { id: 'compact', label: '(6) Thu gọn' },
+  { id: 'tabbed', label: '(7) Phân tab' },
+  { id: 'construction', label: '(8) Góc cạnh' },
 ];
 
 const DEFAULT_PRICING_STYLE: PricingStyle = 'cards';
@@ -60,7 +64,9 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  spacing: DEFAULT_SECTION_SPACING,
   gridCols: 3,
+  cornerRadius: DEFAULT_PRICING_CORNER_RADIUS,
 };
 
 const isPricingStyle = (value: unknown): value is PricingStyle => (
@@ -70,6 +76,8 @@ const isPricingStyle = (value: unknown): value is PricingStyle => (
   || value === 'comparison'
   || value === 'featured'
   || value === 'compact'
+  || value === 'tabbed'
+  || value === 'construction'
 );
 
 const normalizeFeatureList = (value: unknown) => {
@@ -130,6 +138,12 @@ export const normalizePricingConfig = (value: unknown): PricingConfig => {
     uppercaseText: typeof raw.uppercaseText === 'boolean' ? raw.uppercaseText : (DEFAULT_PRICING_CONFIG.uppercaseText ?? false),
     showBadge: typeof raw.showBadge === 'boolean' ? raw.showBadge : (DEFAULT_PRICING_CONFIG.showBadge ?? true),
     badgeText: typeof raw.badgeText === 'string' ? raw.badgeText : (DEFAULT_PRICING_CONFIG.badgeText ?? ''),
+    spacing: normalizePricingSpacing(raw.spacing, raw.noVerticalMargin),
     gridCols: raw.gridCols === 4 ? 4 : 3,
+    cornerRadius: normalizePricingCornerRadius(raw.cornerRadius, raw.noBorderRadius),
   };
 };
+
+export const normalizePricingSpacing = (value: unknown, noVerticalMargin?: unknown): SectionSpacing => (
+  noVerticalMargin === true ? 'none' : normalizeSectionSpacing(value)
+);

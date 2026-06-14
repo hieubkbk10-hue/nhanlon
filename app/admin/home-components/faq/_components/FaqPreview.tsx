@@ -2,11 +2,14 @@
 
 import React from 'react';
 import { AlertTriangle, Eye } from 'lucide-react';
+import { cn } from '../../../components/ui';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
-import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { PreviewWrapper, usePreviewDark } from '../../_shared/components/PreviewWrapper';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 import { SectionHeader } from '../../_shared/components/SectionHeader';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { FAQ_STYLES } from '../_lib/constants';
 import {
   calculateFaqAccentBalance,
@@ -16,7 +19,16 @@ import {
   resolveFaqSecondary,
 } from '../_lib/colors';
 import { FaqSectionShared } from './FaqSectionShared';
-import type { FaqBrandMode, FaqConfig, FaqItem, FaqStyle } from '../_types';
+import {
+  DEFAULT_FAQ_SPACING,
+  getFaqSectionSpacingClassName,
+  normalizeFaqDesktopColumns,
+  normalizeFaqRounded,
+  type FaqBrandMode,
+  type FaqConfig,
+  type FaqItem,
+  type FaqStyle,
+} from '../_types';
 
 const DESCRIPTION_FONT_SIZE: Record<FaqStyle, number> = {
   accordion: 16,
@@ -33,7 +45,7 @@ export const FaqPreview = ({
   brandColor,
   secondary,
   mode = 'dual',
-  selectedStyle = 'accordion',
+  selectedStyle = 'wine-list',
   onStyleChange,
   config,
   title,
@@ -49,6 +61,7 @@ export const FaqPreview = ({
   uppercaseText,
   showBadge,
   badgeText,
+  spacing = DEFAULT_FAQ_SPACING,
 }: {
   items: FaqItem[];
   brandColor: string;
@@ -70,10 +83,15 @@ export const FaqPreview = ({
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
 }) => {
   const { device, setDevice } = usePreviewDevice();
+  const { isDark } = usePreviewDark();
   const style = selectedStyle;
   const maxVisible = device === 'mobile' ? 4 : 6;
+  const sectionSpacingClassName = getFaqSectionSpacingClassName(spacing);
+  const rounded = normalizeFaqRounded(config?.cornerRadius ?? config?.rounded, config?.noBorderRadius);
+  const desktopColumns = normalizeFaqDesktopColumns(config?.desktopColumns);
   const hasSharedHeader = !hideHeader && (
     (showTitle && typeof title === 'string' && title.trim().length > 0)
     || (showSubtitle && typeof subtitle === 'string' && subtitle.trim().length > 0)
@@ -84,12 +102,10 @@ export const FaqPreview = ({
     ? brandColor.trim()
     : '#3b82f6';
 
-  const tokens = getFaqColors({
-    primary: normalizedPrimary,
-    secondary,
-    mode,
-    style,
-  });
+  const tokens = React.useMemo(
+    () => adaptTokensForDarkMode(getFaqColors({primary: normalizedPrimary, secondary, mode, style}), isDark),
+    [normalizedPrimary, secondary, mode, style, isDark]
+  );
 
   const resolvedSecondary = resolveFaqSecondary(normalizedPrimary, secondary, mode);
   const harmonyStatus = mode === 'dual'
@@ -138,7 +154,7 @@ export const FaqPreview = ({
         fontClassName={fontClassName}
       >
         <BrowserFrame url="yoursite.com/faq">
-          <div className="container mx-auto px-4">
+          <div className={cn('container mx-auto', style === 'cards' && device !== 'desktop' ? 'px-0' : 'px-4', sectionSpacingClassName)}>
             <SectionHeader
               title={title}
               subtitle={subtitle}
@@ -163,6 +179,9 @@ export const FaqPreview = ({
               maxVisible={maxVisible}
               device={device}
               suppressInternalHeader={hasSharedHeader}
+              spacingClassName="py-0"
+              rounded={rounded}
+              desktopColumns={desktopColumns}
             />
           </div>
         </BrowserFrame>

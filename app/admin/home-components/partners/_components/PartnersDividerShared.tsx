@@ -4,7 +4,7 @@ import React from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import { getPartnersColors, type PartnersBrandMode } from '../_lib/colors';
-import type { PartnersAlign, PartnersDisplayMode } from '../_types';
+import { getPartnersContentTopSpacingClassName, getPartnersCornerRadiusClassName, getPartnersHeaderSpacingClassName, getPartnersLogoBoxClassName, getPartnersLogoFallbackSize, getPartnersSectionSpacingClassName, type PartnersAlign, type PartnersCornerRadius, type PartnersDisplayMode, type PartnersLogoSize, type PartnersSpacing } from '../_types';
 import { PartnersSectionHeader } from './PartnersSectionHeader';
 
 type PartnersDividerItem = {
@@ -20,6 +20,10 @@ export const PartnersDividerShared = ({
   subheading,
   align = 'center',
   displayMode = 'withName',
+  cornerRadius = 'lg',
+  logoSize = 'normal',
+  showBorder = true,
+  spacing = 'normal',
   brandColor,
   secondary,
   mode = 'dual',
@@ -34,6 +38,10 @@ export const PartnersDividerShared = ({
   subheading?: React.ReactNode;
   align?: PartnersAlign;
   displayMode?: PartnersDisplayMode;
+  cornerRadius?: PartnersCornerRadius;
+  logoSize?: PartnersLogoSize;
+  showBorder?: boolean;
+  spacing?: PartnersSpacing;
   brandColor: string;
   secondary: string;
   mode?: PartnersBrandMode;
@@ -48,11 +56,17 @@ export const PartnersDividerShared = ({
   const colors = React.useMemo(() => getPartnersColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
   const linkProps = openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {};
   const showName = displayMode === 'withName';
+  const radiusClassName = getPartnersCornerRadiusClassName(cornerRadius);
+  const logoBoxClassName = getPartnersLogoBoxClassName('compact', logoSize, showName);
+  const fallbackIconSize = getPartnersLogoFallbackSize('compact', logoSize, showName);
+  const sectionSpacingClassName = getPartnersSectionSpacingClassName(spacing, 'default', skipHeader);
+  const contentTopSpacingClassName = getPartnersContentTopSpacingClassName(spacing);
+  const headerSpacingClassName = getPartnersHeaderSpacingClassName(spacing);
 
   const resolvedColumnsClassName = columnsClassName ?? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6';
 
   return (
-    <section className={cn('w-full bg-white', skipHeader ? 'pb-6 md:pb-10' : 'py-6 md:py-10', className)}>
+    <section className={cn('w-full bg-white', sectionSpacingClassName, className)}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         {!skipHeader && (
           <PartnersSectionHeader
@@ -62,35 +76,35 @@ export const PartnersDividerShared = ({
             brandColor={brandColor}
             secondary={secondary}
             mode={mode}
+            className={headerSpacingClassName}
           />
         )}
         {/* Grid with subtle divider borders — clean, minimal */}
         <div
-          className={cn('mt-5 grid md:mt-8', resolvedColumnsClassName)}
-          style={{ borderColor: colors.neutralBorder }}
+          className={cn('grid overflow-hidden', contentTopSpacingClassName, showBorder && 'border', radiusClassName, resolvedColumnsClassName)}
+          style={{ borderColor: showBorder ? colors.neutralBorder : undefined }}
         >
           {items.map((item, index) => (
             <a
               key={item.id ?? `${item.url ?? ''}-${index}`}
               href={item.link ?? '#'}
               className={cn(
-                'group flex flex-col items-center justify-center border-b bg-white text-center transition-colors',
+                'group flex flex-col items-center justify-center bg-white text-center transition-colors',
                 showName ? 'gap-2 p-4 md:p-5' : 'p-4 md:p-6',
-                // Right border for all except last in row
-                'border-r',
+                showBorder && 'border-b border-r',
               )}
-              style={{ borderColor: colors.neutralBorder }}
+              style={{ borderColor: showBorder ? colors.neutralBorder : undefined }}
               onMouseEnter={(event) => { event.currentTarget.style.backgroundColor = colors.neutralSubtle; }}
               onMouseLeave={(event) => { event.currentTarget.style.backgroundColor = ''; }}
               {...linkProps}
             >
               <div className={cn(
                 'flex w-full items-center justify-center',
-                showName ? 'h-10 md:h-12' : 'h-12 md:h-14',
+                logoBoxClassName,
               )}>
                 {item.url
                   ? renderImage(item, 'mx-auto h-full w-auto max-w-full object-contain')
-                  : <ImageIcon size={showName ? 28 : 40} className="text-slate-300" />}
+                  : <ImageIcon size={fallbackIconSize} className="text-slate-300" />}
               </div>
               {showName && (
                 <span className="w-full truncate text-xs font-medium text-slate-500 md:text-sm">

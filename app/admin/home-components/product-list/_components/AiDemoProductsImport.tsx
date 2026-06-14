@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { AdminImage as Image } from '@/app/admin/components/AdminImage';
+import { AiDirectGeneratePanel } from '@/app/admin/components/AiDirectGenerateButton';
 import { Bot, Check, Copy, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Label, cn } from '../../../components/ui';
@@ -27,8 +28,10 @@ import type { CaseStudyProject } from '../../case-study/_types';
 import type { PricingEditorPlan } from '../../pricing/_types';
 import type { FooterColumn } from '../../footer/_types';
 import type { ContactInfoItem } from '../../contact/_types';
-import type { HeroSlide } from '../../hero/_types';
+import type { HeroSlide, HeroStyle } from '../../hero/_types';
 import type { SpeedDialAction } from '../../speed-dial/_types';
+import { useTypeAiImportEnabled } from '../../_shared/hooks/useTypeAiImportEnabled';
+import { HomeComponentFooterActionPortal } from '../../_shared/components/HomeComponentFooterActions';
 
 const MAX_IMPORT_ITEMS = 24;
 
@@ -171,18 +174,22 @@ const parseAiDemoProducts = (raw: string): ParseResult => {
 };
 
 export function AiDemoProductsImport({
-  buttonClassName,
   onApply,
 }: {
   buttonClassName?: string;
   onApply: (items: DemoProductItem[]) => void;
 }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
 
   const result = useMemo(() => parseAiDemoProducts(rawInput), [rawInput]);
   const canApply = rawInput.trim().length > 0 && result.items.length > 0 && result.errors.length === 0;
+
+  if (!isAiImportEnabled) {
+    return null;
+  }
 
   const copyText = async (value: string, type: 'prompt' | 'sample') => {
     await navigator.clipboard.writeText(value);
@@ -201,9 +208,11 @@ export function AiDemoProductsImport({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={cn('h-7 gap-1 text-xs', buttonClassName)} onClick={() => setOpen(true)}>
-        <Bot size={11} /> Import AI
-      </Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> Import AI
+        </Button>
+      </HomeComponentFooterActionPortal>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -248,6 +257,12 @@ export function AiDemoProductsImport({
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={AI_PRODUCTS_PROMPT}
+                  sessionId="admin-demo-products-import"
+                  onGenerated={setRawInput}
+                  placeholder="Ví dụ: Tạo 8 sản phẩm demo cho shop phụ kiện tủ bếp, có giá VNĐ, tag hot/sale và mô tả ngắn."
+                />
                 <textarea
                   className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   placeholder={SAMPLE_JSON}
@@ -336,6 +351,7 @@ type GenericImportConfig<T extends { id: string | number }> = {
   rootKey: string;
   itemLabel: string;
   promptIntro: string;
+  promptNotes?: string;
   fields: GenericImportField<T>[];
   imageKey?: keyof T & string;
   nameKey: keyof T & string;
@@ -359,6 +375,7 @@ ${schemaFields}
     }
   ]
 }
+${config.promptNotes ? `\n${config.promptNotes}\n` : ''}
 
 Yêu cầu:
 - Số lượng item trong JSON phải đúng với số lượng tôi yêu cầu; nếu tôi yêu cầu 1 thì trả 1, yêu cầu 8 thì trả 8.
@@ -449,7 +466,6 @@ const parseGenericItems = <T extends { id: string | number }>(raw: string, confi
 };
 
 function GenericAiDemoImport<T extends { id: string | number }>({
-  buttonClassName,
   config,
   sample,
   onApply,
@@ -459,12 +475,17 @@ function GenericAiDemoImport<T extends { id: string | number }>({
   sample: string;
   onApply: (items: T[]) => void;
 }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
   const prompt = useMemo(() => formatGenericPrompt(config), [config]);
   const result = useMemo(() => parseGenericItems(rawInput, config), [rawInput, config]);
   const canApply = rawInput.trim().length > 0 && result.items.length > 0 && result.errors.length === 0;
+
+  if (!isAiImportEnabled) {
+    return null;
+  }
 
   const copyText = async (value: string, type: 'prompt' | 'sample') => {
     await navigator.clipboard.writeText(value);
@@ -483,9 +504,11 @@ function GenericAiDemoImport<T extends { id: string | number }>({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={cn('h-7 gap-1 text-xs', buttonClassName)} onClick={() => setOpen(true)}>
-        <Bot size={11} /> {config.buttonLabel}
-      </Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> {config.buttonLabel}
+        </Button>
+      </HomeComponentFooterActionPortal>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -516,6 +539,12 @@ function GenericAiDemoImport<T extends { id: string | number }>({
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={prompt}
+                  sessionId={`admin-demo-${config.rootKey}-import`}
+                  onGenerated={setRawInput}
+                  placeholder={`Ví dụ: Tạo 6 ${config.itemLabel} demo phù hợp website nội thất/phụ kiện tủ bếp, nội dung tự nhiên và có ảnh URL nếu có.`}
+                />
                 <textarea className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder={sample} value={rawInput} onChange={(event) => setRawInput(event.target.value)} />
               </div>
               {rawInput.trim().length > 0 && (
@@ -586,6 +615,7 @@ const CATEGORY_IMPORT_CONFIG: GenericImportConfig<DemoProductCategoryItem> = {
     { key: 'image', label: 'URL ảnh http/https hoặc path bắt đầu bằng /', kind: 'image', maxLength: 500 },
     { key: 'productCount', label: 'number, số sản phẩm', kind: 'number' },
     { key: 'description', label: 'string, tối đa 160 ký tự', maxLength: 160 },
+    { key: 'link', label: 'string, đường dẫn liên kết (VD: /dien-thoai-phu-kien, /khuyen-mai)', maxLength: 300 },
   ],
   imageKey: 'image',
   itemLabel: 'danh mục',
@@ -722,9 +752,16 @@ export const AiDemoServicesImport = (props: { buttonClassName?: string; onApply:
   <GenericAiDemoImport config={SERVICE_IMPORT_CONFIG} sample={'{\n  "services": [\n    {\n      "name": "Thiết kế website chuyên nghiệp",\n      "image": "https://images.unsplash.com/photo-1460925895917-afdab827c52f",\n      "price": "5.000.000đ",\n      "description": "Thiết kế web responsive, chuẩn SEO.",\n      "tag": "hot"\n    }\n  ]\n}'} {...props} />
 );
 
-export const AiDemoProductCategoriesImport = (props: { buttonClassName?: string; onApply: (items: DemoProductCategoryItem[]) => void }) => (
-  <GenericAiDemoImport config={CATEGORY_IMPORT_CONFIG} sample={'{\n  "categories": [\n    {\n      "name": "Thời trang nam",\n      "image": "https://images.unsplash.com/photo-1516257984-b1b4d707412e",\n      "productCount": 24,\n      "description": "Áo quần và phụ kiện nam hiện đại."\n    }\n  ]\n}'} {...props} />
-);
+export const AiDemoProductCategoriesImport = ({ buttonLabel, ...props }: { buttonClassName?: string; buttonLabel?: string; onApply: (items: DemoProductCategoryItem[]) => void }) => {
+  const config = useMemo<GenericImportConfig<DemoProductCategoryItem>>(
+    () => ({ ...CATEGORY_IMPORT_CONFIG, buttonLabel: buttonLabel ?? CATEGORY_IMPORT_CONFIG.buttonLabel }),
+    [buttonLabel],
+  );
+
+  return (
+    <GenericAiDemoImport config={config} sample={'{\n  "categories": [\n    {\n      "name": "Thời trang nam",\n      "image": "https://images.unsplash.com/photo-1516257984-b1b4d707412e",\n      "productCount": 24,\n      "description": "Áo quần và phụ kiện nam hiện đại.",\n      "link": "/thoi-trang-nam"\n    }\n  ]\n}'} {...props} />
+  );
+};
 
 export const AiDemoBlogPostsImport = (props: { buttonClassName?: string; onApply: (items: DemoBlogItem[]) => void }) => (
   <GenericAiDemoImport config={BLOG_IMPORT_CONFIG} sample={'{\n  "posts": [\n    {\n      "title": "5 xu hướng mua sắm online năm 2026",\n      "excerpt": "Những thay đổi nổi bật giúp thương hiệu bán hàng hiệu quả hơn.",\n      "thumbnail": "https://images.unsplash.com/photo-1499750310107-5fef28a66643",\n      "category": "Ecommerce",\n      "date": "08/05/2026",\n      "author": "VietAdmin"\n    }\n  ]\n}'} {...props} />
@@ -848,7 +885,7 @@ const PROCESS_IMPORT_CONFIG: GenericImportConfig<ProcessFormStep> = {
   itemLabel: 'bước',
   metaKeys: ['icon'],
   nameKey: 'title',
-  promptIntro: 'Hãy tạo danh sách các bước quy trình cho website doanh nghiệp tiếng Việt theo số lượng tôi yêu cầu. Tối đa 4 bước.',
+  promptIntro: 'Hãy tạo danh sách các bước quy trình cho website doanh nghiệp tiếng Việt theo số lượng tôi yêu cầu. Tối đa 8 bước.',
   rootKey: 'steps',
 };
 
@@ -1003,9 +1040,46 @@ const HERO_IMPORT_CONFIG: GenericImportConfig<HeroSlide> = {
   rootKey: 'slides',
 };
 
-export const AiDemoHeroImport = (props: { buttonClassName?: string; onApply: (items: HeroSlide[]) => void }) => (
-  <GenericAiDemoImport config={HERO_IMPORT_CONFIG} sample={'{\n  "slides": [\n    {\n      "url": "https://images.unsplash.com/photo-1556761175-4b46a572b786",\n      "link": "/products"\n    }\n  ]\n}'} {...props} />
-);
+const HERO_IMAGE_GUIDE_BY_STYLE: Record<HeroStyle, string> = {
+  bento: '- Bento: nên tạo đúng 4 ảnh. Ảnh 1/3/4 dùng 5:4, gợi ý 1200×960px. Ảnh 2 là ảnh ngang 5:2, gợi ý 1600×640px. Giữ chủ thể ở trung tâm, tránh chữ sát mép.',
+  builderCoffee: '- Builder Coffee: ảnh chính 16:9, gợi ý 1920×1080px. Layout dùng ảnh contain + nền blur, nên chọn ảnh có background sạch và chủ thể rõ ở trung tâm.',
+  fade: '- Fade: ảnh panorama 21:9, gợi ý 1920×820px. Nội dung quan trọng đặt vùng trung tâm để không xấu trên mobile 16:9.',
+  fullscreen: '- Fullscreen: ảnh 16:9, gợi ý 1920×1080px. Layout không crop ảnh, có nền blur; tránh chữ quá nhỏ vì mobile vẫn cần đọc được.',
+  conquest: '- Conquest: ảnh 16:9, gợi ý 1920×1080px. Layout có khối nội dung và hình ảnh lớn, nên chọn ảnh rõ chủ thể, nền sạch, ít chữ.',
+  parallax: '- Parallax: ảnh 16:9, gợi ý 1920×1080px. Desktop có card nổi phía dưới, mobile giống Split: ảnh trên + nội dung dưới; để chủ thể không bị che bởi card/controls.',
+  slider: '- Slider: ảnh panorama 21:9, gợi ý 1920×820px. Nội dung quan trọng đặt vùng trung tâm, tránh logo/chữ sát 2 mép.',
+  split: '- Split: ảnh 4:3, gợi ý 1200×900px. Mobile hiển thị ảnh carousel phía trên và nội dung phía dưới; chọn ảnh rõ chủ thể, ít chữ trên ảnh.',
+  triple: '- Triple: nên tạo đúng 3 ảnh 16:9, gợi ý 1200×675px mỗi ảnh. Desktop xếp 3 cột ngang, mobile vuốt từng ảnh.',
+  triple2: '- Triple 2: nên tạo đúng 3 ảnh 16:9, gợi ý 1200×675px mỗi ảnh. Desktop có ảnh đầu lớn hơn, mobile vuốt từng ảnh.',
+};
+
+const buildHeroPromptNotes = (heroStyle?: HeroStyle) => {
+  const selectedStyle = heroStyle ?? 'slider';
+  return `Hướng dẫn ảnh theo layout Hero đang chọn: ${selectedStyle}
+${HERO_IMAGE_GUIDE_BY_STYLE[selectedStyle]}
+
+Bảng tham chiếu nhanh nếu người dùng đổi layout:
+- Slider/Fade: 21:9, gợi ý 1920×820px.
+- Builder Coffee/Fullscreen/Conquest/Parallax/Triple/Triple 2: 16:9, gợi ý 1920×1080px hoặc 1200×675px.
+- Split: 4:3, gợi ý 1200×900px.
+- Bento: slot 1/3/4 là 5:4, slot 2 là 5:2.
+
+Quy tắc chọn/tạo ảnh:
+- URL ảnh phải trỏ tới ảnh có tỷ lệ gần đúng layout để khi crop không mất chủ thể.
+- Không dùng ảnh có text/logo nằm sát mép; giữ safe area trung tâm khoảng 70%.
+- Nếu không chắc tỷ lệ ảnh từ URL, ưu tiên ảnh rộng, rõ chủ thể, nền sạch và dễ crop theo tỷ lệ trên.`;
+};
+
+export const AiDemoHeroImport = ({ buttonLabel, heroStyle, ...props }: { buttonClassName?: string; buttonLabel?: string; heroStyle?: HeroStyle; onApply: (items: HeroSlide[]) => void }) => {
+  const config = useMemo<GenericImportConfig<HeroSlide>>(
+    () => ({ ...HERO_IMPORT_CONFIG, buttonLabel: buttonLabel ?? HERO_IMPORT_CONFIG.buttonLabel, promptNotes: buildHeroPromptNotes(heroStyle) }),
+    [buttonLabel, heroStyle],
+  );
+
+  return (
+    <GenericAiDemoImport config={config} sample={'{\n  "slides": [\n    {\n      "url": "https://images.unsplash.com/photo-1556761175-4b46a572b786",\n      "link": "/dien-thoai-phu-kien"\n    }\n  ]\n}'} {...props} />
+  );
+};
 
 // ── Footer Columns ─────────────────────────────────────────
 type FooterColumnWithId = FooterColumn & { id: string | number };
@@ -1171,17 +1245,21 @@ const parseCategoryProductSections = (raw: string): GenericParseResult<DemoCateg
 };
 
 export function AiDemoCategoryProductsImport({
-  buttonClassName,
   onApply,
 }: {
   buttonClassName?: string;
   onApply: (items: DemoCategoryProductsSection[]) => void;
 }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
   const result = useMemo(() => parseCategoryProductSections(rawInput), [rawInput]);
   const canApply = rawInput.trim().length > 0 && result.items.length > 0 && result.errors.length === 0;
+
+  if (!isAiImportEnabled) {
+    return null;
+  }
 
   const copyText = async (value: string, type: 'prompt' | 'sample') => {
     await navigator.clipboard.writeText(value);
@@ -1200,9 +1278,11 @@ export function AiDemoCategoryProductsImport({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={cn('h-7 gap-1 text-xs', buttonClassName)} onClick={() => setOpen(true)}>
-        <Bot size={11} /> Import AI
-      </Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> Import AI
+        </Button>
+      </HomeComponentFooterActionPortal>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1233,6 +1313,12 @@ export function AiDemoCategoryProductsImport({
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={CATEGORY_PRODUCTS_PROMPT}
+                  sessionId="admin-category-products-import"
+                  onGenerated={setRawInput}
+                  placeholder="Ví dụ: Tạo 4 section danh mục cho shop phụ kiện tủ bếp, mỗi section có 4 sản phẩm phù hợp và giá VNĐ."
+                />
                 <textarea className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder={CATEGORY_PRODUCTS_SAMPLE} value={rawInput} onChange={(event) => setRawInput(event.target.value)} />
               </div>
               {rawInput.trim().length > 0 && (

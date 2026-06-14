@@ -9,10 +9,12 @@ import {
   getBlogColorTokens,
   type BlogBrandMode,
 } from '@/app/admin/home-components/blog/_lib/colors';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 import { sortBlogPosts } from '@/app/admin/home-components/blog/_lib/constants';
 import { BlogSectionRuntime } from '@/app/admin/home-components/blog/_components/BlogSectionRuntime';
 import { normalizeBlogConfig } from '@/app/admin/home-components/blog/_types';
 import { extractSectionHeaderConfig } from '@/app/admin/home-components/_shared/hooks/useSectionHeaderState';
+import { getSectionSpacingClassName } from '@/app/admin/home-components/_shared/types/sectionSpacing';
 import { useSnapshotDemoContext } from '@/components/modules/homepage/SnapshotDemoProvider';
 
 interface BlogSectionProps {
@@ -22,9 +24,10 @@ interface BlogSectionProps {
   mode: BlogBrandMode;
   title: string;
   snapshotComponentKey?: string;
+  isDark?: boolean;
 }
 
-export function BlogSection({ config, brandColor, secondary, mode, title, snapshotComponentKey }: BlogSectionProps) {
+export function BlogSection({ config, brandColor, secondary, mode, title, snapshotComponentKey, isDark }: BlogSectionProps) {
   const snapshotDemo = useSnapshotDemoContext();
   const normalizedConfig = React.useMemo(() => normalizeBlogConfig(config), [config]);
   const style = normalizedConfig.style;
@@ -34,12 +37,16 @@ export function BlogSection({ config, brandColor, secondary, mode, title, snapsh
   const selectedPostIds = normalizedConfig.selectedPostIds;
   const demoPosts = normalizedConfig.demoPosts;
   const headerConfig = extractSectionHeaderConfig(config);
+  const sectionSpacingClassName = getSectionSpacingClassName(normalizedConfig.spacing);
 
-  const tokens = getBlogColorTokens({
-    primary: brandColor,
-    secondary,
-    mode,
-  });
+  const tokens = adaptTokensForDarkMode(
+    getBlogColorTokens({
+      primary: brandColor,
+      secondary,
+      mode,
+    }),
+    isDark ?? false
+  );
 
   const querySortBy = sortBy === 'popular'
     ? 'popular'
@@ -115,7 +122,7 @@ export function BlogSection({ config, brandColor, secondary, mode, title, snapsh
 
   if (!snapshotData && orderedPosts === undefined) {
     return (
-      <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.sectionBg }}>
+      <section className={`${sectionSpacingClassName} px-4`} style={{ backgroundColor: tokens.sectionBg }}>
         <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[200px]">
           <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
         </div>
@@ -127,7 +134,7 @@ export function BlogSection({ config, brandColor, secondary, mode, title, snapsh
 
   if (posts.length === 0) {
     return (
-      <section className="py-12 md:py-16 px-4" style={{ backgroundColor: tokens.sectionBg }}>
+      <section className={`${sectionSpacingClassName} px-4`} style={{ backgroundColor: tokens.sectionBg }}>
         <div className="max-w-6xl mx-auto text-center">
           <h2 className="text-2xl md:text-3xl font-bold tracking-tighter mb-4" style={{ color: tokens.heading }}>{title}</h2>
           <p style={{ color: tokens.mutedText }}>Chưa có bài viết nào được xuất bản.</p>
@@ -170,7 +177,9 @@ export function BlogSection({ config, brandColor, secondary, mode, title, snapsh
         titleColorPrimary={headerConfig.titleColorPrimary}
         subtitleAboveTitle={headerConfig.subtitleAboveTitle}
         uppercaseText={headerConfig.uppercaseText}
-        desktopColumns={(config as Record<string, unknown>).desktopColumns === 3 ? 3 : 4}
+        desktopColumns={normalizedConfig.desktopColumns}
+        spacing={normalizedConfig.spacing}
+        cornerRadius={normalizedConfig.cornerRadius}
       />
     );
   }
@@ -208,7 +217,9 @@ export function BlogSection({ config, brandColor, secondary, mode, title, snapsh
       titleColorPrimary={headerConfig.titleColorPrimary}
       subtitleAboveTitle={headerConfig.subtitleAboveTitle}
       uppercaseText={headerConfig.uppercaseText}
-      desktopColumns={(config as Record<string, unknown>).desktopColumns === 3 ? 3 : 4}
+      desktopColumns={normalizedConfig.desktopColumns}
+      spacing={normalizedConfig.spacing}
+      cornerRadius={normalizedConfig.cornerRadius}
     />
   );
 }

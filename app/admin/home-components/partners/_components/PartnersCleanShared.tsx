@@ -4,7 +4,7 @@ import React from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import { getPartnersColors, type PartnersBrandMode } from '../_lib/colors';
-import type { PartnersAlign, PartnersDisplayMode } from '../_types';
+import { getPartnersContentTopSpacingClassName, getPartnersCornerRadiusClassName, getPartnersHeaderSpacingClassName, getPartnersItemGapClassName, getPartnersLogoBoxClassName, getPartnersLogoFallbackSize, getPartnersSectionSpacingClassName, type PartnersAlign, type PartnersCornerRadius, type PartnersDisplayMode, type PartnersLogoSize, type PartnersSpacing } from '../_types';
 import { PartnersSectionHeader } from './PartnersSectionHeader';
 
 type PartnersCleanItem = {
@@ -20,6 +20,9 @@ export const PartnersCleanShared = ({
   subheading,
   align = 'center',
   displayMode = 'withName',
+  cornerRadius = 'lg',
+  logoSize = 'normal',
+  spacing = 'normal',
   brandColor,
   secondary,
   mode = 'dual',
@@ -33,6 +36,9 @@ export const PartnersCleanShared = ({
   subheading?: React.ReactNode;
   align?: PartnersAlign;
   displayMode?: PartnersDisplayMode;
+  cornerRadius?: PartnersCornerRadius;
+  logoSize?: PartnersLogoSize;
+  spacing?: PartnersSpacing;
   brandColor: string;
   secondary: string;
   mode?: PartnersBrandMode;
@@ -46,9 +52,16 @@ export const PartnersCleanShared = ({
   const _colors = React.useMemo(() => getPartnersColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
   const linkProps = openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {};
   const showName = displayMode === 'withName';
+  const radiusClassName = getPartnersCornerRadiusClassName(cornerRadius);
+  const logoBoxClassName = getPartnersLogoBoxClassName('clean', logoSize, showName);
+  const fallbackIconSize = getPartnersLogoFallbackSize('clean', logoSize, showName);
+  const sectionSpacingClassName = getPartnersSectionSpacingClassName(spacing, 'default', skipHeader);
+  const contentTopSpacingClassName = getPartnersContentTopSpacingClassName(spacing);
+  const flowGapClassName = getPartnersItemGapClassName(spacing, showName ? 'cleanName' : 'cleanLogo');
+  const headerSpacingClassName = getPartnersHeaderSpacingClassName(spacing);
 
   return (
-    <section className={cn('w-full bg-white', skipHeader ? 'pb-6 md:pb-10' : 'py-6 md:py-10', className)}>
+    <section className={cn('w-full bg-white', sectionSpacingClassName, className)}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         {!skipHeader && (
           <PartnersSectionHeader
@@ -58,12 +71,14 @@ export const PartnersCleanShared = ({
             brandColor={brandColor}
             secondary={secondary}
             mode={mode}
+            className={headerSpacingClassName}
           />
         )}
         {/* Inline flow: logos with optional names, wrap naturally */}
         <div className={cn(
-          'mt-5 flex flex-wrap items-center justify-center md:mt-8',
-          showName ? 'gap-x-8 gap-y-5 md:gap-x-12 md:gap-y-6' : 'gap-x-6 gap-y-4 md:gap-x-10 md:gap-y-6',
+          'flex flex-wrap items-center justify-center',
+          contentTopSpacingClassName,
+          flowGapClassName,
         )}>
           {items.map((item, index) => (
             <a
@@ -78,13 +93,13 @@ export const PartnersCleanShared = ({
               {item.url
                 ? (
                   <div className={showName
-                    ? 'flex h-7 w-7 items-center justify-center overflow-hidden md:h-8 md:w-8'
-                    : 'flex h-9 w-[80px] items-center justify-center overflow-hidden md:h-10 md:w-[100px]'
+                    ? cn('flex items-center justify-center overflow-hidden', logoBoxClassName, radiusClassName)
+                    : cn('flex items-center justify-center overflow-hidden', logoBoxClassName, radiusClassName)
                   }>
                     {renderImage(item, 'h-full w-full object-contain')}
                   </div>
                 )
-                : <ImageIcon size={showName ? 24 : 36} className="text-slate-400" />}
+                : <ImageIcon size={fallbackIconSize} className="text-slate-400" />}
               {showName && (
                 <span className="whitespace-nowrap text-sm font-medium text-slate-600 md:text-base">
                   {item.name ?? `Đối tác ${index + 1}`}

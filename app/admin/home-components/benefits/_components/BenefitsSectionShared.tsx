@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import type { BenefitsColorTokens } from '../_lib/colors';
+import { getBenefitsCornerRadiusClassName, normalizeBenefitsCornerRadius } from '../_lib/constants';
 import type { PreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 import { resolveContactIcon } from '../../contact/_lib/iconOptions';
 import type {
@@ -25,7 +26,7 @@ interface BenefitsSectionSharedProps {
   title?: string;
   config: Pick<
     BenefitsConfig,
-    'subHeading' | 'heading' | 'subtitle' | 'buttonText' | 'buttonLink' | 'headerAlign' | 'gridColumnsDesktop' | 'gridColumnsMobile' | 'visualImage' | 'highlightIndex' | 'showItemNumbers' | 'showDecorativeVisuals'
+    'subHeading' | 'heading' | 'subtitle' | 'buttonText' | 'buttonLink' | 'headerAlign' | 'gridColumnsDesktop' | 'gridColumnsMobile' | 'visualImage' | 'highlightIndex' | 'showItemNumbers' | 'showDecorativeVisuals' | 'cornerRadius'
   >;
   tokens: BenefitsColorTokens;
   mode: BenefitsBrandMode;
@@ -89,17 +90,17 @@ const toHeaderAlign = (value?: string): BenefitsHeaderAlign => (
     : 'left'
 );
 
-const toGridColumnsDesktop = (value?: number): 3 | 4 => (
-  value === 3 ? 3 : 4
+const toGridColumnsDesktop = (value?: number): 3 | 4 | 5 => (
+  value === 3 || value === 5 ? value : 4
 );
 
-const toGridColumnsMobileByDesktop = (desktopColumns: 3 | 4): 1 | 2 => (
+const toGridColumnsMobileByDesktop = (desktopColumns: 3 | 4 | 5): 1 | 2 => (
   desktopColumns === 3 ? 1 : 2
 );
 
 const toPreviewGridClass = (
   previewDevice: PreviewDevice,
-  desktopColumns: 3 | 4,
+  desktopColumns: 3 | 4 | 5,
 ) => {
   if (previewDevice === 'mobile') {
     const mobileColumns = toGridColumnsMobileByDesktop(desktopColumns);
@@ -110,7 +111,48 @@ const toPreviewGridClass = (
     return desktopColumns === 3 ? 'grid-cols-3' : 'grid-cols-2';
   }
 
+  if (desktopColumns === 5) {
+    return 'grid-cols-5';
+  }
+
   return desktopColumns === 3 ? 'grid-cols-3' : 'grid-cols-4';
+};
+
+const toResponsiveGridClass = (
+  context: 'preview' | 'site',
+  previewDevice: PreviewDevice,
+  desktopColumns: 3 | 4 | 5,
+) => {
+  if (context === 'preview') {
+    return toPreviewGridClass(previewDevice, desktopColumns);
+  }
+
+  if (desktopColumns === 3) {
+    return 'grid-cols-1 sm:grid-cols-3 lg:grid-cols-3';
+  }
+
+  if (desktopColumns === 5) {
+    return 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-5';
+  }
+
+  return 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4';
+};
+
+const getFiveColumnMiddleClass = (
+  desktopColumns: 3 | 4 | 5,
+  idx: number,
+  context: 'preview' | 'site',
+  previewDevice: PreviewDevice,
+) => {
+  if (desktopColumns !== 5 || idx !== 2) {
+    return '';
+  }
+
+  if (context === 'preview') {
+    return previewDevice === 'desktop' ? '' : 'col-span-2';
+  }
+
+  return 'col-span-2 lg:col-span-1';
 };
 
 const toKeySeed = (item: BenefitItem, idx: number) => `${item.icon}|${item.title}|${item.description}|${idx}`;
@@ -180,6 +222,7 @@ export function BenefitsSectionShared({
   const visualImage = (config.visualImage ?? '').trim();
   const showItemNumbers = config.showItemNumbers ?? true;
   const showDecorativeVisuals = config.showDecorativeVisuals ?? true;
+  const cornerRadiusClassName = getBenefitsCornerRadiusClassName(normalizeBenefitsCornerRadius(config.cornerRadius));
   const headerAlign = toHeaderAlign(config.headerAlign);
   const headerAlignClass = headerAlign === 'center'
     ? 'items-center text-center'
@@ -189,10 +232,11 @@ export function BenefitsSectionShared({
 
   const isPreview = context === 'preview';
   const isPreviewMobile = isPreview && previewDevice === 'mobile';
-  const sectionPaddingClass = isPreviewMobile ? 'py-8' : 'py-12 md:py-16';
+  const sectionPaddingClass = skipHeader ? 'py-0' : isPreviewMobile ? 'py-8' : 'py-12 md:py-16';
 
   const resolvedPreviewDevice = previewDevice ?? 'desktop';
-  toPreviewGridClass(resolvedPreviewDevice, toGridColumnsDesktop(config.gridColumnsDesktop));
+  const desktopColumns = toGridColumnsDesktop(config.gridColumnsDesktop);
+  const responsiveGridClass = toResponsiveGridClass(context, resolvedPreviewDevice, desktopColumns);
 
   const displayedItems = React.useMemo(
     () => (typeof maxVisible === 'number' ? items.slice(0, maxVisible) : items),
@@ -265,21 +309,14 @@ export function BenefitsSectionShared({
       <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="max-w-6xl mx-auto space-y-8">
           {renderHeader()}
-          <div className={cn(isPreview ? 'flex flex-wrap justify-center gap-3' : 'flex flex-wrap justify-center gap-3 md:gap-4 lg:gap-6 xl:gap-5')}>
+          <div className={cn('grid gap-3 md:gap-4 lg:gap-6', responsiveGridClass)}>
             {displayedItems.map((item, idx) => (
               <article
                 key={itemKeys[idx]}
                 className={cn(
-                  'relative flex flex-col items-center overflow-hidden rounded-lg border border-b-[3px] border-slate-50 bg-white text-center shadow-[0_2px_12px_rgba(0,0,0,0.06)]',
-                  isPreview
-                    ? (
-                      resolvedPreviewDevice === 'mobile'
-                        ? (idx === displayedItems.length - 1 ? 'w-full px-3 pb-2 pt-3' : 'w-[calc(50%-0.375rem)] px-3 pb-2 pt-3')
-                        : resolvedPreviewDevice === 'tablet'
-                          ? (idx === displayedItems.length - 1 ? 'w-full px-4 pb-2 pt-4' : 'w-[calc(50%-0.5rem)] px-4 pb-2 pt-4')
-                          : 'w-[calc(20%-1rem)] px-4 pb-2 pt-4'
-                    )
-                    : (idx === displayedItems.length - 1 ? 'w-full px-3 md:px-4 pb-2 pt-3 sm:pt-4 lg:w-[calc(33.333%-1rem)] xl:w-[calc(20%-1rem)]' : 'w-[calc(50%-0.375rem)] px-3 md:px-4 pb-2 pt-3 sm:pt-4 md:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-1rem)] xl:w-[calc(20%-1rem)]'),
+                  'relative flex flex-col items-center overflow-hidden border border-b-[3px] border-slate-50 bg-white px-3 pb-2 pt-3 text-center shadow-[0_2px_12px_rgba(0,0,0,0.06)] md:px-4 md:pt-4',
+                  cornerRadiusClassName,
+                  getFiveColumnMiddleClass(desktopColumns, idx, context, resolvedPreviewDevice),
                 )}
                 style={{
                   backgroundColor: tokens.neutralSurface,
@@ -314,7 +351,7 @@ export function BenefitsSectionShared({
                   <div className="w-full px-1">
                     <h3
                       className={cn(
-                        'line-clamp-2 text-center font-bold leading-[1.3]',
+                        'break-words text-center font-bold leading-[1.3]',
                         isPreview
                           ? (resolvedPreviewDevice === 'mobile' ? 'mb-1.5 text-[13px]' : 'mb-2 text-[14px]')
                           : 'mb-1.5 text-[13px] sm:mb-2 sm:text-[14px]',
@@ -328,7 +365,7 @@ export function BenefitsSectionShared({
                     {toDescription(item.description) ? (
                       <p
                         className={cn(
-                          'relative z-10 text-center font-medium leading-[1.4] line-clamp-4',
+                          'relative z-10 break-words text-center font-medium leading-[1.4]',
                           isPreview
                             ? (resolvedPreviewDevice === 'mobile' ? 'pb-5 text-[11px]' : 'pb-7 text-[12px]')
                             : 'pb-5 text-[11px] sm:pb-7 sm:text-[12px]',
@@ -370,7 +407,7 @@ export function BenefitsSectionShared({
       <section className={cn(sectionPaddingClass, 'px-4')} style={{ backgroundColor: tokens.neutralBackground }}>
         <div className="max-w-6xl mx-auto space-y-8">
           {renderHeader()}
-          <div className={cn(isPreview ? 'flex flex-wrap justify-center gap-3' : 'flex flex-wrap justify-center gap-3 md:gap-4 lg:gap-6 xl:gap-5')}>
+          <div className={cn('grid gap-3 md:gap-4 lg:gap-6', responsiveGridClass)}>
             {displayedItems.map((item, idx) => {
               const Icon = resolveBenefitsIcon(item.icon);
               const accent = idx % 2 === 0 ? tokens.primary : tokens.secondary;
@@ -378,16 +415,9 @@ export function BenefitsSectionShared({
                 <article
                   key={itemKeys[idx]}
                   className={cn(
-                    'overflow-hidden rounded-[28px] border bg-white text-center shadow-sm',
-                    isPreview
-                      ? (
-                        resolvedPreviewDevice === 'mobile'
-                          ? (idx === displayedItems.length - 1 ? 'w-full p-4' : 'w-[calc(50%-0.375rem)] p-4')
-                          : resolvedPreviewDevice === 'tablet'
-                            ? (idx === displayedItems.length - 1 ? 'w-full p-5' : 'w-[calc(50%-0.5rem)] p-5')
-                            : 'w-[calc(20%-1rem)] p-5'
-                      )
-                      : (idx === displayedItems.length - 1 ? 'w-full p-4 md:p-5 lg:w-[calc(33.333%-1rem)] xl:w-[calc(20%-1rem)]' : 'w-[calc(50%-0.375rem)] p-4 md:w-[calc(50%-0.5rem)] md:p-5 lg:w-[calc(33.333%-1rem)] xl:w-[calc(20%-1rem)]'),
+                    'overflow-hidden border bg-white p-4 text-center shadow-sm md:p-5',
+                    cornerRadiusClassName,
+                    getFiveColumnMiddleClass(desktopColumns, idx, context, resolvedPreviewDevice),
                   )}
                   style={{ borderColor: tokens.cardBorder }}
                 >
@@ -395,11 +425,11 @@ export function BenefitsSectionShared({
                     <Icon size={22} />
                   </div>
                   <div className="mt-4 space-y-2">
-                    <h3 className="line-clamp-2 text-base font-semibold md:text-lg" style={{ color: tokens.neutralText }}>
+                    <h3 className="break-words text-base font-semibold md:text-lg" style={{ color: tokens.neutralText }}>
                       {toText(item.title, 'Tiêu đề')}
                     </h3>
                     {toDescription(item.description) ? (
-                      <p className="line-clamp-4 text-sm leading-7" style={{ color: tokens.mutedText }}>
+                      <p className="break-words text-sm leading-7" style={{ color: tokens.mutedText }}>
                         {toDescription(item.description)}
                       </p>
                     ) : null}
@@ -422,12 +452,19 @@ export function BenefitsSectionShared({
           {showDecorativeVisuals ? (
             <div className="pointer-events-none absolute bottom-[5px] left-0 right-0 z-30 hidden h-[24px] lg:block">
               <svg width="100%" height="100%" viewBox="0 0 1000 24" preserveAspectRatio="none">
+                <defs>
+                  <filter id="benefits-layout-3-line-shadow" x="-4%" y="-140%" width="108%" height="360%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor={tokens.primary} floodOpacity="0.28" />
+                    <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000000" floodOpacity="0.16" />
+                  </filter>
+                </defs>
                 <path
                   d="M -20,0 Q 500,48 1020,0"
                   fill="none"
                   stroke={tokens.primary}
-                  strokeOpacity="0.4"
-                  strokeWidth="1.5"
+                  strokeOpacity="0.72"
+                  strokeWidth="1.75"
+                  filter="url(#benefits-layout-3-line-shadow)"
                   vectorEffect="non-scaling-stroke"
                 />
               </svg>
@@ -458,13 +495,8 @@ export function BenefitsSectionShared({
           <div
             className={cn(
               'relative z-10 w-full',
-              isPreview
-                ? resolvedPreviewDevice === 'mobile'
-                  ? 'grid grid-cols-2 gap-4'
-                  : resolvedPreviewDevice === 'tablet'
-                    ? 'grid grid-cols-2 gap-6'
-                    : 'grid grid-cols-5 gap-6 xl:gap-8'
-                : 'grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-5 lg:gap-6 xl:gap-8',
+              'grid gap-4 sm:gap-6 lg:gap-6 xl:gap-8',
+              responsiveGridClass,
             )}
           >
             {displayedItems.map((item, idx) => {
@@ -479,10 +511,12 @@ export function BenefitsSectionShared({
                     isPreview
                       ? (
                         resolvedPreviewDevice === 'desktop'
-                          ? 'col-span-1 rounded-[1.25rem]'
-                          : (isLast ? 'col-span-2 rounded-[1.25rem]' : 'col-span-1 rounded-[1.25rem]')
+                          ? 'col-span-1'
+                          : (isLast ? 'col-span-2' : 'col-span-1')
                       )
-                      : (isLast ? 'col-span-2 rounded-[1.25rem] lg:col-span-1' : 'col-span-1 rounded-[1.25rem]'),
+                      : (isLast ? 'col-span-2 lg:col-span-1' : 'col-span-1'),
+                    cornerRadiusClassName,
+                    getFiveColumnMiddleClass(desktopColumns, idx, context, resolvedPreviewDevice),
                   )}
                   style={{
                     backgroundColor: isActive ? tokens.primary : tokens.neutralSurface,
@@ -732,7 +766,7 @@ export function BenefitsSectionShared({
               ) : null}
 
               <div
-                className="relative z-10 aspect-[16/10] w-full overflow-hidden rounded-[1.5rem]"
+                className={cn('relative z-10 aspect-[16/10] w-full overflow-hidden', cornerRadiusClassName)}
                 style={{
                   backgroundColor: `color-mix(in srgb, ${tokens.primary} 8%, ${tokens.neutralBackground})`,
                   boxShadow: '0 12px 40px rgba(0,0,0,0.06)',
@@ -885,7 +919,8 @@ export function BenefitsSectionShared({
                 <article
                   key={itemKeys[idx]}
                   className={cn(
-                    'group relative overflow-hidden rounded-[24px] border transition-all duration-300',
+                    'group relative overflow-hidden border transition-all duration-300',
+                    cornerRadiusClassName,
                     isPreview
                       ? (resolvedPreviewDevice === 'mobile' ? 'p-4' : 'p-6')
                       : 'p-5 sm:p-6',
@@ -958,8 +993,8 @@ export function BenefitsSectionShared({
                         className={cn(
                           'font-bold leading-tight',
                           isPreview
-                            ? (resolvedPreviewDevice === 'mobile' ? (isHighlighted ? 'text-base line-clamp-2' : 'text-sm line-clamp-2') : (isHighlighted ? 'text-xl line-clamp-3' : 'text-base line-clamp-2'))
-                            : isHighlighted ? 'text-base line-clamp-2 sm:text-xl sm:line-clamp-3' : 'text-base line-clamp-2',
+                            ? (resolvedPreviewDevice === 'mobile' ? (isHighlighted ? 'text-base' : 'text-sm') : (isHighlighted ? 'text-xl' : 'text-base'))
+                            : isHighlighted ? 'text-base sm:text-xl' : 'text-base',
                         )}
                         style={{ color: isHighlighted ? '#ffffff' : tokens.neutralText }}
                       >
@@ -971,8 +1006,8 @@ export function BenefitsSectionShared({
                           className={cn(
                             'leading-relaxed',
                             isPreview
-                              ? (resolvedPreviewDevice === 'mobile' ? (isHighlighted ? 'text-[12px] line-clamp-4' : 'text-[11px] line-clamp-2') : (isHighlighted ? 'text-sm line-clamp-5' : 'text-[13px] line-clamp-3'))
-                              : isHighlighted ? 'text-[13px] line-clamp-3 sm:text-sm sm:line-clamp-5' : 'text-[13px] line-clamp-3',
+                              ? (resolvedPreviewDevice === 'mobile' ? (isHighlighted ? 'text-[12px]' : 'text-[11px]') : (isHighlighted ? 'text-sm' : 'text-[13px]'))
+                              : isHighlighted ? 'text-[13px] sm:text-sm' : 'text-[13px]',
                           )}
                           style={{ color: isHighlighted ? 'rgba(255,255,255,0.90)' : tokens.mutedText }}
                         >
@@ -1038,7 +1073,8 @@ export function BenefitsSectionShared({
           {/* Hero Image Container */}
           <div
             className={cn(
-              'relative overflow-hidden rounded-[32px] mx-auto',
+              'relative mx-auto overflow-hidden',
+              cornerRadiusClassName,
               isPreview
                 ? (resolvedPreviewDevice === 'mobile' ? 'h-[320px]' : resolvedPreviewDevice === 'tablet' ? 'h-[400px]' : 'h-[480px]')
                 : 'h-[320px] md:h-[400px] lg:h-[480px]',
@@ -1101,7 +1137,8 @@ export function BenefitsSectionShared({
                       <article
                         key={itemKeys[idx]}
                         className={cn(
-                          'group pointer-events-auto flex-1 rounded-[20px] border backdrop-blur-md transition-all duration-300 hover:-translate-y-2',
+                          'group pointer-events-auto flex-1 border backdrop-blur-md transition-all duration-300 hover:-translate-y-2',
+                          cornerRadiusClassName,
                           isPreview
                             ? (resolvedPreviewDevice === 'tablet' ? 'p-4' : 'p-5')
                             : 'p-4 md:p-5',
@@ -1134,7 +1171,7 @@ export function BenefitsSectionShared({
                           <div className="flex-1 min-w-0">
                             <h3
                               className={cn(
-                                'font-bold leading-tight line-clamp-1',
+                                'break-words font-bold leading-tight',
                                 isPreview
                                   ? (resolvedPreviewDevice === 'tablet' ? 'text-sm mb-1' : 'text-base mb-1.5')
                                   : 'text-sm md:text-base mb-1 md:mb-1.5',
@@ -1146,7 +1183,7 @@ export function BenefitsSectionShared({
                             {toDescription(item.description) ? (
                               <p
                                 className={cn(
-                                  'leading-relaxed line-clamp-2',
+                                  'break-words leading-relaxed',
                                   isPreview
                                     ? (resolvedPreviewDevice === 'tablet' ? 'text-xs' : 'text-sm')
                                     : 'text-xs md:text-sm',
@@ -1199,7 +1236,8 @@ export function BenefitsSectionShared({
                 <article
                   key={itemKeys[actualIdx]}
                   className={cn(
-                    'group rounded-[24px] border transition-all duration-300',
+                    'group border transition-all duration-300',
+                    cornerRadiusClassName,
                     isPreview
                       ? (resolvedPreviewDevice === 'mobile' ? 'p-5' : 'p-6')
                       : 'p-5 md:p-6',

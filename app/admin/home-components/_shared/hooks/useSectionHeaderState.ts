@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { SectionHeaderConfig } from '../types/sectionHeader';
+import { DEFAULT_SECTION_SPACING, normalizeSectionSpacing } from '../types/sectionSpacing';
 
 export function useSectionHeaderState(initialConfig?: Partial<SectionHeaderConfig>) {
   const [hideHeader, setHideHeader] = useState(initialConfig?.hideHeader ?? false);
@@ -12,6 +13,7 @@ export function useSectionHeaderState(initialConfig?: Partial<SectionHeaderConfi
   const [uppercaseText, setUppercaseText] = useState(initialConfig?.uppercaseText ?? false);
   const [showBadge, setShowBadge] = useState(initialConfig?.showBadge ?? true);
   const [badgeText, setBadgeText] = useState(initialConfig?.badgeText ?? '');
+  const [spacing, setSpacing] = useState(normalizeSectionSpacing(initialConfig?.spacing ?? DEFAULT_SECTION_SPACING));
 
   return {
     hideHeader,
@@ -34,6 +36,8 @@ export function useSectionHeaderState(initialConfig?: Partial<SectionHeaderConfi
     setShowBadge,
     badgeText,
     setBadgeText,
+    spacing,
+    setSpacing,
   };
 }
 
@@ -51,5 +55,6 @@ export function extractSectionHeaderConfig(config: Record<string, unknown>): Sec
     uppercaseText: typeof config.uppercaseText === 'boolean' ? config.uppercaseText : false,
     showBadge: typeof config.showBadge === 'boolean' ? config.showBadge : true,
     badgeText: typeof config.badgeText === 'string' ? config.badgeText : '',
+    spacing: normalizeSectionSpacing(config.spacing),
   };
 }

@@ -20,8 +20,10 @@ export const DEFAULT_MARQUEE_CONFIG: MarqueeConfig = {
   titleColorPrimary: false,
   subtitleAboveTitle: false,
   uppercaseText: false,
-  showBadge: false,
+  showBadge: true,
   badgeText: '',
+  spacing: 'normal',
+  cornerRadius: 'none',
 };
 
 export const DEMO_MARQUEE_ITEMS = [
@@ -33,6 +35,7 @@ export const DEMO_MARQUEE_ITEMS = [
 ];
 
 export const SEPARATOR_OPTIONS = [
+  { label: 'Khoảng cách trống', value: '  ' },
   { label: 'Sao', value: '✦' },
   { label: 'Ngôi sao', value: '★' },
   { label: 'Kim cương', value: '♦' },

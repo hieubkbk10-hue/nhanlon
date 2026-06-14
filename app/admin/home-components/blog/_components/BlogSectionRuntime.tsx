@@ -2,13 +2,22 @@
 
 import React from 'react';
 import Link from 'next/link';
+import useEmblaCarousel from 'embla-carousel-react';
 import { AdminImage } from '@/app/admin/components/AdminImage';
 import { PublicImage } from '@/components/shared/PublicImage';
 import { ArrowRight, ArrowUpRight, Calendar, ChevronRight, FileText, Newspaper } from 'lucide-react';
+import type { EmblaCarouselType } from 'embla-carousel';
 import { cn } from '../../../components/ui';
 import { SectionHeader } from '../../_shared/components/SectionHeader';
+import { getSectionSpacingClassName, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import type { BlogColorTokens } from '../_lib/colors';
-import type { BlogPreviewItem, BlogStyle } from '../_types';
+import {
+  getBlogCardRadiusClassName,
+  getBlogImageRadiusClassName,
+  type BlogCardRadius,
+  type BlogPreviewItem,
+  type BlogStyle,
+} from '../_types';
 
 type BlogSectionContext = 'preview' | 'site';
 type PreviewDevice = 'desktop' | 'tablet' | 'mobile';
@@ -41,6 +50,8 @@ interface BlogSectionRuntimeProps {
   uppercaseText?: boolean;
   // Grid columns
   desktopColumns?: 3 | 4;
+  spacing?: SectionSpacing;
+  cornerRadius?: BlogCardRadius;
 }
 
 const FALLBACK_TITLE = 'Tin tức mới nhất';
@@ -178,6 +189,104 @@ const ItemLink = ({
   return <div className={className} data-item-id={item.id}>{children}</div>;
 };
 
+const useBlogEmbla = (active: boolean, reInitKey: string) => {
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: 'start',
+    containScroll: 'trimSnaps',
+    dragFree: true,
+  });
+  const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+  const [canScrollNext, setCanScrollNext] = React.useState(false);
+
+  const updateScrollState = React.useCallback((api?: EmblaCarouselType) => {
+    if (!active || !api) {
+      setCanScrollPrev(false);
+      setCanScrollNext(false);
+      return;
+    }
+
+    setCanScrollPrev(api.canScrollPrev());
+    setCanScrollNext(api.canScrollNext());
+  }, [active]);
+
+  React.useEffect(() => {
+    if (!active || !emblaApi) {
+      updateScrollState(undefined);
+      return;
+    }
+
+    emblaApi.reInit();
+    updateScrollState(emblaApi);
+    emblaApi.on('select', updateScrollState);
+    emblaApi.on('reInit', updateScrollState);
+
+    return () => {
+      emblaApi.off('select', updateScrollState);
+      emblaApi.off('reInit', updateScrollState);
+    };
+  }, [active, emblaApi, reInitKey, updateScrollState]);
+
+  return {
+    canScrollNext,
+    canScrollPrev,
+    emblaRef,
+    scrollNext: () => emblaApi?.scrollNext(),
+    scrollPrev: () => emblaApi?.scrollPrev(),
+    showArrows: canScrollPrev || canScrollNext,
+  };
+};
+
+const EmblaArrowButtons = ({
+  canScrollNext,
+  canScrollPrev,
+  className,
+  compact = false,
+  onNext,
+  onPrev,
+  show,
+  tokens,
+}: {
+  canScrollNext: boolean;
+  canScrollPrev: boolean;
+  className?: string;
+  compact?: boolean;
+  onNext: () => void;
+  onPrev: () => void;
+  show: boolean;
+  tokens: BlogColorTokens;
+}) => {
+  if (!show) {return null;}
+
+  const buttonClassName = compact
+    ? 'h-5 w-5 rounded-full border flex items-center justify-center transition-colors'
+    : 'h-7 w-7 md:h-8 md:w-8 rounded-full border flex items-center justify-center transition-colors';
+  const iconSize = compact ? 10 : 14;
+
+  return (
+    <div className={cn('flex items-center gap-1.5', className)}>
+      <button
+        type="button"
+        onClick={onPrev}
+        disabled={!canScrollPrev}
+        aria-label="Trang trước"
+        className={cn(buttonClassName, canScrollPrev ? 'border-slate-200 hover:bg-slate-50' : 'border-slate-100 opacity-35 cursor-not-allowed')}
+      >
+        <ChevronRight size={iconSize} className="rotate-180" style={{ color: canScrollPrev ? tokens.primary.solid : undefined }} />
+      </button>
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={!canScrollNext}
+        aria-label="Trang sau"
+        className={cn(buttonClassName, canScrollNext ? 'text-white' : 'border-slate-100 opacity-35 cursor-not-allowed')}
+        style={canScrollNext ? { backgroundColor: tokens.primary.solid, borderColor: tokens.primary.solid } : undefined}
+      >
+        <ChevronRight size={iconSize} />
+      </button>
+    </div>
+  );
+};
+
 export function BlogSectionRuntime({
   items,
   title,
@@ -205,20 +314,20 @@ export function BlogSectionRuntime({
   uppercaseText = false,
   // Grid columns
   desktopColumns = 4,
+  spacing = 'normal',
+  cornerRadius = 'lg',
 }: BlogSectionRuntimeProps) {
   const breakpoint = getBlogBreakpoint(context, device);
-  const layout4PageSize = desktopColumns;
   const layout5PageSize = desktopColumns === 3 ? 6 : 8;
-  const layout6PageSize = desktopColumns;
-  const layout7PageSize = 3;
   const visibleItems = React.useMemo(
     () => items.slice(0, getBlogVisibleItemLimit(style, context, device)),
     [context, device, items, style],
   );
-  const [layout4Page, setLayout4Page] = React.useState(0);
   const [layout5Page, setLayout5Page] = React.useState(0);
-  const [layout6Page, setLayout6Page] = React.useState(0);
-  const [layout7Page, setLayout7Page] = React.useState(0);
+  const layout2Items = React.useMemo(
+    () => (style === 'layout2' ? items : visibleItems),
+    [items, style, visibleItems],
+  );
   const layout4Items = React.useMemo(
     () => (style === 'layout4' ? items : visibleItems),
     [items, style, visibleItems],
@@ -235,34 +344,11 @@ export function BlogSectionRuntime({
     () => (style === 'layout7' ? items : visibleItems),
     [items, style, visibleItems],
   );
-  const layout4TotalPages = React.useMemo(
-    () => (style === 'layout4' ? Math.ceil(layout4Items.length / layout4PageSize) : 1),
-    [layout4Items.length, style],
-  );
   const layout5TotalPages = React.useMemo(
     () => (style === 'layout5' ? Math.ceil(layout5Items.length / layout5PageSize) : 1),
     [layout5Items.length, style],
   );
-  const layout6TotalPages = React.useMemo(
-    () => (style === 'layout6' ? Math.ceil(layout6Items.length / layout6PageSize) : 1),
-    [layout6Items.length, style],
-  );
-  const layout7TotalPages = React.useMemo(
-    () => (style === 'layout7' ? Math.ceil(layout7Items.length / layout7PageSize) : 1),
-    [layout7Items.length, style],
-  );
-  const layout4CanPaginate = style === 'layout4' && layout4Items.length > layout4PageSize;
   const layout5CanPaginate = style === 'layout5' && layout5Items.length > layout5PageSize;
-  const layout6CanPaginate = style === 'layout6' && layout6Items.length > layout6PageSize;
-  const layout7CanPaginate = style === 'layout7' && layout7Items.length > layout7PageSize;
-  const layout4PagedItems = React.useMemo(() => {
-    if (style !== 'layout4') {
-      return visibleItems;
-    }
-
-    const startIndex = layout4Page * layout4PageSize;
-    return layout4Items.slice(startIndex, startIndex + layout4PageSize);
-  }, [layout4Items, layout4Page, style, visibleItems]);
   const layout5PagedItems = React.useMemo(() => {
     if (style !== 'layout5') {
       return visibleItems;
@@ -271,27 +357,15 @@ export function BlogSectionRuntime({
     const startIndex = layout5Page * layout5PageSize;
     return layout5Items.slice(startIndex, startIndex + layout5PageSize);
   }, [layout5Items, layout5Page, style, visibleItems]);
-  const layout6PagedItems = React.useMemo(() => {
-    if (style !== 'layout6') {
-      return visibleItems;
-    }
-
-    const startIndex = layout6Page * layout6PageSize;
-    return layout6Items.slice(startIndex, startIndex + layout6PageSize);
-  }, [layout6Items, layout6Page, style, visibleItems, layout6PageSize]);
-  const layout7PagedItems = React.useMemo(() => {
-    if (style !== 'layout7') {
-      return visibleItems;
-    }
-
-    const startIndex = layout7Page * layout7PageSize;
-    return layout7Items.slice(startIndex, startIndex + layout7PageSize);
-  }, [layout7Items, layout7Page, style, visibleItems]);
+  const layout2Embla = useBlogEmbla(style === 'layout2', `layout2-${layout2Items.length}-${desktopColumns}-${breakpoint}`);
+  const layout4Embla = useBlogEmbla(style === 'layout4', `layout4-${layout4Items.length}-${desktopColumns}-${breakpoint}`);
+  const layout6Embla = useBlogEmbla(style === 'layout6', `layout6-${layout6Items.length}-${desktopColumns}-${breakpoint}`);
+  const layout7Embla = useBlogEmbla(style === 'layout7', `layout7-${layout7Items.length}-${desktopColumns}-${breakpoint}`);
   const layout1Categories = React.useMemo(
     () => Array.from(new Set(items.map((item) => resolveCategoryLabel(item.category)))),
     [items],
   );
-  const [activeLayout1Category, setActiveLayout1Category] = React.useState<string | undefined>(layout1Categories[0]);
+  const [activeLayout1Category, setActiveLayout1Category] = React.useState<string | undefined>(undefined);
 
   React.useEffect(() => {
     if (layout1Categories.length === 0) {
@@ -300,25 +374,9 @@ export function BlogSectionRuntime({
     }
 
     setActiveLayout1Category((current) => (
-      current && layout1Categories.includes(current)
-        ? current
-        : layout1Categories[0]
+      current && layout1Categories.includes(current) ? current : undefined
     ));
   }, [layout1Categories]);
-
-  React.useEffect(() => {
-    if (style !== 'layout4') {
-      if (layout4Page !== 0) {
-        setLayout4Page(0);
-      }
-      return;
-    }
-
-    const lastPage = Math.max(layout4TotalPages - 1, 0);
-    if (layout4Page > lastPage) {
-      setLayout4Page(lastPage);
-    }
-  }, [layout4Page, layout4TotalPages, style]);
 
   React.useEffect(() => {
     if (style !== 'layout5') {
@@ -334,34 +392,6 @@ export function BlogSectionRuntime({
     }
   }, [layout5Page, layout5TotalPages, style]);
 
-  React.useEffect(() => {
-    if (style !== 'layout6') {
-      if (layout6Page !== 0) {
-        setLayout6Page(0);
-      }
-      return;
-    }
-
-    const lastPage = Math.max(layout6TotalPages - 1, 0);
-    if (layout6Page > lastPage) {
-      setLayout6Page(lastPage);
-    }
-  }, [layout6Page, layout6TotalPages, style]);
-
-  React.useEffect(() => {
-    if (style !== 'layout7') {
-      if (layout7Page !== 0) {
-        setLayout7Page(0);
-      }
-      return;
-    }
-
-    const lastPage = Math.max(layout7TotalPages - 1, 0);
-    if (layout7Page > lastPage) {
-      setLayout7Page(lastPage);
-    }
-  }, [layout7Page, layout7TotalPages, style]);
-
   const layout1Items = React.useMemo(() => {
     if (style !== 'layout1') {
       return visibleItems;
@@ -371,12 +401,15 @@ export function BlogSectionRuntime({
       ? items.filter((item) => resolveCategoryLabel(item.category) === activeLayout1Category)
       : items;
 
-    return filteredItems.slice(0, getBlogVisibleItemLimit(style, context, device));
-  }, [activeLayout1Category, context, device, items, style, visibleItems]);
+    return filteredItems;
+  }, [activeLayout1Category, items, style, visibleItems]);
 
   const sectionTitle = toText(title) ?? FALLBACK_TITLE;
   const sectionSubtitle = toText(subtitle);
   const outerShellClassName = getOuterShellClassName(style);
+  const sectionSpacingClassName = getSectionSpacingClassName(spacing);
+  const cardRadiusClassName = getBlogCardRadiusClassName(cornerRadius);
+  const imageRadiusClassName = getBlogImageRadiusClassName(cornerRadius);
 
   // Shared SectionHeader rendering for all layouts
   const renderSectionHeader = (className?: string) => {
@@ -404,15 +437,14 @@ export function BlogSectionRuntime({
     ? { desktop: 'grid-cols-3', tablet: 'grid-cols-3', mobile: 'grid-cols-1' }
     : { desktop: 'grid-cols-4', tablet: 'grid-cols-2', mobile: 'grid-cols-2' }
   );
-  const layout46GridClassName = getResponsiveClassName(context, breakpoint, desktopColumns === 3
-    ? { desktop: 'grid-cols-3', tablet: 'grid-cols-3', mobile: 'grid-cols-1' }
-    : { desktop: 'grid-cols-4', tablet: 'grid-cols-2', mobile: 'grid-cols-2' }
+  const emblaItemClassName = getResponsiveClassName(context, breakpoint, desktopColumns === 3
+    ? { desktop: 'basis-1/3 pl-5', tablet: 'basis-1/3 pl-5', mobile: 'basis-[82%] pl-3' }
+    : { desktop: 'basis-1/4 pl-5', tablet: 'basis-1/2 pl-5', mobile: 'basis-[82%] pl-3' }
   );
-  const layout7GridClassName = getResponsiveClassName(context, breakpoint, {
-    desktop: 'grid-cols-3',
-    tablet: 'grid-cols-2',
-    mobile: 'grid-cols-1',
-  });
+  const layout7EmblaItemClassName = getResponsiveClassName(context, breakpoint, desktopColumns === 3
+    ? { desktop: 'basis-1/3 pl-5', tablet: 'basis-1/3 pl-5', mobile: 'basis-[86%] pl-3' }
+    : { desktop: 'basis-1/4 pl-5', tablet: 'basis-1/2 pl-5', mobile: 'basis-[78%] pl-3' }
+  );
   const layout3GridClassName = getResponsiveClassName(context, breakpoint, {
     desktop: 'grid-cols-2',
     tablet: 'grid-cols-2',
@@ -489,7 +521,8 @@ export function BlogSectionRuntime({
     mobile: 'p-4',
   });
   const hasDisplayItems =
-    style === 'layout4' ? layout4Items.length > 0
+    style === 'layout2' ? layout2Items.length > 0
+      : style === 'layout4' ? layout4Items.length > 0
       : style === 'layout5' ? layout5Items.length > 0
         : style === 'layout6' ? layout6Items.length > 0
           : style === 'layout7' ? layout7Items.length > 0
@@ -497,7 +530,7 @@ export function BlogSectionRuntime({
 
   if (!hasDisplayItems) {
     return (
-      <section className={cn('px-4 py-8 md:py-10', fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
+      <section className={cn('px-4', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
         <div className={outerShellClassName}>
           <div className="rounded-3xl border px-6 py-10 text-center" style={{ backgroundColor: tokens.cardBg, borderColor: tokens.cardBorder }}>
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: tokens.imageFallbackBg }}>
@@ -515,12 +548,25 @@ export function BlogSectionRuntime({
 
   if (style === 'layout1') {
     return (
-      <section className={cn('px-4 py-8 md:py-10', fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
+      <section className={cn('px-4', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
         <div className={outerShellClassName}>
           {renderSectionHeader('mb-8')}
           <div className="mb-8 text-center">
             {layout1Categories.length > 1 ? (
               <div className="flex flex-wrap justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => { setActiveLayout1Category(undefined); }}
+                  className={cn(
+                    'rounded-md px-6 py-2 font-medium whitespace-nowrap shadow-sm transition-colors',
+                    activeLayout1Category === undefined ? 'text-white' : 'bg-white',
+                  )}
+                  style={activeLayout1Category === undefined
+                    ? { backgroundColor: tokens.primary.solid }
+                    : { color: tokens.primary.solid }}
+                >
+                  Tất cả
+                </button>
                 {layout1Categories.map((category) => {
                   const isActive = category === activeLayout1Category;
 
@@ -548,7 +594,7 @@ export function BlogSectionRuntime({
           <div className={cn('mb-8 grid gap-3 md:gap-6', layout14GridClassName)}>
             {layout1Items.map((item) => (
               <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className="group">
-                <article className="flex h-full flex-col border bg-white shadow-sm transition-shadow hover:shadow-md" style={{ borderColor: tokens.cardBorder, backgroundColor: tokens.cardBg }}>
+                <article className={cn('flex h-full flex-col overflow-hidden border bg-white shadow-sm transition-shadow hover:shadow-md', cardRadiusClassName)} style={{ borderColor: tokens.cardBorder, backgroundColor: tokens.cardBg }}>
                   <div className="relative aspect-[3/2] w-full overflow-hidden">
                     <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw" context={context} className="transition-transform duration-500 group-hover:scale-105" />
                   </div>
@@ -591,30 +637,43 @@ export function BlogSectionRuntime({
 
   if (style === 'layout2') {
     return (
-      <section className={cn('px-4 py-8 md:py-10', fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
+      <section className={cn('px-4', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
         <div className={outerShellClassName}>
           {renderSectionHeader('mb-8')}
 
-          <div className={cn('mb-8 grid gap-3 md:gap-6', layout14GridClassName)}>
-            {visibleItems.slice(0, 4).map((item) => (
-              <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className="group cursor-pointer pb-3 md:pb-4">
-                <article className={cn('flex h-full flex-col', breakpoint === 'mobile' ? 'border-b' : 'border-b-0')} style={{ borderColor: tokens.cardBorder }}>
-                  <div className="relative mb-3 md:mb-4 aspect-[4/3] w-full overflow-hidden rounded-sm border bg-slate-100" style={{ borderColor: `${tokens.cardBorder}80` }}>
-                    <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw" context={context} className="transition-transform duration-300 group-hover:scale-105" />
-                    {showDate && resolveDate(item) ? (
-                      <div className="absolute left-3 top-3 px-2 py-1 text-center text-white shadow-sm" style={{ backgroundColor: tokens.secondary.solid }}>
-                        <div className="text-lg font-bold leading-none">{resolveDate(item)?.split('/')[0] ?? ''}</div>
-                        <div className="text-[10px] font-medium leading-tight">{resolveDate(item)?.split('/').slice(1).join('/') ?? ''}</div>
+          <div className="relative mb-8">
+            <EmblaArrowButtons
+              canScrollNext={layout2Embla.canScrollNext}
+              canScrollPrev={layout2Embla.canScrollPrev}
+              className="mb-3 justify-end"
+              onNext={layout2Embla.scrollNext}
+              onPrev={layout2Embla.scrollPrev}
+              show={layout2Embla.showArrows}
+              tokens={tokens}
+            />
+            <div ref={layout2Embla.emblaRef} className="overflow-hidden">
+              <div className="flex -ml-3 md:-ml-5">
+                {layout2Items.map((item) => (
+                  <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className={cn('group min-w-0 flex-none cursor-pointer pb-3 md:pb-4', emblaItemClassName)}>
+                    <article className={cn('flex h-full flex-col', breakpoint === 'mobile' ? 'border-b' : 'border-b-0')} style={{ borderColor: tokens.cardBorder }}>
+                      <div className={cn('relative mb-3 md:mb-4 aspect-[4/3] w-full overflow-hidden border bg-slate-100', imageRadiusClassName)} style={{ borderColor: `${tokens.cardBorder}80` }}>
+                        <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 82vw" context={context} className="transition-transform duration-300 group-hover:scale-105" />
+                        {showDate && resolveDate(item) ? (
+                          <div className="absolute left-3 top-3 px-2 py-1 text-center text-white shadow-sm" style={{ backgroundColor: tokens.secondary.solid }}>
+                            <div className="text-lg font-bold leading-none">{resolveDate(item)?.split('/')[0] ?? ''}</div>
+                            <div className="text-[10px] font-medium leading-tight">{resolveDate(item)?.split('/').slice(1).join('/') ?? ''}</div>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                  <h3 className={cn('mb-2 line-clamp-2 text-base font-bold transition-colors', breakpoint !== 'mobile' && 'line-clamp-1')} style={{ color: tokens.bodyText }}>{item.title}</h3>
-                  {showExcerpt && item.excerpt ? (
-                    <p className="line-clamp-3 text-sm leading-relaxed" style={{ color: tokens.mutedText }}>{item.excerpt}</p>
-                  ) : null}
-                </article>
-              </ItemLink>
-            ))}
+                      <h3 className={cn('mb-2 line-clamp-2 text-base font-bold transition-colors', breakpoint !== 'mobile' && 'line-clamp-1')} style={{ color: tokens.bodyText }}>{item.title}</h3>
+                      {showExcerpt && item.excerpt ? (
+                        <p className="line-clamp-3 text-sm leading-relaxed" style={{ color: tokens.mutedText }}>{item.excerpt}</p>
+                      ) : null}
+                    </article>
+                  </ItemLink>
+                ))}
+              </div>
+            </div>
           </div>
 
           {renderViewAll({
@@ -636,7 +695,7 @@ export function BlogSectionRuntime({
     const [featuredItem, ...listItems] = visibleItems;
 
     return (
-      <section className={cn('px-4 py-8 md:py-10', fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
+      <section className={cn('px-4', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
         <div className={outerShellClassName}>
           {renderSectionHeader('mb-6')}
 
@@ -644,7 +703,7 @@ export function BlogSectionRuntime({
             {featuredItem ? (
               <ItemLink item={featuredItem} href={getHref(featuredItem)} context={context} className="group flex flex-col">
                 <article className="flex flex-col">
-                  <div className="relative mb-6 aspect-[4/3] w-full overflow-hidden rounded-sm bg-slate-100">
+                  <div className={cn('relative mb-6 aspect-[4/3] w-full overflow-hidden bg-slate-100', imageRadiusClassName)}>
                     <ImageView item={featuredItem} alt={featuredItem.title} sizes="(min-width: 768px) 50vw, 100vw" context={context} className="transition-transform duration-700 group-hover:scale-105" />
                   </div>
                   <h3 className="mb-3 text-xl font-bold leading-snug md:text-2xl" style={{ color: tokens.primary.solid }}>{featuredItem.title}</h3>
@@ -665,7 +724,7 @@ export function BlogSectionRuntime({
               {listItems.slice(0, 4).map((item) => (
                 <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className="group cursor-pointer">
                   <article className={cn('flex', layout3ItemGapClassName)}>
-                    <div className={cn('relative aspect-square shrink-0 overflow-hidden rounded-sm bg-slate-100', layout3ThumbWidthClassName)}>
+                    <div className={cn('relative aspect-square shrink-0 overflow-hidden bg-slate-100', imageRadiusClassName, layout3ThumbWidthClassName)}>
                       <ImageView item={item} alt={item.title} sizes="128px" context={context} className="transition-transform duration-500 group-hover:scale-105" />
                     </div>
                     <div className="flex flex-1 flex-col justify-center">
@@ -688,79 +747,58 @@ export function BlogSectionRuntime({
   }
 
   if (style === 'layout4') {
-    const canGoToPreviousLayout4Page = layout4Page > 0;
-    const canGoToNextLayout4Page = layout4Page < layout4TotalPages - 1;
-
     return (
-      <section className={cn('px-4 py-8 md:py-10', fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle, '--token-primary': tokens.primary.solid, '--token-secondary-text': tokens.secondary.solid } as React.CSSProperties}>
+      <section className={cn('px-4', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle, '--token-primary': tokens.primary.solid, '--token-secondary-text': tokens.secondary.solid } as React.CSSProperties}>
         <div className={cn(outerShellClassName, 'flex flex-col items-start')}>
-          <div className="mb-6 md:mb-8 w-full">
+          <div className="mb-4 md:mb-5 w-full">
             {renderSectionHeader('mb-0')}
-            {layout4CanPaginate ? (
-              <div className="flex justify-end items-center gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => { setLayout4Page((current) => Math.max(current - 1, 0)); }}
-                  disabled={!canGoToPreviousLayout4Page}
-                  aria-label="Trang trước"
-                  className={cn(
-                    'w-8 h-8 md:w-10 md:h-10 rounded-full border flex items-center justify-center transition-colors',
-                    canGoToPreviousLayout4Page ? 'border-slate-200 hover:bg-slate-50' : 'border-slate-100 opacity-40 cursor-not-allowed',
-                  )}
-                >
-                  <ChevronRight size={18} className="rotate-180" style={{ color: canGoToPreviousLayout4Page ? tokens.primary.solid : undefined }} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setLayout4Page((current) => Math.min(current + 1, layout4TotalPages - 1)); }}
-                  disabled={!canGoToNextLayout4Page}
-                  aria-label="Trang sau"
-                  className={cn(
-                    'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors',
-                    canGoToNextLayout4Page ? 'text-white' : 'opacity-40 cursor-not-allowed border border-slate-100',
-                  )}
-                  style={canGoToNextLayout4Page ? { backgroundColor: tokens.primary.solid } : undefined}
-                >
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-            ) : null}
+            <EmblaArrowButtons
+              canScrollNext={layout4Embla.canScrollNext}
+              canScrollPrev={layout4Embla.canScrollPrev}
+              className="mt-1.5 justify-end"
+              onNext={layout4Embla.scrollNext}
+              onPrev={layout4Embla.scrollPrev}
+              show={layout4Embla.showArrows}
+              tokens={tokens}
+            />
           </div>
 
-          <div className={cn('mb-8 md:mb-10 grid w-full gap-5 md:gap-6', layout46GridClassName)}>
-            {layout4PagedItems.map((item) => (
-              <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className="group cursor-pointer bg-white">
-                <article className="flex flex-col bg-white">
-                  <div
-                    className="relative z-0 mb-6 aspect-[4/3] overflow-hidden rounded-[2rem] border bg-slate-100"
-                    style={{ borderColor: tokens.cardBorder }}
-                  >
-                    <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw" context={context} className="transition-transform duration-700 group-hover:scale-105" />
-                    {showDate && resolveDate(item) ? (
-                      <div className="absolute bottom-4 right-4 rounded-full bg-black px-4 py-1.5 text-xs font-bold text-white shadow-lg">
-                        {resolveDate(item)}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="px-2">
-                    <h3 className="mb-2 line-clamp-2 text-lg font-bold leading-tight transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.bodyText }}>
-                      {item.title}
-                    </h3>
-                    {showAuthor && item.author ? (
-                      <p className="mb-3 flex items-center gap-1 text-xs text-slate-500">
-                        Đăng bởi: <span style={{ color: tokens.primary.solid }}>{item.author}</span>
-                      </p>
-                    ) : null}
-                    {showExcerpt && item.excerpt ? (
-                      <p className="mb-4 line-clamp-2 text-sm leading-relaxed" style={{ color: tokens.mutedText }}>{item.excerpt}</p>
-                    ) : null}
-                    <span className="text-sm font-bold transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.bodyText }}>
-                      Đọc tiếp › ›
-                    </span>
-                  </div>
-                </article>
-              </ItemLink>
-            ))}
+          <div ref={layout4Embla.emblaRef} className="mb-6 md:mb-8 w-full overflow-hidden">
+            <div className="flex -ml-3 md:-ml-5">
+              {layout4Items.map((item) => (
+                <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className={cn('group min-w-0 flex-none cursor-pointer bg-white', emblaItemClassName)}>
+                  <article className="flex h-full flex-col bg-white">
+                    <div
+                      className={cn('relative z-0 mb-6 aspect-[4/3] overflow-hidden border bg-slate-100', imageRadiusClassName)}
+                      style={{ borderColor: tokens.cardBorder }}
+                    >
+                      <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 82vw" context={context} className="transition-transform duration-700 group-hover:scale-105" />
+                      {showDate && resolveDate(item) ? (
+                        <div className="absolute bottom-4 right-4 rounded-full bg-black px-4 py-1.5 text-xs font-bold text-white shadow-lg">
+                          {resolveDate(item)}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="px-2">
+                      <h3 className="mb-2 line-clamp-2 text-lg font-bold leading-tight transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.bodyText }}>
+                        {item.title}
+                      </h3>
+                      {showAuthor && item.author ? (
+                        <p className="mb-3 flex items-center gap-1 text-xs text-slate-500">
+                          Đăng bởi: <span style={{ color: tokens.primary.solid }}>{item.author}</span>
+                        </p>
+                      ) : null}
+                      {showExcerpt && item.excerpt ? (
+                        <p className="mb-4 line-clamp-2 text-sm leading-relaxed" style={{ color: tokens.mutedText }}>{item.excerpt}</p>
+                      ) : null}
+                      <span className="text-sm font-bold transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.bodyText }}>
+                        Đọc tiếp › ›
+                      </span>
+                    </div>
+                  </article>
+                </ItemLink>
+              ))}
+            </div>
           </div>
 
           {renderViewAll({
@@ -786,8 +824,8 @@ export function BlogSectionRuntime({
     const canGoToNextLayout5Page = layout5Page < layout5TotalPages - 1;
 
     return (
-      <section className={cn('px-4 py-8 md:py-10', fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
-        <div className={cn(outerShellClassName, 'rounded-md border bg-white shadow-sm', layout5WrapperPaddingClassName)} style={{ borderColor: `${tokens.cardBorder}80`, backgroundColor: tokens.cardBg }}>
+      <section className={cn('px-4', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
+        <div className={cn(outerShellClassName, 'border bg-white shadow-sm', cardRadiusClassName, layout5WrapperPaddingClassName)} style={{ borderColor: `${tokens.cardBorder}80`, backgroundColor: tokens.cardBg }}>
           <div className="mb-6 md:mb-8">
             {renderSectionHeader('mb-0')}
             {layout5CanPaginate ? (
@@ -825,7 +863,7 @@ export function BlogSectionRuntime({
             {layout5PagedItems.map((item) => (
               <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className="group cursor-pointer">
                 <article className="flex flex-col">
-                  <div className="relative mb-3 aspect-[16/10] w-full overflow-hidden rounded-md bg-slate-100">
+                  <div className={cn('relative mb-3 aspect-[16/10] w-full overflow-hidden bg-slate-100', imageRadiusClassName)}>
                     <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw" context={context} className="transition-transform duration-300 group-hover:scale-105" />
                   </div>
                   <div className="flex flex-1 flex-col">
@@ -858,70 +896,49 @@ export function BlogSectionRuntime({
   }
 
   if (style === 'layout6') {
-    const canGoToPreviousLayout6Page = layout6Page > 0;
-    const canGoToNextLayout6Page = layout6Page < layout6TotalPages - 1;
-
     return (
-      <section className={cn('px-4 py-8 md:py-10', fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
-        <div className={cn(outerShellClassName, 'rounded-3xl border bg-gray-50/50', layout6WrapperPaddingClassName)} style={{ borderColor: tokens.cardBorder }}>
-          <div className="mb-6 md:mb-8">
+      <section className={cn('px-4', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, ...fontStyle }}>
+        <div className={cn(outerShellClassName, 'border bg-gray-50/50', cardRadiusClassName, layout6WrapperPaddingClassName)} style={{ borderColor: tokens.cardBorder }}>
+          <div className="mb-4 md:mb-5">
             {renderSectionHeader('mb-0')}
-            {layout6CanPaginate ? (
-              <div className="flex justify-end items-center gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => { setLayout6Page((current) => Math.max(current - 1, 0)); }}
-                  disabled={!canGoToPreviousLayout6Page}
-                  aria-label="Trang trước"
-                  className={cn(
-                    'w-8 h-8 md:w-10 md:h-10 rounded-full border flex items-center justify-center transition-colors',
-                    canGoToPreviousLayout6Page ? 'border-slate-200 hover:bg-slate-50' : 'border-slate-100 opacity-40 cursor-not-allowed',
-                  )}
-                >
-                  <ChevronRight size={18} className="rotate-180" style={{ color: canGoToPreviousLayout6Page ? tokens.primary.solid : undefined }} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setLayout6Page((current) => Math.min(current + 1, layout6TotalPages - 1)); }}
-                  disabled={!canGoToNextLayout6Page}
-                  aria-label="Trang sau"
-                  className={cn(
-                    'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors',
-                    canGoToNextLayout6Page ? 'text-white' : 'opacity-40 cursor-not-allowed border border-slate-100',
-                  )}
-                  style={canGoToNextLayout6Page ? { backgroundColor: tokens.primary.solid } : undefined}
-                >
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-            ) : null}
+            <EmblaArrowButtons
+              canScrollNext={layout6Embla.canScrollNext}
+              canScrollPrev={layout6Embla.canScrollPrev}
+              className="mt-1.5 justify-end"
+              onNext={layout6Embla.scrollNext}
+              onPrev={layout6Embla.scrollPrev}
+              show={layout6Embla.showArrows}
+              tokens={tokens}
+            />
           </div>
 
-          <div className={cn('mb-6 md:mb-8 grid gap-5 md:gap-6', layout46GridClassName)}>
-            {layout6PagedItems.map((item) => (
-              <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className="group flex h-full cursor-pointer">
-                <article className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md" style={{ borderColor: tokens.cardBorder, backgroundColor: tokens.cardBg }}>
-                  <div className="relative aspect-[16/10] w-full">
-                    <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw" context={context} />
-                    {showDate && resolveDate(item) ? (
-                      <div className="absolute top-0 left-4 flex flex-col items-center justify-center rounded-b-lg px-3 py-2 text-white shadow-sm" style={{ backgroundColor: tokens.primary.solid }}>
-                        <span className="text-xl font-bold leading-none">{resolveDate(item)?.split('/')[0] ?? ''}</span>
-                        <span className="text-[10px] font-medium uppercase tracking-wider">{resolveDate(item)?.split('/').slice(1).join('/') ?? ''}</span>
-                      </div>
-                    ) : null}
-                  </div>
+          <div ref={layout6Embla.emblaRef} className="mb-5 md:mb-6 overflow-hidden">
+            <div className="flex -ml-3 md:-ml-5">
+              {layout6Items.map((item) => (
+                <ItemLink key={item.id} item={item} href={getHref(item)} context={context} className={cn('group flex h-full min-w-0 flex-none cursor-pointer', emblaItemClassName)}>
+                  <article className={cn('flex h-full w-full flex-col overflow-hidden border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md', cardRadiusClassName)} style={{ borderColor: tokens.cardBorder, backgroundColor: tokens.cardBg }}>
+                    <div className="relative aspect-[16/10] w-full">
+                      <ImageView item={item} alt={item.title} sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 82vw" context={context} />
+                      {showDate && resolveDate(item) ? (
+                        <div className="absolute top-0 left-4 flex flex-col items-center justify-center rounded-b-lg px-3 py-2 text-white shadow-sm" style={{ backgroundColor: tokens.primary.solid }}>
+                          <span className="text-xl font-bold leading-none">{resolveDate(item)?.split('/')[0] ?? ''}</span>
+                          <span className="text-[10px] font-medium uppercase tracking-wider">{resolveDate(item)?.split('/').slice(1).join('/') ?? ''}</span>
+                        </div>
+                      ) : null}
+                    </div>
 
-                  <div className="flex flex-1 flex-col p-4 pb-4 md:p-5 md:pb-6">
-                    <h3 className="mb-3 line-clamp-2 text-lg font-semibold leading-snug transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.bodyText }}>
-                      {item.title}
-                    </h3>
-                    {showExcerpt && item.excerpt ? (
-                      <p className="flex-1 line-clamp-3 text-sm leading-relaxed" style={{ color: tokens.mutedText }}>{item.excerpt}</p>
-                    ) : <div className="flex-1" />}
-                  </div>
-                </article>
-              </ItemLink>
-            ))}
+                    <div className="flex flex-1 flex-col p-4 pb-4 md:p-5 md:pb-6">
+                      <h3 className="mb-3 line-clamp-2 text-lg font-semibold leading-snug transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.bodyText }}>
+                        {item.title}
+                      </h3>
+                      {showExcerpt && item.excerpt ? (
+                        <p className="flex-1 line-clamp-3 text-sm leading-relaxed" style={{ color: tokens.mutedText }}>{item.excerpt}</p>
+                      ) : <div className="flex-1" />}
+                    </div>
+                  </article>
+                </ItemLink>
+              ))}
+            </div>
           </div>
 
           {renderViewAll({
@@ -939,162 +956,80 @@ export function BlogSectionRuntime({
     );
   }
 
-  // Layout 7: Bean Construction style
-  const canGoToPreviousLayout7Page = layout7Page > 0;
-  const canGoToNextLayout7Page = layout7Page < layout7TotalPages - 1;
-
   return (
-    <section className={cn('section-index section_blog py-[60px]', fontClassName)} style={{ backgroundColor: tokens.sectionBg, fontFamily: '"Manrope", sans-serif', fontSize: '14px', lineHeight: '23.8px', ...fontStyle }}>
+    <section className={cn('section-index section_blog', sectionSpacingClassName, fontClassName)} style={{ backgroundColor: tokens.sectionBg, fontSize: '14px', lineHeight: '22px', ...fontStyle, fontFamily: '"Be Vietnam Pro", sans-serif' }}>
       <div className={cn(outerShellClassName, "relative mx-auto max-w-[1170px] px-[10px]")}>
-        {!hideHeader && (
-          <>
-            <div className="section-title-blog mb-[15px] flex flex-col" style={{ textAlign: headerAlign }}>
-              {showSubtitleHeader && subtitle && (
-                <div className="sub_title text-[14px] font-[700] uppercase mb-[15px]" style={{ color: tokens.primary.solid }}>
-                  {subtitle}
-                </div>
-              )}
-              {showTitleHeader && (
-                <h2 className="text-[40px] font-[800] leading-[56px] mb-[5px]" style={{ fontFamily: '"Raleway", sans-serif' }}>
-                  <span style={{ color: titleColorPrimary ? tokens.primary.solid : tokens.heading }}>{sectionTitle}</span>
-                </h2>
-              )}
-            </div>
-            
-            {showBadge && badgeText && (
-              <div className="desc mb-[20px] text-[16px] leading-[27.2px]" style={{ color: tokens.mutedText, textAlign: headerAlign, margin: headerAlign === 'center' ? '0 auto 20px' : '0 0 20px' }}> 
-                {badgeText}
-              </div>
-            )}
-          </>
-        )}
+        {renderSectionHeader('mb-4')}
 
         <div className="swiper_blogs swiper-container relative">
-          {layout7CanPaginate && (
-            <>
-              <button
-                type="button"
-                onClick={() => { setLayout7Page((current) => Math.max(current - 1, 0)); }}
-                disabled={!canGoToPreviousLayout7Page}
-                className={cn(
-                  'swiper-button-prev absolute left-[-55px] top-[43%] -translate-y-1/2 z-10 w-[60px] h-[60px] rounded-[50%] flex items-center justify-center transition-all opacity-0 xl:opacity-100',
-                  canGoToPreviousLayout7Page ? 'cursor-pointer hover:scale-105' : 'opacity-35 cursor-not-allowed',
-                )}
-                style={{ backgroundColor: tokens.primary.solid, color: '#fff' }}
-              >
-                <svg width="58" height="58" viewBox="0 0 58 58" fill="none" xmlns="http://www.w3.org/2000/svg" className="rotate-180">
-                  <path d="M18.5 29H39.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
-                  <path d="M29 18.5L39.5 29L29 39.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLayout7Page((current) => Math.min(current + 1, layout7TotalPages - 1)); }}
-                disabled={!canGoToNextLayout7Page}
-                className={cn(
-                  'swiper-button-next absolute right-[-55px] top-[43%] -translate-y-1/2 z-10 w-[60px] h-[60px] rounded-[50%] flex items-center justify-center transition-all opacity-0 xl:opacity-100',
-                  canGoToNextLayout7Page ? 'cursor-pointer hover:scale-105' : 'opacity-35 cursor-not-allowed',
-                )}
-                style={{ backgroundColor: tokens.primary.solid, color: '#fff' }}
-              >
-                <svg width="58" height="58" viewBox="0 0 58 58" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18.5 29H39.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
-                  <path d="M29 18.5L39.5 29L29 39.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
-                </svg>
-              </button>
-            </>
-          )}
+          <EmblaArrowButtons
+            canScrollNext={layout7Embla.canScrollNext}
+            canScrollPrev={layout7Embla.canScrollPrev}
+            className="absolute right-0 top-0 z-10 -translate-y-7"
+            compact
+            onNext={layout7Embla.scrollNext}
+            onPrev={layout7Embla.scrollPrev}
+            show={layout7Embla.showArrows}
+            tokens={tokens}
+          />
 
-          <div className={cn("swiper-wrapper grid gap-[20px]", layout7GridClassName)}>
-            {layout7PagedItems.map((item) => (
-              <div key={item.id} className="swiper-slide h-auto">
-                <ItemLink item={item} href={getHref(item)} context={context} className="group flex h-full cursor-pointer flex-col">
-                  <article className="item_blog flex h-full flex-col overflow-hidden bg-white">
-                    <div className="image-blog relative w-full overflow-hidden rounded-[20px] bg-[#f8f8f8]" style={{ paddingBottom: '63.5%' }}>
-                      <ImageView item={item} alt={item.title} sizes="(min-width: 1170px) 369px, (min-width: 768px) 50vw, 100vw" context={context} className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 ease-in-out group-hover:scale-[1.02]" />
-                      {showDate && resolveDate(item) && (
-                        <span className="user_date absolute bottom-[10px] right-[10px] z-[2] flex items-center justify-center rounded-[40px] bg-black px-[33px] py-[7px] text-[14px] leading-[19.6px] text-white"> 
-                          {resolveDate(item)}
-                        </span> 
-                      )}
-                    </div>
-                    <div className="blog_content flex flex-1 flex-col bg-white py-[10px]"> 
-                      <h3 className="mb-[7px]">
-                        <span className="block h-[44px] overflow-hidden text-[16px] font-[600] leading-[22px] transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.heading, '--token-primary': tokens.primary.solid } as React.CSSProperties}>
-                          {item.title}
-                        </span>
-                      </h3>
-                      {showAuthor && (
-                        <p className="update_date flex justify-between mb-[7px] text-[12px] leading-[20.4px]" style={{ color: 'rgb(131, 131, 131)' }}>
-                          <span className="user_name">Đăng bởi: <b className="font-[500]" style={{ color: tokens.primary.solid }}>{item.author || 'Bean Construction'}</b></span> 
-                        </p>
-                      )}
-                      <div className="conten_info_blog flex flex-col flex-1 min-h-[73.8px]">
-                        {showExcerpt && item.excerpt && (
-                          <p className="blog_description mb-[10px] h-[40px] overflow-hidden text-[14px] leading-[20px]" style={{ color: tokens.bodyText }}>
-                            {item.excerpt}
+          <div ref={layout7Embla.emblaRef} className="overflow-hidden">
+            <div className="swiper-wrapper flex -ml-3 md:-ml-5">
+              {layout7Items.map((item) => (
+                <div key={item.id} className={cn('swiper-slide h-auto min-w-0 flex-none', layout7EmblaItemClassName)}>
+                  <ItemLink item={item} href={getHref(item)} context={context} className="group flex h-full cursor-pointer flex-col">
+                    <article className="item_blog flex h-full flex-col overflow-hidden bg-white">
+                      <div className={cn('image-blog relative w-full overflow-hidden bg-[#f8f8f8]', imageRadiusClassName)} style={{ paddingBottom: '63.5%' }}>
+                        <ImageView item={item} alt={item.title} sizes="(min-width: 1170px) 25vw, (min-width: 768px) 50vw, 86vw" context={context} className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 ease-in-out group-hover:scale-[1.02]" />
+                        {showDate && resolveDate(item) && (
+                          <span className="user_date absolute bottom-[10px] right-[10px] z-[2] flex items-center justify-center rounded-[40px] bg-black px-[33px] py-[7px] text-[14px] leading-[19.6px] text-white"> 
+                            {resolveDate(item)}
+                          </span> 
+                        )}
+                      </div>
+                      <div className="blog_content flex flex-1 flex-col bg-white py-3"> 
+                        <h3 className="mb-1.5">
+                          <span className="block h-11 overflow-hidden text-sm font-semibold leading-5 transition-colors group-hover:text-[var(--token-primary)] md:text-[15px]" style={{ color: tokens.heading, '--token-primary': tokens.primary.solid } as React.CSSProperties}>
+                            {item.title}
+                          </span>
+                        </h3>
+                        {showAuthor && (
+                          <p className="update_date mb-1.5 flex justify-between text-xs leading-5" style={{ color: 'rgb(131, 131, 131)' }}>
+                            <span className="user_name">Đăng bởi: <b className="font-[500]" style={{ color: tokens.primary.solid }}>{item.author || 'Bean Construction'}</b></span> 
                           </p>
                         )}
-                        <div className="mt-auto">
-                          <span className="read_more text-[14px] font-[600] transition-colors group-hover:text-[var(--token-primary)] inline-block" style={{ color: tokens.bodyText, '--token-primary': tokens.primary.solid } as React.CSSProperties}>
-                            Đọc tiếp &gt;&gt;
-                          </span>
+                        <div className="conten_info_blog flex min-h-[66px] flex-1 flex-col">
+                          {showExcerpt && item.excerpt && (
+                            <p className="blog_description mb-2 h-10 overflow-hidden text-xs leading-5 md:text-[13px]" style={{ color: tokens.bodyText }}>
+                              {item.excerpt}
+                            </p>
+                          )}
+                          <div className="mt-auto">
+                            <span className="read_more inline-block text-xs font-semibold transition-colors group-hover:text-[var(--token-primary)]" style={{ color: tokens.bodyText, '--token-primary': tokens.primary.solid } as React.CSSProperties}>
+                              Đọc tiếp &gt;&gt;
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </article>
-                </ItemLink>
-              </div>
-            ))}
-          </div>
-          
-          {layout7CanPaginate && (
-            <div className="flex xl:hidden justify-center items-center gap-4 mt-[30px]">
-              <button
-                type="button"
-                onClick={() => { setLayout7Page((current) => Math.max(current - 1, 0)); }}
-                disabled={!canGoToPreviousLayout7Page}
-                className={cn(
-                  'w-[44px] h-[44px] rounded-full flex items-center justify-center transition-all shadow-sm',
-                  canGoToPreviousLayout7Page ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed',
-                )}
-                style={{ backgroundColor: canGoToPreviousLayout7Page ? tokens.primary.solid : '#f1f5f9', color: canGoToPreviousLayout7Page ? '#fff' : '#94a3b8' }}
-              >
-                <svg width="20" height="20" viewBox="0 0 58 58" fill="none" xmlns="http://www.w3.org/2000/svg" className="rotate-180">
-                  <path d="M18.5 29H39.5" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path>
-                  <path d="M29 18.5L39.5 29L29 39.5" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path>
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLayout7Page((current) => Math.min(current + 1, layout7TotalPages - 1)); }}
-                disabled={!canGoToNextLayout7Page}
-                className={cn(
-                  'w-[44px] h-[44px] rounded-full flex items-center justify-center transition-all shadow-sm',
-                  canGoToNextLayout7Page ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed',
-                )}
-                style={{ backgroundColor: canGoToNextLayout7Page ? tokens.primary.solid : '#f1f5f9', color: canGoToNextLayout7Page ? '#fff' : '#94a3b8' }}
-              >
-                <svg width="20" height="20" viewBox="0 0 58 58" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18.5 29H39.5" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path>
-                  <path d="M29 18.5L39.5 29L29 39.5" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path>
-                </svg>
-              </button>
+                    </article>
+                  </ItemLink>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
         </div>
 
         {renderViewAll({
           context,
           href: viewAllHref,
-          className: 'box_see_blog mt-[25px] flex justify-center',
+          className: 'box_see_blog mt-5 flex justify-center',
           children: (
-            <div className="theme-btn btn-style-three exp-btn-title inline-block font-[700] uppercase text-white transition-transform hover:scale-105 cursor-pointer rounded-[50px] pt-[8px] pb-[8px] pl-[26px] pr-[8px]" style={{ backgroundColor: tokens.primary.solid }}>
+            <div className="theme-btn btn-style-three exp-btn-title inline-block cursor-pointer rounded-full py-1.5 pl-5 pr-1.5 text-xs font-semibold uppercase text-white transition-transform hover:scale-105" style={{ backgroundColor: tokens.primary.solid }}>
               <span className="btn-wrap">
                 <span className="text-one flex items-center justify-center text-center">
                   XEM TẤT CẢ 
-                  <i className="flex h-[50px] w-[50px] items-center justify-center rounded-[50px] bg-black ml-[15px] italic">
-                    <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <i className="ml-3 flex h-8 w-8 items-center justify-center rounded-full bg-black italic">
+                    <svg width="8" height="8" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M0.46967 7.46967C0.176777 7.76256 0.176777 8.23744 0.46967 8.53033C0.762563 8.82322 1.23744 8.82322 1.53033 8.53033L0.46967 7.46967ZM8.75 1C8.75 0.585786 8.41421 0.25 8 0.25L1.25 0.25C0.835786 0.25 0.5 0.585786 0.5 1C0.5 1.41421 0.835786 1.75 1.25 1.75L7.25 1.75V7.75C7.25 8.16421 7.58579 8.5 8 8.5C8.41421 8.5 8.75 8.16421 8.75 7.75V1ZM1 8L1.53033 8.53033L8.53033 1.53033L8 1L7.46967 0.46967L0.46967 7.46967L1 8Z" fill="white"></path>
                     </svg>
                   </i>

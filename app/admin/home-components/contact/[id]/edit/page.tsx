@@ -1,5 +1,7 @@
 'use client';
 
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -12,6 +14,7 @@ import { Card, CardContent } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
@@ -32,14 +35,40 @@ import { getContactMapDataFromSettings } from '@/lib/contact/getContactMapData';
 
 const COMPONENT_TYPE = 'Contact';
 
-export default function ContactEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type ContactEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function ContactEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: ContactEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
   const contactSettings = useQuery(api.settings.listByGroup, { group: 'contact' });
   const mapData = useMemo(() => getContactMapDataFromSettings(contactSettings ?? []), [contactSettings]);
@@ -50,7 +79,8 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
+  const [displayExpanded, setDisplayExpanded] = useState(false);
   const [contactDataExpanded, setContactDataExpanded] = useState(false);
   const [formExpanded, setFormExpanded] = useState(false);
   const [socialExpanded, setSocialExpanded] = useState(false);
@@ -69,7 +99,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     if (!component) {return;}
 
-    if (component.type !== 'Contact') {
+    if (!snapshotComponent && component.type !== 'Contact') {
       router.replace(`/admin/home-components/${id}/edit`);
       return;
     }
@@ -91,7 +121,6 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
     setUppercaseText(headerConfig.uppercaseText ?? false);
     setShowBadge(headerConfig.showBadge ?? true);
     setBadgeText(headerConfig.badgeText ?? '');
-
     setInitialSnapshot(toContactSnapshot({
       title: component.title,
       active: component.active,
@@ -123,13 +152,13 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
   const style = configWithHeader.style;
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
@@ -173,6 +202,8 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
     return warnings;
   }, [effectiveColors.mode, validation]);
 
+  useUnsavedGuard(hasChanges);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isSubmitting || !hasChanges) {return;}
@@ -185,13 +216,17 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
         style: nextConfig.style,
       };
 
-      await updateMutation({
-        active,
-        config: payload,
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: payload, title });
+      } else {
+        await updateMutation({
+          active,
+          config: payload,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -201,7 +236,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -215,7 +250,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
         active,
         config: nextConfig,
       }));
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -223,7 +258,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -257,7 +292,8 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Contact</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 lg:hidden">
@@ -305,8 +341,8 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
           titlePlaceholder="Nhập tiêu đề component..."
@@ -319,10 +355,12 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
               value={normalizedConfig}
               onChange={(next) => { setConfig(normalizeContactConfig(next)); }}
               title="Cấu hình Contact"
+              displayExpanded={displayExpanded}
               contactDataExpanded={contactDataExpanded}
               formExpanded={formExpanded}
               socialExpanded={socialExpanded}
               labelsExpanded={labelsExpanded}
+              onDisplayExpandedChange={setDisplayExpanded}
               onContactDataExpandedChange={setContactDataExpanded}
               onFormExpandedChange={setFormExpanded}
               onSocialExpandedChange={setSocialExpanded}
@@ -343,7 +381,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
               </Card>
             )}
 
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Liên hệ"
                 enabled={customState.enabled}
@@ -372,7 +410,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
               />
             )}
 
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Liên hệ"
                 enabled={customFontState.enabled}
@@ -417,7 +455,7 @@ export default function ContactEditPage({ params }: { params: Promise<{ id: stri
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() => { router.push('/admin/home-components'); }}
+          onCancel={() => { router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}

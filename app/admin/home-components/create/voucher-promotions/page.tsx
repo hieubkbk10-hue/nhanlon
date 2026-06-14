@@ -1,21 +1,22 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { VoucherPromotionsPreview } from '../../voucher-promotions/_components/VoucherPromotionsPreview';
 import { VoucherPromotionsForm } from '../../voucher-promotions/_components/VoucherPromotionsForm';
 import { normalizeVoucherLimit } from '@/lib/home-components/voucher-promotions';
 import {
   DEFAULT_VOUCHER_PROMOTIONS_CONFIG,
   normalizeDemoVouchers,
+  normalizeVoucherPromotionsCornerRadius,
   normalizeVoucherPromotionsTexts,
 } from '../../voucher-promotions/_lib/constants';
-import { getVoucherPromotionsValidationResult } from '../../voucher-promotions/_lib/colors';
 import type { DemoVoucherPromotionItem, VoucherPromotionItem, VoucherPromotionsConfigState } from '../../voucher-promotions/_types';
 
 export default function VoucherPromotionsCreatePage() {
@@ -26,7 +27,7 @@ export default function VoucherPromotionsCreatePage() {
   const { primary, secondary, mode } = effectiveColors;
   const fontStyle = { '--font-active': `var(${effectiveFont.fontVariable})` } as React.CSSProperties;
   const [voucherConfig, setVoucherConfig] = useState<VoucherPromotionsConfigState>(DEFAULT_VOUCHER_PROMOTIONS_CONFIG);
-  const [headerExpanded, setHeaderExpanded] = useState(true);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], true);
   const [demoVouchers, setDemoVouchers] = useState<DemoVoucherPromotionItem[]>(DEFAULT_VOUCHER_PROMOTIONS_CONFIG.demoVouchers);
   const promotionsModule = useQuery(api.admin.modules.getModuleByKey, { key: 'promotions' });
   const canUseRealData = promotionsModule?.enabled === true;
@@ -35,18 +36,13 @@ export default function VoucherPromotionsCreatePage() {
     voucherConfig.selectionMode === 'auto' && canUseRealData ? { limit: normalizeVoucherLimit(voucherConfig.limit) } : 'skip',
   ) as VoucherPromotionItem[] | undefined;
 
-  useMemo(() => getVoucherPromotionsValidationResult({
-    primary,
-    secondary,
-    mode,
-  }), [primary, secondary, mode]);
-
   const onSubmit = (event: React.FormEvent) => {
     void handleSubmit(event, {
       ...voucherConfig,
       demoVouchers: voucherConfig.selectionMode === 'demo' ? normalizeDemoVouchers(demoVouchers) : [],
       limit: normalizeVoucherLimit(voucherConfig.limit),
-      texts: normalizeVoucherPromotionsTexts(voucherConfig.texts),
+      cornerRadius: normalizeVoucherPromotionsCornerRadius(voucherConfig.cornerRadius),
+      texts: normalizeVoucherPromotionsTexts({ ...voucherConfig.texts, heading: title }),
     });
   };
 
@@ -66,6 +62,7 @@ export default function VoucherPromotionsCreatePage() {
       customFontState={customFontState}
       showFontCustomBlock={showFontCustomBlock}
       setCustomFontState={setCustomFontState}
+      skipTitleInput
     >
       <HeaderConfigSection
         hideHeader={voucherConfig.hideHeader ?? false}
@@ -80,7 +77,10 @@ export default function VoucherPromotionsCreatePage() {
         showBadge={voucherConfig.showBadge ?? true}
         badgeText={voucherConfig.badgeText ?? ''}
         onHideHeaderChange={(value) => setVoucherConfig((prev) => ({ ...prev, hideHeader: value }))}
-        onTitleChange={setTitle}
+        onTitleChange={(value) => {
+          setTitle(value);
+          setVoucherConfig((prev) => ({ ...prev, texts: { ...prev.texts, heading: value } }));
+        }}
         onShowTitleChange={(value) => setVoucherConfig((prev) => ({ ...prev, showTitle: value }))}
         onSubtitleChange={(value) => setVoucherConfig((prev) => ({ ...prev, subtitle: value, texts: { ...prev.texts, description: value } }))}
         onShowSubtitleChange={(value) => setVoucherConfig((prev) => ({ ...prev, showSubtitle: value }))}
@@ -90,8 +90,8 @@ export default function VoucherPromotionsCreatePage() {
         onUppercaseTextChange={(value) => setVoucherConfig((prev) => ({ ...prev, uppercaseText: value }))}
         onShowBadgeChange={(value) => setVoucherConfig((prev) => ({ ...prev, showBadge: value }))}
         onBadgeTextChange={(value) => setVoucherConfig((prev) => ({ ...prev, badgeText: value }))}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={headerOpenSections.header}
+        onExpandedChange={(open) => toggleHeaderSection('header', open)}
         titleLabel="Tiêu đề section"
         titlePlaceholder="VD: Voucher khuyến mãi, Ưu đãi hôm nay..."
       />
@@ -109,12 +109,16 @@ export default function VoucherPromotionsCreatePage() {
         onShowCtaChange={(value) => setVoucherConfig((prev) => ({ ...prev, showCta: value }))}
         ctaVariant={voucherConfig.ctaVariant ?? 'button'}
         onCtaVariantChange={(value) => setVoucherConfig((prev) => ({ ...prev, ctaVariant: value }))}
+        spacing={voucherConfig.spacing ?? 'normal'}
+        onSpacingChange={(value) => setVoucherConfig((prev) => ({ ...prev, spacing: value }))}
         demoVouchers={demoVouchers}
         setDemoVouchers={setDemoVouchers}
         canUseRealData={canUseRealData}
         moduleLoaded={promotionsModule !== undefined}
         desktopColumns={voucherConfig.desktopColumns ?? 4}
         onDesktopColumnsChange={(value) => setVoucherConfig((prev) => ({ ...prev, desktopColumns: value }))}
+        cornerRadius={voucherConfig.cornerRadius ?? 'lg'}
+        onCornerRadiusChange={(value) => setVoucherConfig((prev) => ({ ...prev, cornerRadius: value }))}
         iconName={voucherConfig.iconName ?? 'BadgePercent'}
         onIconNameChange={(value) => setVoucherConfig((prev) => ({ ...prev, iconName: value }))}
         brandColor={primary}

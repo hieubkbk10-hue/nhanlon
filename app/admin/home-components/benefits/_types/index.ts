@@ -1,3 +1,4 @@
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 export interface BenefitPersistItem {
   icon: string;
   title: string;
@@ -13,6 +14,7 @@ export type LegacyBenefitsStyle = 'cards' | 'list' | 'bento' | 'row' | 'carousel
 export type BenefitsBrandMode = 'single' | 'dual';
 export type BenefitsHarmony = 'analogous' | 'complementary' | 'triadic';
 export type BenefitsHeaderAlign = 'left' | 'center' | 'right';
+export type BenefitsCornerRadius = 'none' | 'sm' | 'lg';
 
 export interface BenefitsConfig {
   items: BenefitPersistItem[];
@@ -20,7 +22,7 @@ export interface BenefitsConfig {
   subHeading?: string;
   heading?: string;
   headerAlign?: BenefitsHeaderAlign;
-  gridColumnsDesktop?: 3 | 4;
+  gridColumnsDesktop?: 3 | 4 | 5;
   gridColumnsMobile?: 1 | 2;
   buttonText?: string;
   buttonLink?: string;
@@ -28,6 +30,7 @@ export interface BenefitsConfig {
   highlightIndex?: number;
   showItemNumbers?: boolean;
   showDecorativeVisuals?: boolean;
+  cornerRadius?: BenefitsCornerRadius;
   harmony?: BenefitsHarmony;
   // Shared header config
   hideHeader?: boolean;
@@ -39,6 +42,9 @@ export interface BenefitsConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
 }
 
 export interface BenefitsEditorState {
@@ -47,7 +53,7 @@ export interface BenefitsEditorState {
   subHeading: string;
   heading: string;
   headerAlign: BenefitsHeaderAlign;
-  gridColumnsDesktop: 3 | 4;
+  gridColumnsDesktop: 3 | 4 | 5;
   gridColumnsMobile: 1 | 2;
   buttonText: string;
   buttonLink: string;
@@ -55,6 +61,7 @@ export interface BenefitsEditorState {
   highlightIndex: number;
   showItemNumbers: boolean;
   showDecorativeVisuals: boolean;
+  cornerRadius: BenefitsCornerRadius;
   harmony: BenefitsHarmony;
   // Shared header config
   hideHeader: boolean;

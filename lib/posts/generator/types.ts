@@ -55,6 +55,7 @@ export interface GeneratorProduct {
   affiliateLink?: string;
   categoryName?: string;
   categoryId?: string;
+  categorySlug?: string;
   categoryImage?: string;
   description?: string;
   relatedProducts?: GeneratorRelatedProduct[];
@@ -69,6 +70,7 @@ export interface GeneratorRelatedProduct {
   sales?: number;
   image?: string;
   affiliateLink?: string;
+  categorySlug?: string;
 }
 
 export interface GeneratorSettings {
@@ -86,6 +88,8 @@ export interface GeneratorRequest {
   budgetMin?: number;
   budgetMax?: number;
   keyword?: string;
+  secondaryKeyword?: string;
+  keywords?: string[];
   compareSlugs?: string[];
   selectedProductSlugs?: string[];
   categoryId?: string;

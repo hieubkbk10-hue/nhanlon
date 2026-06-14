@@ -6,6 +6,9 @@ import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { ClientsForm } from '../../clients/_components/ClientsForm';
 import { ClientsPreview } from '../../clients/_components/ClientsPreview';
 import {
@@ -16,8 +19,12 @@ import { toClientEditorItems, toPersistClientItems } from '../../clients/_lib/it
 import type {
   ClientEditorItem,
   ClientsConfig,
+  ClientsCornerRadius,
   ClientsHeaderAlign,
   ClientsStyle,
+} from '../../clients/_types';
+import {
+  normalizeClientsCornerRadius,
 } from '../../clients/_types';
 import { AiDemoClientsImport } from '../../product-list/_components/AiDemoProductsImport';
 
@@ -41,7 +48,7 @@ export default function ClientsCreatePage() {
   const [style, setStyle] = useState<ClientsStyle>(DEFAULT_CLIENTS_CONFIG.style);
 
   // Header config state
-  const [expandedSections, setExpandedSections] = useState({ header: true });
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header'], true);
   const [hideHeader, setHideHeader] = useState(DEFAULT_CLIENTS_CONFIG.hideHeader ?? false);
   const [showTitle, setShowTitle] = useState(DEFAULT_CLIENTS_CONFIG.showTitle ?? true);
   const [subtitle, setSubtitle] = useState(DEFAULT_CLIENTS_CONFIG.subtitle ?? '');
@@ -52,7 +59,8 @@ export default function ClientsCreatePage() {
   const [uppercaseText, setUppercaseText] = useState(DEFAULT_CLIENTS_CONFIG.uppercaseText ?? false);
   const [showBadge, setShowBadge] = useState(DEFAULT_CLIENTS_CONFIG.showBadge ?? true);
   const [badgeText, setBadgeText] = useState(DEFAULT_CLIENTS_CONFIG.badgeText ?? '');
-  const [noBorderRadius, setNoBorderRadius] = useState(DEFAULT_CLIENTS_CONFIG.noBorderRadius ?? false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_CLIENTS_CONFIG.noVerticalMargin === true ? 'none' : (DEFAULT_CLIENTS_CONFIG.spacing ?? DEFAULT_SECTION_SPACING));
+  const [cornerRadius, setCornerRadius] = useState<ClientsCornerRadius>(normalizeClientsCornerRadius(DEFAULT_CLIENTS_CONFIG.cornerRadius, DEFAULT_CLIENTS_CONFIG.noBorderRadius));
 
   const handleUseDemoImages = () => {
     setClientItems(CLIENTS_DEMO_ITEMS_BY_STYLE[style].map((item) => ({ ...item })));
@@ -79,7 +87,10 @@ export default function ClientsCreatePage() {
       uppercaseText,
       showBadge,
       badgeText,
-      noBorderRadius,
+      spacing,
+      noVerticalMargin: spacing === 'none',
+      cornerRadius,
+      noBorderRadius: cornerRadius === 'none',
     });
   };
 
@@ -101,6 +112,8 @@ export default function ClientsCreatePage() {
       setCustomFontState={setCustomFontState}
       skipTitleInput={true}
     >
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+
       <HeaderConfigSection
         hideHeader={hideHeader}
         title={title}
@@ -124,8 +137,8 @@ export default function ClientsCreatePage() {
         onUppercaseTextChange={setUppercaseText}
         onShowBadgeChange={setShowBadge}
         onBadgeTextChange={setBadgeText}
-        expanded={expandedSections.header}
-        onExpandedChange={(value) => setExpandedSections({ header: value })}
+        expanded={openSections.header}
+        onExpandedChange={(value) => toggleSection('header', value)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
@@ -135,8 +148,11 @@ export default function ClientsCreatePage() {
         items={clientItems}
         setItems={setClientItems}
         selectedStyle={style}
-        noBorderRadius={noBorderRadius}
-        setNoBorderRadius={setNoBorderRadius}
+        spacing={spacing}
+        setSpacing={setSpacing}
+        cornerRadius={cornerRadius}
+        setCornerRadius={setCornerRadius}
+        maxItems={style === 'layout08' ? 8 : 4}
         action={(
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={handleUseDemoImages}>
@@ -167,7 +183,8 @@ export default function ClientsCreatePage() {
         uppercaseText={uppercaseText}
         showBadge={showBadge}
         badgeText={badgeText}
-        noBorderRadius={noBorderRadius}
+        spacing={spacing}
+        cornerRadius={cornerRadius}
       />
     </ComponentFormWrapper>
   );

@@ -8,10 +8,12 @@ import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { BlogForm, type BlogPostItem } from '../../blog/_components/BlogForm';
 import { BlogPreview } from '../../blog/_components/BlogPreview';
 import { DEFAULT_BLOG_CONFIG, sortBlogPosts } from '../../blog/_lib/constants';
-import type { BlogSelectionMode, BlogStyle, DemoBlogItem } from '../../blog/_types';
+import type { BlogCardRadius, BlogSelectionMode, BlogStyle, DemoBlogItem } from '../../blog/_types';
 
 const COMPONENT_TYPE = 'Blog';
 
@@ -49,8 +51,10 @@ export default function BlogCreatePage() {
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
   const [badgeText, setBadgeText] = useState('');
-  const [headerExpanded, setHeaderExpanded] = useState(true);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], true);
   const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
+  const [cornerRadius, setCornerRadius] = useState<BlogCardRadius>(DEFAULT_BLOG_CONFIG.cornerRadius);
 
   const canShowAuthor = useMemo(() => {
     if (postsModuleData === undefined || postsModuleFields === undefined) {
@@ -126,7 +130,11 @@ export default function BlogCreatePage() {
       uppercaseText,
       showBadge,
       badgeText,
+      spacing,
+      noVerticalMargin: spacing === 'none',
       desktopColumns,
+      cornerRadius,
+      noBorderRadius: cornerRadius === 'none',
     });
   };
 
@@ -165,6 +173,7 @@ export default function BlogCreatePage() {
       customFontState={customFontState}
       showFontCustomBlock={showFontCustomBlock}
       setCustomFontState={setCustomFontState}
+      skipTitleInput
     >
       <HeaderConfigSection
         hideHeader={hideHeader}
@@ -189,8 +198,8 @@ export default function BlogCreatePage() {
         onUppercaseTextChange={setUppercaseText}
         onShowBadgeChange={setShowBadge}
         onBadgeTextChange={setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={headerOpenSections.header}
+        onExpandedChange={(open) => toggleHeaderSection('header', open)}
         titleLabel="Tiêu đề section"
         titlePlaceholder="VD: Tin tức mới nhất, Bài viết nổi bật..."
       />
@@ -236,6 +245,10 @@ export default function BlogCreatePage() {
         defaultExpanded={true}
         desktopColumns={desktopColumns}
         onDesktopColumnsChange={setDesktopColumns}
+        spacing={spacing}
+        onSpacingChange={setSpacing}
+        cornerRadius={cornerRadius}
+        onCornerRadiusChange={setCornerRadius}
       />
 
       <BlogPreview
@@ -264,6 +277,8 @@ export default function BlogCreatePage() {
         subtitleAboveTitle={subtitleAboveTitle}
         uppercaseText={uppercaseText}
         desktopColumns={desktopColumns}
+        spacing={spacing}
+        cornerRadius={cornerRadius}
       />
     </ComponentFormWrapper>
   );

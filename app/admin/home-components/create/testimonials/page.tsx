@@ -6,7 +6,9 @@ import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 import { TestimonialsPreview } from '../../testimonials/_components/TestimonialsPreview';
 import { TestimonialsForm } from '../../testimonials/_components/TestimonialsForm';
 import {
@@ -18,10 +20,13 @@ import {
   createTestimonialsItem,
   toTestimonialsPersistItem,
   type TestimonialsBrandMode,
+  type TestimonialsCornerRadius,
   type TestimonialsDesktopColumns,
   type TestimonialsItem,
   type TestimonialsStyle,
 } from '../../testimonials/_types';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
+import { Label, cn } from '../../../components/ui';
 
 export default function TestimonialsCreatePage() {
   const COMPONENT_TYPE = 'Testimonials';
@@ -54,9 +59,10 @@ export default function TestimonialsCreatePage() {
     setShowBadge,
     badgeText,
     setBadgeText,
+    spacing,
   } = useSectionHeaderState();
 
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections, toggleSection } = useFormSectionsState(['header', 'display'], true);
 
   const [items, setItems] = useState<TestimonialsItem[]>([
     {
@@ -81,6 +87,8 @@ export default function TestimonialsCreatePage() {
   const [desktopColumns, setDesktopColumns] = useState<TestimonialsDesktopColumns>(3);
   const [splitBackgroundImage, setSplitBackgroundImage] = useState('/demo/brand-banners/banner-1.webp');
   const [splitBackgroundOverlayOpacity, setSplitBackgroundOverlayOpacity] = useState(62);
+  const [displaySpacing, setDisplaySpacing] = useState<SectionSpacing>(spacing);
+  const [cornerRadius, setCornerRadius] = useState<TestimonialsCornerRadius>('lg');
 
   const resolvedSecondary = useMemo(
     () => resolveSecondaryForMode(primary, secondary, brandMode),
@@ -114,6 +122,8 @@ export default function TestimonialsCreatePage() {
       uppercaseText,
       showBadge,
       badgeText,
+      spacing: displaySpacing,
+      cornerRadius,
     });
   };
 
@@ -158,16 +168,51 @@ export default function TestimonialsCreatePage() {
         onUppercaseTextChange={setUppercaseText}
         onShowBadgeChange={setShowBadge}
         onBadgeTextChange={setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={openSections.header}
+        onExpandedChange={(open) => toggleSection('header', open)}
       />
+
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.display}
+          onOpenChange={(open) => toggleSection('display', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={setCornerRadius}
+          spacing={displaySpacing}
+          onSpacingChange={setDisplaySpacing}
+        >
+            <div className="space-y-2">
+              <Label>Số cột desktop</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {([3, 4] as const).map((option) => {
+                  const selected = desktopColumns === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setDesktopColumns(option)}
+                      className={cn(
+                        'h-9 rounded-md border text-xs transition-colors',
+                        selected
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      )}
+                    >
+                      {option} cột
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-500">3 cột: tablet 3, mobile 1. 4 cột: tablet/mobile 2.</p>
+            </div>
+        </HomeComponentDisplaySettingsSection>
+      </div>
 
       <TestimonialsForm
         items={items}
         setItems={setItems}
         defaultExpanded={true}
         desktopColumns={desktopColumns}
-        onDesktopColumnsChange={setDesktopColumns}
         selectedStyle={style}
         splitBackgroundImage={splitBackgroundImage}
         onSplitBackgroundImageChange={setSplitBackgroundImage}
@@ -209,6 +254,8 @@ export default function TestimonialsCreatePage() {
         uppercaseText={uppercaseText}
         showBadge={showBadge}
         badgeText={badgeText}
+        spacing={displaySpacing}
+        cornerRadius={cornerRadius}
         desktopColumns={desktopColumns}
         splitBackgroundImage={splitBackgroundImage}
         splitBackgroundOverlayOpacity={splitBackgroundOverlayOpacity}

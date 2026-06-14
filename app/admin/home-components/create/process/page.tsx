@@ -6,6 +6,8 @@ import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverr
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 import { ProcessForm } from '../../process/_components/ProcessForm';
 import { ProcessPreview } from '../../process/_components/ProcessPreview';
 import {
@@ -14,7 +16,13 @@ import {
   serializeProcessFormSteps,
   type ProcessFormStep,
 } from '../../process/_lib/normalize';
-import type { ProcessBrandMode, ProcessStyle } from '../../process/_types';
+import {
+  DEFAULT_PROCESS_CORNER_RADIUS,
+  type ProcessBrandMode,
+  type ProcessCornerRadius,
+  type ProcessStyle,
+} from '../../process/_types';
+import { Label, cn } from '@/app/admin/components/ui';
 
 const DEFAULT_CREATE_STEPS: ProcessFormStep[] = [
   createProcessFormStep({
@@ -60,11 +68,14 @@ export default function ProcessCreatePage() {
     badgeText: '',
   });
 
-  const [headerExpanded, setHeaderExpanded] = React.useState(true);
+  const { openSections, toggleSection } = useFormSectionsState(['header', 'display'], true);
 
   const [steps, setSteps] = React.useState<ProcessFormStep[]>(DEFAULT_CREATE_STEPS);
   const [style, setStyle] = React.useState<ProcessStyle>('horizontal');
   const [desktopColumns, setDesktopColumns] = React.useState<3 | 4>(4);
+  const [cornerRadius, setCornerRadius] = React.useState<ProcessCornerRadius>(DEFAULT_PROCESS_CORNER_RADIUS);
+  const [circularCtaText, setCircularCtaText] = React.useState('');
+  const [circularCtaLink, setCircularCtaLink] = React.useState('');
 
   const normalizedPreviewSteps = React.useMemo(
     () => normalizeProcessRenderSteps(serializeProcessFormSteps(steps)),
@@ -76,6 +87,8 @@ export default function ProcessCreatePage() {
       steps: serializeProcessFormSteps(steps),
       style,
       desktopColumns,
+      cornerRadius,
+      noBorderRadius: cornerRadius === 'none',
       hideHeader: headerState.hideHeader,
       showTitle: headerState.showTitle,
       subtitle: headerState.subtitle,
@@ -86,6 +99,10 @@ export default function ProcessCreatePage() {
       uppercaseText: headerState.uppercaseText,
       showBadge: headerState.showBadge,
       badgeText: headerState.badgeText,
+      spacing: headerState.spacing,
+      noVerticalMargin: headerState.spacing === 'none',
+      circularCtaText,
+      circularCtaLink,
     });
   };
 
@@ -130,14 +147,58 @@ export default function ProcessCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={openSections.header}
+        onExpandedChange={(open) => toggleSection('header', open)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <ProcessForm steps={steps} onChange={setSteps} secondary={secondary} desktopColumns={desktopColumns} onDesktopColumnsChange={setDesktopColumns} />
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.display}
+          onOpenChange={(open) => toggleSection('display', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={setCornerRadius}
+          spacing={headerState.spacing}
+          onSpacingChange={headerState.setSpacing}
+        >
+            <div className="space-y-2">
+              <Label>Số cột desktop</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {([3, 4] as const).map((option) => {
+                  const selected = desktopColumns === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setDesktopColumns(option)}
+                      className={cn(
+                        'h-9 rounded-md border text-xs transition-colors',
+                        selected
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      )}
+                    >
+                      {option} cột
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+        </HomeComponentDisplaySettingsSection>
+      </div>
+
+      <ProcessForm
+        steps={steps}
+        onChange={setSteps}
+        secondary={secondary}
+        style={style}
+        circularCtaText={circularCtaText}
+        circularCtaLink={circularCtaLink}
+        onChangeCircularCtaText={setCircularCtaText}
+        onChangeCircularCtaLink={setCircularCtaLink}
+      />
 
       <ProcessPreview
         steps={normalizedPreviewSteps}
@@ -160,6 +221,10 @@ export default function ProcessCreatePage() {
         fontStyle={fontStyle}
         fontClassName="font-active"
         desktopColumns={desktopColumns}
+        spacing={headerState.spacing}
+        cornerRadius={cornerRadius}
+        circularCtaText={circularCtaText}
+        circularCtaLink={circularCtaLink}
       />
     </ComponentFormWrapper>
   );

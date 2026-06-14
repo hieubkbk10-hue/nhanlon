@@ -1,14 +1,33 @@
-import type { DemoProductItem, ProductListConfig, ProductListStyle, ProductListTextConfig } from '../_types';
+import { DEFAULT_PRODUCT_LIST_CARD_RADIUS, DEFAULT_PRODUCT_LIST_DESKTOP_COLUMNS, type DemoProductItem, type ProductListConfig, type ProductListStyle, type ProductListTextConfig } from '../_types';
 
 export const PRODUCT_LIST_STYLES: { id: ProductListStyle; label: string }[] = [
-  { id: 'commerce', label: 'Commerce' },
-  { id: 'minimal', label: 'E-commerce' },
-  { id: 'bento', label: 'Bento' },
-  { id: 'carousel', label: 'Carousel' },
-  { id: 'wine-carousel', label: 'Wine Carousel' },
-  { id: 'compact', label: 'Compact' },
-  { id: 'showcase', label: 'Showcase' },
+  { id: 'commerce', label: '(1) Thương mại' },
+  { id: 'minimal', label: '(2) Tối giản' },
+  { id: 'bento', label: '(3) Ô ghép' },
+  { id: 'carousel', label: '(4) Trượt ngang' },
+  { id: 'wine-carousel', label: '(5) Trượt ngang 2' },
+  { id: 'compact', label: '(6) Thu gọn' },
+  { id: 'showcase', label: '(7) Trưng bày' },
+  { id: 'lookbook', label: '(8) Gắn điểm' },
 ];
+
+export const PRODUCT_LIST_LOOKBOOK_BANNERS = [
+  {
+    title: 'Máy Scott Slimissimo',
+    image: 'https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/banner_coll_1_1.jpg?1778581786863',
+    hoverImage: 'https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/banner_coll_1_1_hover.png?1778581786863',
+  },
+  {
+    title: 'Máy DeLonghi EC685.M',
+    image: 'https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/banner_coll_1_2.jpg?1778581786863',
+    hoverImage: 'https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/banner_coll_1_2_hover.png?1778581786863',
+  },
+  {
+    title: 'Máy Gemilai CRM3605',
+    image: 'https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/banner_coll_1_3.jpg?1778581786863',
+    hoverImage: 'https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/banner_coll_1_3_hover.png?1778581786863',
+  },
+] as const;
 
 export const normalizeProductListStyle = (value: unknown): ProductListStyle => {
   if (
@@ -19,6 +38,7 @@ export const normalizeProductListStyle = (value: unknown): ProductListStyle => {
     || value === 'wine-carousel'
     || value === 'compact'
     || value === 'showcase'
+    || value === 'lookbook'
   ) {
     return value;
   }
@@ -27,8 +47,14 @@ export const normalizeProductListStyle = (value: unknown): ProductListStyle => {
 };
 
 export const DEFAULT_PRODUCT_LIST_CONFIG: ProductListConfig = {
+  cardRadius: DEFAULT_PRODUCT_LIST_CARD_RADIUS,
+  desktopColumns: DEFAULT_PRODUCT_LIST_DESKTOP_COLUMNS,
   itemCount: 8,
+  lookbookDesktopColumns: DEFAULT_PRODUCT_LIST_DESKTOP_COLUMNS,
   sortBy: 'newest',
+  showAddToCartButton: true,
+  showBuyNowButton: true,
+  cartButtonsLayout: 'stack',
 };
 
 export const DEFAULT_PRODUCT_LIST_TEXT: ProductListTextConfig = {

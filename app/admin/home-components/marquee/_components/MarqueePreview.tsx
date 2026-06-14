@@ -2,26 +2,29 @@
 
 import React from 'react';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
-import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { PreviewWrapper, usePreviewDark } from '../../_shared/components/PreviewWrapper';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { getMarqueeSectionColors } from '../_lib/colors';
 import { MarqueeSectionShared } from './MarqueeSectionShared';
 import type {
   MarqueeBrandMode,
+  MarqueeCornerRadius,
   MarqueeDirection,
   MarqueeItem,
   MarqueeScale,
   MarqueeSpeed,
   MarqueeStyle,
 } from '../_types';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 const MARQUEE_STYLES: Array<{ id: MarqueeStyle; label: string }> = [
-  { id: 'ribbon', label: 'Ribbon' },
-  { id: 'gradient', label: 'Gradient' },
-  { id: 'minimal', label: 'Minimal' },
-  { id: 'dark', label: 'Dark' },
-  { id: 'split', label: 'Split' },
-  { id: 'stripe', label: 'Stripe' },
+  { id: 'ribbon', label: '(1) Chạy ngang' },
+  { id: 'gradient', label: '(2) Chuyển màu' },
+  { id: 'minimal', label: '(3) Tối giản' },
+  { id: 'dark', label: '(4) Nền tối' },
+  { id: 'split', label: '(5) Chia đôi' },
+  { id: 'stripe', label: '(6) Sọc kẻ' },
 ];
 
 export const MarqueePreview = ({
@@ -49,6 +52,8 @@ export const MarqueePreview = ({
   uppercaseText,
   showBadge,
   badgeText,
+  spacing,
+  cornerRadius,
 }: {
   items: MarqueeItem[];
   brandColor: string;
@@ -74,8 +79,11 @@ export const MarqueePreview = ({
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  cornerRadius?: MarqueeCornerRadius;
 }) => {
   const { device, setDevice } = usePreviewDevice();
+  const { isDark } = usePreviewDark();
   const previewStyle = selectedStyle ?? 'ribbon';
   const itemCount = items.length;
 
@@ -85,7 +93,10 @@ export const MarqueePreview = ({
     }
   };
 
-  const colors = getMarqueeSectionColors({ mode, primary: brandColor, secondary });
+  const colors = React.useMemo(
+    () => adaptTokensForDarkMode(getMarqueeSectionColors({ mode, primary: brandColor, secondary }), isDark),
+    [mode, brandColor, secondary, isDark]
+  );
 
   return (
     <PreviewWrapper
@@ -127,6 +138,8 @@ export const MarqueePreview = ({
             uppercaseText={uppercaseText}
             showBadge={showBadge}
             badgeText={badgeText}
+            spacing={spacing}
+            cornerRadius={cornerRadius}
           />
         </div>
       </BrowserFrame>

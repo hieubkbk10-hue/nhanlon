@@ -4,7 +4,7 @@ import React from 'react';
 import {
   Calendar,
   Check,
-  ChevronDown,
+  Download,
   Facebook,
   GripVertical,
   Headphones,
@@ -12,7 +12,6 @@ import {
   Instagram,
   Mail,
   MapPin,
-  MessageCircle,
   Pencil,
   Phone,
   Plus,
@@ -24,9 +23,15 @@ import {
   Youtube,
   Zap,
 } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { toast } from 'sonner';
 import { Button, Card, CardContent, Label, cn } from '../../../components/ui';
 import { AiDemoSpeedDialImport } from '../../product-list/_components/AiDemoProductsImport';
 import type { SpeedDialAction, SpeedDialPosition } from '../_types';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 /* ------------------------------------------------------------------ */
 /*  Custom SVG icons (not in Lucide)                                   */
@@ -64,6 +69,19 @@ const MessengerSvg = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
+const AiChatSvg = ({ size = 18 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {/* Anten */}
+    <path d="M12 9V5h3" />
+    {/* Mặt robot */}
+    <rect x="6" y="9" width="12" height="8" rx="2" />
+    {/* Hai mắt */}
+    <path d="M10 12v2M14 12v2" />
+    {/* Hai tai */}
+    <path d="M4 13h2M18 13h2" />
+  </svg>
+);
+
 /* ------------------------------------------------------------------ */
 /*  Icon registry with suggestions                                     */
 /* ------------------------------------------------------------------ */
@@ -82,7 +100,7 @@ const ICON_DEFS: IconDef[] = [
   { value: 'phone', label: 'Điện thoại', brandColor: '#ef4444', suggestedLabel: 'Gọi ngay', suggestedUrl: 'tel:0123456789' },
   { value: 'mail', label: 'Email', brandColor: '#ea580c', suggestedLabel: 'Email', suggestedUrl: 'mailto:contact@example.com' },
   { value: 'messenger', label: 'Messenger', brandColor: '#0084ff', suggestedLabel: 'Messenger', suggestedUrl: 'https://m.me/yourpage' },
-  { value: 'message-circle', label: 'Chat', brandColor: '#3b82f6', suggestedLabel: 'Chat ngay', suggestedUrl: '' },
+  { value: 'message-circle', label: 'Chat AI', brandColor: '#8b5cf6', suggestedLabel: 'Chat AI', suggestedUrl: '#ai-chatbot' },
   { value: 'map-pin', label: 'Địa chỉ', brandColor: '#f97316', suggestedLabel: 'Chỉ đường', suggestedUrl: 'https://maps.google.com/?q=your+address' },
   { value: 'zalo', label: 'Zalo', brandColor: '#0084ff', suggestedLabel: 'Chat Zalo', suggestedUrl: 'https://zalo.me/yourpage' },
   { value: 'facebook', label: 'Facebook', brandColor: '#1877f2', suggestedLabel: 'Facebook', suggestedUrl: 'https://facebook.com/yourpage' },
@@ -105,12 +123,25 @@ const getIconDef = (value: string): IconDef =>
 
 const getIconBrandColor = (value: string): string => getIconDef(value).brandColor;
 
+const normalizePhoneUrl = (value: string) => value.startsWith('tel:') ? value : `tel:${value.replace(/\s+/g, '')}`;
+
+const normalizeEmailUrl = (value: string) => value.startsWith('mailto:') ? value : `mailto:${value}`;
+
+const normalizeMapUrl = (value: string) =>
+  /^https?:\/\//.test(value) ? value : `https://maps.google.com/?q=${encodeURIComponent(value)}`;
+
+const normalizeZaloUrl = (value: string) => {
+  if (/^https?:\/\//.test(value)) return value;
+  return `https://zalo.me/${value.replace(/\s+/g, '')}`;
+};
+
 const renderIcon = (value: string, size = 16) => {
   if (value === 'zalo') return <ZaloSvg size={size} />;
   if (value === 'tiktok') return <TikTokSvg size={size} />;
   if (value === 'x') return <XSvg size={size} />;
   if (value === 'shopee') return <ShopeeSvg size={size} />;
   if (value === 'messenger') return <MessengerSvg size={size} />;
+  if (value === 'message-circle') return <AiChatSvg size={size} />;
 
   // Lazada & Tiki dùng PNG logo
   const def = ICON_DEFS.find((d) => d.value === value);
@@ -119,7 +150,7 @@ const renderIcon = (value: string, size = 16) => {
   }
 
   const map: Record<string, React.ElementType> = {
-    phone: Phone, mail: Mail, 'message-circle': MessageCircle, 'map-pin': MapPin,
+    phone: Phone, mail: Mail, 'map-pin': MapPin,
     facebook: Facebook, instagram: Instagram, youtube: Youtube, telegram: Send,
     calendar: Calendar, 'shopping-cart': ShoppingCart, headphones: Headphones,
     'help-circle': HelpCircle,
@@ -174,43 +205,17 @@ function ClearInput({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Collapsible SubSection                                             */
-/* ------------------------------------------------------------------ */
-
-function SubSection({
-  icon: Icon, title, defaultOpen = true, badge, children,
-}: {
-  icon: React.ElementType; title: string; defaultOpen?: boolean; badge?: string; children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <Icon size={15} className="text-slate-400 shrink-0" />
-        <span className="flex-1 text-left">{title}</span>
-        {badge && <span className="text-xs text-slate-400 font-normal">{badge}</span>}
-        <ChevronDown size={15} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
-      </button>
-      {open && <div className="p-3 space-y-3 bg-white dark:bg-slate-900">{children}</div>}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Validation                                                         */
 /* ------------------------------------------------------------------ */
 
 const validateUrl = (url: string): { valid: boolean; message?: string } => {
   if (!url.trim()) return { valid: true };
   const t = url.trim();
+  if (t === '#ai-chatbot') return { valid: true };
   if (/^tel:[0-9+\-() ]+$/.test(t)) return { valid: true };
   if (/^mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(t)) return { valid: true };
   if (/^https?:\/\/.+/.test(t)) return { valid: true };
-  return { valid: false, message: 'Dùng tel:, mailto:, hoặc https://' };
+  return { valid: false, message: 'Dùng tel:, mailto:, https:// hoặc #ai-chatbot' };
 };
 
 /* ------------------------------------------------------------------ */
@@ -428,6 +433,8 @@ interface SpeedDialFormProps {
   onShowOnAllPagesChange: (value: boolean) => void;
   enableShadow: boolean;
   onEnableShadowChange: (value: boolean) => void;
+  enableGlassmorphism?: boolean;
+  onEnableGlassmorphismChange?: (value: boolean) => void;
   defaultActionColor: string;
   defaultExpanded?: boolean;
 }
@@ -443,8 +450,28 @@ export function SpeedDialForm({
   onShowOnAllPagesChange,
   enableShadow,
   onEnableShadowChange,
+  enableGlassmorphism = false,
+  onEnableGlassmorphismChange,
+  defaultActionColor,
   defaultExpanded = true,
 }: SpeedDialFormProps) {
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['settings', 'actions'],
+    defaultExpanded
+  );
+
+  const speedDialSettings = useQuery(api.settings.getMultiple, {
+    keys: [
+      'contact_phone',
+      'contact_email',
+      'contact_address',
+      'contact_zalo',
+      'social_facebook',
+      'social_instagram',
+      'social_youtube',
+      'social_tiktok',
+    ],
+  });
   const [draggedId, setDraggedId] = React.useState<string | null>(null);
   const [dragOverId, setDragOverId] = React.useState<string | null>(null);
 
@@ -480,7 +507,54 @@ export function SpeedDialForm({
   }, [needsNormalization, normalizedActions, onActionsChange]);
 
   const handleAdd = () => {
-    onActionsChange([...normalizedActions, { id: buildId(), icon: 'phone', label: '', url: '', bgColor: getIconBrandColor('phone') }]);
+    onActionsChange([...normalizedActions, { id: buildId(), icon: 'phone', label: '', url: '', bgColor: defaultActionColor || getIconBrandColor('phone') }]);
+  };
+
+  const buildSettingAction = (icon: string, label: string, url: string): SpeedDialAction => ({
+    id: buildId(),
+    bgColor: getIconBrandColor(icon),
+    icon,
+    label,
+    url,
+  });
+
+  const getSettingValue = (key: string) => {
+    const value = speedDialSettings?.[key];
+    return typeof value === 'string' ? value.trim() : '';
+  };
+
+  const loadFromSettings = () => {
+    if (!speedDialSettings) {
+      toast.error('Dữ liệu settings chưa sẵn sàng');
+      return;
+    }
+
+    const loadedActions: SpeedDialAction[] = [];
+    const phone = getSettingValue('contact_phone');
+    const zalo = getSettingValue('contact_zalo');
+    const facebook = getSettingValue('social_facebook');
+    const address = getSettingValue('contact_address');
+    const email = getSettingValue('contact_email');
+    const instagram = getSettingValue('social_instagram');
+    const youtube = getSettingValue('social_youtube');
+    const tiktok = getSettingValue('social_tiktok');
+
+    if (phone) loadedActions.push(buildSettingAction('phone', 'Gọi ngay', normalizePhoneUrl(phone)));
+    if (zalo) loadedActions.push(buildSettingAction('zalo', 'Zalo', normalizeZaloUrl(zalo)));
+    if (facebook) loadedActions.push(buildSettingAction('facebook', 'Facebook', facebook));
+    if (address) loadedActions.push(buildSettingAction('map-pin', 'Chỉ đường', normalizeMapUrl(address)));
+    if (email) loadedActions.push(buildSettingAction('mail', 'Email', normalizeEmailUrl(email)));
+    if (instagram) loadedActions.push(buildSettingAction('instagram', 'Instagram', instagram));
+    if (youtube) loadedActions.push(buildSettingAction('youtube', 'Youtube', youtube));
+    if (tiktok) loadedActions.push(buildSettingAction('tiktok', 'TikTok', tiktok));
+
+    if (loadedActions.length === 0) {
+      toast.error('Settings chưa có mạng xã hội hoặc thông tin liên hệ');
+      return;
+    }
+
+    onActionsChange(loadedActions.slice(0, 6));
+    toast.success(`Đã load ${Math.min(loadedActions.length, 6)} hành động từ Settings`);
   };
 
   const handleRemove = (id: string) => {
@@ -514,8 +588,17 @@ export function SpeedDialForm({
   return (
     <Card className="mb-6">
       <CardContent className="p-4 space-y-3">
-        {/* ── Cấu hình chung ── */}
-        <SubSection icon={Settings2} title="Cấu hình chung" defaultOpen={defaultExpanded}>
+        <FormSectionsToggleAllButton
+          hasClosedSection={hasClosedSection}
+          onToggleAll={handleToggleAll}
+        />
+        {/* ── Cấu hình hiển thị ── */}
+        <SubSection
+          icon={Settings2}
+          title="Cấu hình hiển thị"
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+        >
           <div className="space-y-3">
             {/* Vị trí: luôn góc phải, ẩn khỏi UI */}
             <div className="grid grid-cols-2 gap-3">
@@ -552,14 +635,33 @@ export function SpeedDialForm({
                 </button>
                 <Label className="text-xs">Đổ bóng</Label>
               </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onEnableGlassmorphismChange?.(!enableGlassmorphism)}
+                  className={cn('inline-flex items-center justify-center rounded-full w-10 h-5 transition-colors cursor-pointer', enableGlassmorphism ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600')}
+                  aria-pressed={enableGlassmorphism}
+                >
+                  <div className={cn('w-4 h-4 bg-white rounded-full transition-transform shadow', enableGlassmorphism ? 'translate-x-2' : '-translate-x-2')} />
+                </button>
+                <Label className="text-xs">Nền mờ (Glassmorphism)</Label>
+              </div>
             </div>
           </div>
         </SubSection>
 
         {/* ── Hành động ── */}
-        <SubSection icon={Zap} title={`Hành động (${normalizedActions.length})`} defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={Zap}
+          title={`Hành động (${normalizedActions.length})`}
+          open={openSections.actions}
+          onOpenChange={(open) => toggleSection('actions', open)}
+        >
           <div className="space-y-2">
             <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={loadFromSettings} className="h-7 text-xs gap-1.5">
+                <Download size={13} /> Load từ Settings
+              </Button>
               <AiDemoSpeedDialImport onApply={(items) => onActionsChange(items as SpeedDialAction[])} />
               <Button type="button" variant="outline" size="sm" onClick={handleAdd} disabled={normalizedActions.length >= 6} className="h-7 text-xs gap-1.5">
                 <Plus size={13} /> Thêm

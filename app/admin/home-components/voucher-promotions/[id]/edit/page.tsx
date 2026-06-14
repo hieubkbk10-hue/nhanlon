@@ -1,5 +1,7 @@
 'use client';
 
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,6 +13,7 @@ import { toast } from 'sonner';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
@@ -21,6 +24,7 @@ import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/c
 import {
   DEFAULT_VOUCHER_PROMOTIONS_CONFIG,
   normalizeDemoVouchers,
+  normalizeVoucherPromotionsCornerRadius,
   normalizeVoucherPromotionsTexts,
 } from '../../_lib/constants';
 import type { DemoVoucherPromotionItem, VoucherPromotionItem, VoucherPromotionsConfigState } from '../../_types';
@@ -28,14 +32,40 @@ import { normalizeVoucherLimit, normalizeVoucherStyle } from '@/lib/home-compone
 
 const COMPONENT_TYPE = 'VoucherPromotions';
 
-export default function VoucherPromotionsEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type VoucherPromotionsEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function VoucherPromotionsEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: VoucherPromotionsEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
   const promotionsModule = useQuery(api.admin.modules.getModuleByKey, { key: 'promotions' });
 
@@ -45,7 +75,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
   const [demoVouchers, setDemoVouchers] = useState<DemoVoucherPromotionItem[]>(DEFAULT_VOUCHER_PROMOTIONS_CONFIG.demoVouchers);
   const [initialSnapshot, setInitialSnapshot] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
   const canUseRealData = promotionsModule?.enabled === true;
   const realVouchers = useQuery(
     api.promotions.listPublicVouchers,
@@ -54,7 +84,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
 
   useEffect(() => {
     if (component) {
-      if (component.type !== 'VoucherPromotions') {
+      if (!snapshotComponent && component.type !== 'VoucherPromotions') {
         router.replace(`/admin/home-components/${id}/edit`);
         return;
       }
@@ -89,7 +119,9 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
         uppercaseText: headerConfig.uppercaseText,
         showBadge: headerConfig.showBadge,
         badgeText: headerConfig.badgeText,
+        spacing: rawConfig.noVerticalMargin === true && rawConfig.spacing === undefined ? 'none' : headerConfig.spacing,
         desktopColumns: rawConfig.desktopColumns === 3 ? 3 : 4,
+        cornerRadius: normalizeVoucherPromotionsCornerRadius(rawConfig.cornerRadius, rawConfig.noBorderRadius),
         iconName: typeof rawConfig.iconName === 'string' ? rawConfig.iconName : DEFAULT_VOUCHER_PROMOTIONS_CONFIG.iconName,
       };
 
@@ -113,17 +145,19 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
     demoVouchers: config.selectionMode === 'demo' ? demoVouchers : [],
   }), [active, config, demoVouchers, title]);
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
   const hasChanges = initialSnapshot !== '' && (currentSnapshot !== initialSnapshot || customChanged || customFontChanged);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,16 +169,21 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
         ...config,
         demoVouchers: config.selectionMode === 'demo' ? normalizeDemoVouchers(demoVouchers) : [],
         limit: normalizeVoucherLimit(config.limit),
-        texts: normalizeVoucherPromotionsTexts(config.texts),
+        cornerRadius: normalizeVoucherPromotionsCornerRadius(config.cornerRadius),
+        texts: normalizeVoucherPromotionsTexts({ ...config.texts, heading: title }),
       };
 
-      await updateMutation({
-        active,
-        config: payloadConfig,
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: payloadConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: payloadConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -154,7 +193,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -167,7 +206,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
         config: payloadConfig,
         demoVouchers: payloadConfig.selectionMode === 'demo' ? payloadConfig.demoVouchers : [],
       }));
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -175,7 +214,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -208,7 +247,8 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Voucher Promotions</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -225,7 +265,10 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
           showBadge={config.showBadge ?? true}
           badgeText={config.badgeText ?? ''}
           onHideHeaderChange={(value) => setConfig((prev) => ({ ...prev, hideHeader: value }))}
-          onTitleChange={setTitle}
+          onTitleChange={(value) => {
+            setTitle(value);
+            setConfig((prev) => ({ ...prev, texts: { ...prev.texts, heading: value } }));
+          }}
           onShowTitleChange={(value) => setConfig((prev) => ({ ...prev, showTitle: value }))}
           onSubtitleChange={(value) => setConfig((prev) => ({ ...prev, subtitle: value, texts: { ...prev.texts, description: value } }))}
           onShowSubtitleChange={(value) => setConfig((prev) => ({ ...prev, showSubtitle: value }))}
@@ -235,8 +278,8 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
           onUppercaseTextChange={(value) => setConfig((prev) => ({ ...prev, uppercaseText: value }))}
           onShowBadgeChange={(value) => setConfig((prev) => ({ ...prev, showBadge: value }))}
           onBadgeTextChange={(value) => setConfig((prev) => ({ ...prev, badgeText: value }))}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleLabel="Tiêu đề section"
           titlePlaceholder="VD: Voucher khuyến mãi, Ưu đãi hôm nay..."
         />
@@ -254,12 +297,16 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
         onShowCtaChange={(value) => setConfig((prev) => ({ ...prev, showCta: value }))}
         ctaVariant={config.ctaVariant ?? 'button'}
         onCtaVariantChange={(value) => setConfig((prev) => ({ ...prev, ctaVariant: value }))}
+          spacing={config.spacing ?? 'normal'}
+          onSpacingChange={(value) => setConfig((prev) => ({ ...prev, spacing: value }))}
           demoVouchers={demoVouchers}
           setDemoVouchers={setDemoVouchers}
           canUseRealData={canUseRealData}
           moduleLoaded={promotionsModule !== undefined}
           desktopColumns={config.desktopColumns ?? 4}
           onDesktopColumnsChange={(value) => setConfig((prev) => ({ ...prev, desktopColumns: value }))}
+          cornerRadius={config.cornerRadius ?? 'lg'}
+          onCornerRadiusChange={(value) => setConfig((prev) => ({ ...prev, cornerRadius: value }))}
           iconName={config.iconName ?? 'BadgePercent'}
           onIconNameChange={(value) => setConfig((prev) => ({ ...prev, iconName: value }))}
           brandColor={effectiveColors.primary}
@@ -269,7 +316,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Voucher Promotions"
                 enabled={customState.enabled}
@@ -297,7 +344,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
               }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Voucher Promotions"
                 enabled={customFontState.enabled}
@@ -330,7 +377,7 @@ export default function VoucherPromotionsEditPage({ params }: { params: Promise<
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}

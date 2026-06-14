@@ -16,8 +16,13 @@ import type {
   ServiceListPreviewItem,
   ServiceListStyle,
 } from '@/app/admin/home-components/service-list/_types';
+import {
+  normalizeServiceListCardRadius,
+  normalizeServiceListDesktopColumns,
+} from '@/app/admin/home-components/service-list/_types';
 import { buildDetailPath, normalizeRouteMode } from '@/lib/ia/route-mode';
 import { useSnapshotDemoContext } from '@/components/modules/homepage/SnapshotDemoProvider';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 interface ServiceListSectionProps {
   config: Record<string, unknown>;
@@ -26,6 +31,7 @@ interface ServiceListSectionProps {
   mode: ServiceListBrandMode;
   title: string;
   snapshotComponentKey?: string;
+  isDark?: boolean;
 }
 
 type ServiceRecord = {
@@ -53,7 +59,7 @@ const mapServiceToPreview = (
   image: service.thumbnail,
   description: service.excerpt,
   price: service.price,
-  tag: index === 0 ? 'hot' : (index === 1 ? 'new' : undefined),
+  tag: (service as any).tag, // Fallback if tag is passed through somehow, otherwise undefined
   href: service.slug ? buildDetailPath({
     categorySlug: params.categorySlugMap.get(service.categoryId),
     mode: params.routeMode,
@@ -69,11 +75,14 @@ export function ServiceListSection({
   mode,
   title,
   snapshotComponentKey,
+  isDark,
 }: ServiceListSectionProps) {
   const snapshotDemo = useSnapshotDemoContext();
   const safeConfig = config as Partial<ServiceListConfig>;
 
   const style = (safeConfig.style as ServiceListStyle) ?? 'grid';
+  const cardRadius = normalizeServiceListCardRadius(safeConfig.cardRadius);
+  const desktopColumns = normalizeServiceListDesktopColumns(safeConfig.desktopColumns);
   const itemCount = Math.min(Math.max(Number(safeConfig.itemCount) || 8, 1), 20);
   const selectionMode = safeConfig.selectionMode ?? 'auto';
   const headerConfig = extractSectionHeaderConfig(config);
@@ -84,7 +93,7 @@ export function ServiceListSection({
       : []
   ), [safeConfig.selectedServiceIds]);
 
-  const demoServices = React.useMemo(() => (config.demoServices as Array<{ id: string; name: string; image?: string; price?: string; description?: string; tag?: string }>) || [], [config.demoServices]);
+  const demoServices = React.useMemo(() => (config.demoServices as Array<{ id: string; name: string; image?: string; price?: string; description?: string; tag?: string; link?: string }>) || [], [config.demoServices]);
 
   const servicesData = useQuery(
     api.services.listAll,
@@ -124,6 +133,8 @@ export function ServiceListSection({
         thumbnail: item.image,
         title: item.name,
         views: 0,
+        tag: item.tag,
+        link: item.link,
       }));
     }
 
@@ -176,13 +187,24 @@ export function ServiceListSection({
     );
   }
 
-  const tokens = getServiceListColorTokens({
-    primary: brandColor,
-    secondary,
-    mode,
-  });
+  const tokens = React.useMemo(() => {
+    const rawTokens = getServiceListColorTokens({
+      primary: brandColor,
+      secondary,
+      mode,
+    });
+    return adaptTokensForDarkMode(rawTokens, isDark ?? false);
+  }, [brandColor, secondary, mode, isDark]);
 
-  const items = services.map((service, index) => mapServiceToPreview(service, index, { categorySlugMap, routeMode }));
+  const items = services.map((service, index) => {
+    const preview = mapServiceToPreview(service, index, { categorySlugMap, routeMode });
+    // Demo mode: dùng link do người dùng nhập, fallback về href đã build
+    const demoLink = (service as { link?: string }).link;
+    if (demoLink) {
+      return { ...preview, href: demoLink };
+    }
+    return preview;
+  });
 
   return (
     <ServiceListSectionShared
@@ -198,6 +220,9 @@ export function ServiceListSection({
       uppercaseText={headerConfig.uppercaseText}
       showBadge={headerConfig.showBadge}
       badgeText={headerConfig.badgeText}
+      spacing={headerConfig.spacing}
+      cardRadius={cardRadius}
+      desktopColumns={desktopColumns}
       style={style}
       sectionTitle={title}
       items={items}

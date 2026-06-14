@@ -9,6 +9,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Card, CardContent, Input, Label } from '../../../components/ui';
+import { CopyableInput } from '../../../components/CopyTextButton';
 
 const MODULE_KEY = 'notifications';
 
@@ -83,36 +84,35 @@ export default function NotificationEditPage({ params }: { params: Promise<{ id:
     return <div className="text-center py-8 text-slate-500">Không tìm thấy thông báo</div>;
   }
 
-  if (notificationData.status === 'Sent') {
-    return (
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="text-center py-8">
-          <p className="text-slate-500 mb-4">Không thể chỉnh sửa thông báo đã gửi</p>
-          <Link href="/admin/notifications">
-            <Button variant="outline">Quay lại danh sách</Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const isReadOnly = notificationData.status === 'Sent';
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-20">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa thông báo</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+          {isReadOnly ? 'Chi tiết thông báo' : 'Chỉnh sửa thông báo'}
+        </h1>
         <Link href="/admin/notifications" className="text-sm text-pink-600 hover:underline">Quay lại danh sách</Link>
       </div>
+
+      {isReadOnly && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-md text-sm">
+          Thông báo này đã được gửi đi. Bạn đang xem chi tiết ở chế độ chỉ đọc.
+        </div>
+      )}
 
       <Card>
         <form onSubmit={handleSubmit}>
           <CardContent className="p-6 space-y-4">
             <div className="space-y-2">
               <Label>Tiêu đề <span className="text-red-500">*</span></Label>
-              <Input 
+              <CopyableInput
                 required 
                 placeholder="Nhập tiêu đề thông báo..." 
                 value={title}
+                copyLabel="tiêu đề"
                 onChange={(e) =>{  setTitle(e.target.value); }}
+                disabled={isReadOnly}
               />
             </div>
 
@@ -120,10 +120,11 @@ export default function NotificationEditPage({ params }: { params: Promise<{ id:
               <Label>Nội dung <span className="text-red-500">*</span></Label>
               <textarea 
                 required
-                className="w-full min-h-[120px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+                className="w-full min-h-[120px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm disabled:opacity-75 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-500"
                 placeholder="Nhập nội dung thông báo..."
                 value={content}
                 onChange={(e) =>{  setContent(e.target.value); }}
+                disabled={isReadOnly}
               />
             </div>
 
@@ -134,6 +135,7 @@ export default function NotificationEditPage({ params }: { params: Promise<{ id:
                   className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
                   value={type}
                   onChange={(e) =>{  setType(e.target.value as typeof type); }}
+                  disabled={isReadOnly}
                 >
                   <option value="info">Thông tin</option>
                   <option value="success">Thành công</option>
@@ -149,6 +151,7 @@ export default function NotificationEditPage({ params }: { params: Promise<{ id:
                     className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
                     value={targetType}
                     onChange={(e) =>{  setTargetType(e.target.value as typeof targetType); }}
+                    disabled={isReadOnly}
                   >
                     <option value="all">Tất cả</option>
                     <option value="customers">Khách hàng</option>
@@ -166,6 +169,7 @@ export default function NotificationEditPage({ params }: { params: Promise<{ id:
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={(e) =>{  setScheduledAt(e.target.value); }}
+                  disabled={isReadOnly}
                 />
               </div>
             )}
@@ -178,6 +182,7 @@ export default function NotificationEditPage({ params }: { params: Promise<{ id:
                   checked={sendEmail}
                   onChange={(e) =>{  setSendEmail(e.target.checked); }}
                   className="w-4 h-4 rounded border-slate-300"
+                  disabled={isReadOnly}
                 />
                 <Label htmlFor="sendEmail" className="cursor-pointer">Gửi email kèm theo</Label>
               </div>
@@ -185,11 +190,15 @@ export default function NotificationEditPage({ params }: { params: Promise<{ id:
           </CardContent>
           
           <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 rounded-b-lg flex justify-end gap-3">
-            <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/notifications'); }}>Hủy bỏ</Button>
-            <Button type="submit" className="bg-pink-600 hover:bg-pink-500" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
-              Lưu thay đổi
+            <Button type="button" variant="ghost" onClick={() =>{  router.push('/admin/notifications'); }}>
+              {isReadOnly ? 'Quay lại' : 'Hủy bỏ'}
             </Button>
+            {!isReadOnly && (
+              <Button type="submit" className="bg-pink-600 hover:bg-pink-500" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 size={16} className="animate-spin mr-2" />}
+                Lưu thay đổi
+              </Button>
+            )}
           </div>
         </form>
       </Card>

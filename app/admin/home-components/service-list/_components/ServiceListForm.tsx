@@ -2,11 +2,18 @@
 
 import React from 'react';
 import { AdminImage as Image } from '@/app/admin/components/AdminImage';
-import { Briefcase, Check, ChevronDown, GripVertical, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { Briefcase, Check, GripVertical, Plus, Search, X } from 'lucide-react';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
 import type { DemoServiceItem, ServiceSelectionMode } from '../_types';
 import { AiDemoServicesImport } from '../../product-list/_components/AiDemoProductsImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useDemoItemList } from '../../_shared/hooks/useDemoItemList';
+import { DemoItemRowShell } from '../../_shared/components/DemoItemRowShell';
+import { DemoPrimaryFields } from '../../_shared/components/DemoPrimaryFields';
+
 
 export const DEFAULT_DEMO_SERVICES: DemoServiceItem[] = [
   { id: 'ds-1', name: 'Thiết kế website chuyên nghiệp', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=500&fit=crop', price: '5.000.000đ', description: 'Thiết kế web responsive, chuẩn SEO, giao diện hiện đại', tag: 'hot' },
@@ -58,30 +65,35 @@ export const ServiceListForm = ({
   setDemoServices: React.Dispatch<React.SetStateAction<DemoServiceItem[]>>;
   defaultExpanded?: boolean;
 }) => {
-  const [expanded, setExpanded] = React.useState(defaultExpanded ?? true);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['services'],
+    defaultExpanded ?? true
+  );
+
+  const { add: addDemoService, update: updateDemoService, remove: removeDemoService, loadDefault: loadDefaultDemo } = useDemoItemList(
+    demoServices,
+    setDemoServices,
+    {
+      createEmpty: () => ({ name: '', image: '', price: '', description: '', tag: '' as const, link: '' }),
+      defaults: DEFAULT_DEMO_SERVICES,
+      minItems: 1,
+    },
+  );
 
   return (
-    <Card className="mb-6">
-      <CardHeader>
-        <div
-          className="cursor-pointer flex items-center justify-between"
-          onClick={() => setExpanded(!expanded)}
-        >
-          <CardTitle className="text-base flex items-center gap-2">
-            <Briefcase size={20} />
-            Nguồn dữ liệu
-          </CardTitle>
-          <ChevronDown
-            size={16}
-            className={cn(
-              'transition-transform duration-200',
-              expanded ? 'rotate-180' : '',
-            )}
-          />
-        </div>
-      </CardHeader>
-      {expanded && (
-      <CardContent className="space-y-4">
+    <div className="mb-3">
+      <AiDemoServicesImport onApply={setDemoServices} />
+      <FormSectionsToggleAllButton
+        hasClosedSection={hasClosedSection}
+        onToggleAll={handleToggleAll}
+      />
+      <SubSection
+        icon={Briefcase}
+        title="Nguồn dữ liệu"
+        open={openSections.services}
+        onOpenChange={(open) => toggleSection('services', open)}
+      >
+      <div className="space-y-4">
       {/* Selection Mode Toggle */}
       <div className="space-y-2">
         <Label>Chế độ chọn dịch vụ</Label>
@@ -176,7 +188,7 @@ export const ServiceListForm = ({
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{service.title}</p>
+                      <p className="font-medium text-sm leading-snug break-words">{service.title}</p>
                       <p className="text-xs text-slate-500">{service.views} lượt xem</p>
                     </div>
                     <Button 
@@ -241,7 +253,7 @@ export const ServiceListForm = ({
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{service.title}</p>
+                        <p className="text-sm font-medium leading-snug break-words">{service.title}</p>
                         <p className="text-xs text-slate-500">{service.views} lượt xem</p>
                       </div>
                     </div>
@@ -259,73 +271,66 @@ export const ServiceListForm = ({
           <div className="flex items-center justify-between">
             <Label>Dịch vụ demo ({demoServices.length})</Label>
             <div className="flex gap-1.5">
-              <Button type="button" variant="outline" size="sm"
-                onClick={() => setDemoServices(DEFAULT_DEMO_SERVICES.map((d, i) => ({ ...d, id: `demo-${Date.now() + i}` })))}>
-                <RotateCcw size={14} className="mr-1" /> Mặc định
+              <Button type="button" variant="outline" size="sm" onClick={loadDefaultDemo}>
+                Mặc định
               </Button>
               <AiDemoServicesImport onApply={setDemoServices} />
-              <Button type="button" variant="outline" size="sm"
-                onClick={() => setDemoServices(prev => [...prev, { id: `demo-${Date.now()}`, name: '', image: '', price: '', description: '', tag: '' as const }])}>
+              <Button type="button" variant="outline" size="sm" onClick={addDemoService}>
                 <Plus size={14} className="mr-1" /> Thêm
               </Button>
             </div>
           </div>
           {demoServices.map((item, index) => (
-            <div
+            <DemoItemRowShell
               key={item.id}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"
-            >
-              <div className="flex items-center gap-2 px-3 py-2">
-                <span className="w-5 h-5 flex items-center justify-center bg-blue-500 text-white text-[10px] rounded-full font-bold shrink-0">{index + 1}</span>
-                {item.image ? (
-                  <Image src={item.image} alt="" width={36} height={36} className="w-9 h-9 object-cover rounded shrink-0" />
-                ) : (
-                  <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded flex items-center justify-center shrink-0">
-                    <Briefcase size={12} className="text-slate-400" />
-                  </div>
-                )}
-                <Input placeholder="Tên dịch vụ *" className="h-8 flex-1 text-xs min-w-0"
-                  value={item.name}
-                  onChange={(e) => setDemoServices(prev => prev.map(d => d.id === item.id ? { ...d, name: e.target.value } : d))} />
-                <Input placeholder="Giá (VD: 5.000.000đ)" className="h-8 w-32 text-xs shrink-0"
-                  value={item.price ?? ''}
-                  onChange={(e) => setDemoServices(prev => prev.map(d => d.id === item.id ? { ...d, price: e.target.value } : d))} />
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-slate-400 hover:text-red-500"
-                  onClick={() => setDemoServices(prev => prev.length > 1 ? prev.filter(d => d.id !== item.id) : prev)}>
-                  <Trash2 size={13} />
-                </Button>
-              </div>
-              <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-1.5">
+              index={index}
+              image={item.image}
+              onRemove={() => removeDemoService(item.id)}
+              placeholderIcon={<Briefcase size={12} />}
+              footer={
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <Input placeholder="Mô tả ngắn" className="h-7 text-xs"
                     value={item.description ?? ''}
-                    onChange={(e) => setDemoServices(prev => prev.map(d => d.id === item.id ? { ...d, description: e.target.value } : d))} />
+                    onChange={(e) => updateDemoService(item.id, { description: e.target.value })} />
                   <SettingsImageUploader
                     label="Ảnh thumbnail"
                     value={item.image ?? ''}
-                    onChange={(url) => setDemoServices(prev => prev.map(d => d.id === item.id ? { ...d, image: url ?? '' } : d))}
+                    storageId={item.storageId as any}
+                    onChange={(url, storageId) => updateDemoService(item.id, {
+                      image: url ?? '',
+                      storageId: storageId ? String(storageId) : null
+                    })}
                     folder="home-components/service-list"
                     naming={{ entityName: item.name || 'demo-service', field: 'thumbnail', index: index + 1 }}
                     previewSize="sm"
+                    cropAspectRatio="landscape43"
                   />
                 </div>
-              </div>
-            </div>
+              }
+            >
+              <DemoPrimaryFields
+                name={item.name}
+                namePlaceholder="Tên dịch vụ *"
+                onNameChange={v => updateDemoService(item.id, { name: v })}
+                link={item.link ?? ''}
+                onLinkChange={v => updateDemoService(item.id, { link: v })}
+              />
+              <Input placeholder="Giá (VD: 5.000.000đ)" className="h-8 w-28 text-xs shrink-0" value={item.price ?? ''} onChange={(e) => updateDemoService(item.id, { price: e.target.value })} />
+            </DemoItemRowShell>
           ))}
           {demoServices.length === 0 && (
             <div className="text-center py-6 text-sm text-slate-500">
               Chưa có dịch vụ demo.{' '}
-              <button type="button" className="text-blue-600 hover:underline"
-                onClick={() => setDemoServices(DEFAULT_DEMO_SERVICES.map((d, i) => ({ ...d, id: `demo-${Date.now() + i}` })))}>
+              <button type="button" className="text-blue-600 hover:underline" onClick={loadDefaultDemo}>
                 Tạo mặc định
               </button>
             </div>
           )}
         </div>
       )}
-      </CardContent>
-      )}
-    </Card>
+      </div>
+      </SubSection>
+    </div>
   );
 };
 

@@ -5,13 +5,22 @@ import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Bot, Check, ChevronDown, ClipboardPaste, GripVertical, Link2, Loader2, Package, Plus, Search, Trash2, Upload, X } from 'lucide-react';
-import { Button, Card, CardContent, Input, Label, cn } from '../../../components/ui';
+import { Bot, Check, GripVertical, Loader2, Package, Plus, Search, Upload, X } from 'lucide-react';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import type { DemoProductItem, ProductListConfig, ProductSelectionMode } from '../_types';
 import { DEFAULT_DEMO_PRODUCTS } from '../_lib/constants';
 import { toast } from 'sonner';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { AiDemoProductsImport } from './AiDemoProductsImport';
+import { useFileDraftUploads } from '@/app/admin/components/useFileDraftUploads';
+import { ImageEditorDialog } from '@/app/admin/components/ImageEditorDialog';
+import { ImageSourceActions } from '@/app/admin/components/ImageSourceActions';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useDemoItemList } from '../../_shared/hooks/useDemoItemList';
+import { DemoItemRowShell } from '../../_shared/components/DemoItemRowShell';
+import { DemoPrimaryFields } from '../../_shared/components/DemoPrimaryFields';
 
 export interface ProductListFormProduct {
   _id: string;
@@ -33,10 +42,11 @@ export function DemoItemImageUploader({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlDraft, setUrlDraft] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
   const saveImage = useMutation(api.storage.saveImage);
-  const deleteImage = useMutation(api.storage.deleteImage);
+  const { trackDraftUpload } = useFileDraftUploads('product-list-demo-products');
 
   const handleFile = useCallback(async (file: File) => {
     const error = validateImageFile(file, 5);
@@ -56,9 +66,7 @@ export function DemoItemImageUploader({
       if (!response.ok) { throw new Error('Upload failed'); }
       const { storageId } = await response.json();
 
-      if (item.storageId) {
-        try { await deleteImage({ storageId: item.storageId as Id<'_storage'> }); } catch { /* ignore */ }
-      }
+
 
       const result = await saveImage({
         filename: prepared.filename,
@@ -69,6 +77,7 @@ export function DemoItemImageUploader({
         storageId: storageId as Id<'_storage'>,
         width: prepared.width,
       });
+      await trackDraftUpload(storageId as Id<'_storage'>, 'demo-products');
       onImageChange(result.url ?? '', storageId);
       toast.success('Tải ảnh thành công');
     } catch (err) {
@@ -77,7 +86,7 @@ export function DemoItemImageUploader({
     } finally {
       setUploading(false);
     }
-  }, [generateUploadUrl, saveImage, deleteImage, item.storageId, onImageChange]);
+  }, [generateUploadUrl, saveImage, item.storageId, onImageChange, trackDraftUpload]);
 
   const handleClipboardPaste = useCallback(async () => {
     if (uploading) return;
@@ -180,64 +189,28 @@ export function DemoItemImageUploader({
           }}
         />
       </div>
-      {/* Clipboard paste button */}
-      <button
-        type="button"
-        className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
-        onClick={() => { void handleClipboardPaste(); }}
+      <ImageSourceActions
+        mode={showUrlInput ? 'url' : 'upload'}
+        onUpload={() => inputRef.current?.click()}
+        onUrl={() => { setShowUrlInput(true); setUrlDraft(item.image ?? ''); }}
+        onPaste={handleClipboardPaste}
+        onCrop={() => setIsEditorOpen(true)}
+        cropLabel="1:1"
+        cropDisabled={!item.image || uploading}
         disabled={uploading}
-        title="Dán ảnh từ clipboard"
-      >
-        <ClipboardPaste size={12} />
-      </button>
-      {/* URL button */}
-      <button
-        type="button"
-        className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
-        onClick={() => { setShowUrlInput(true); setUrlDraft(item.image ?? ''); }}
-        title="Nhập URL ảnh"
-      >
-        <Link2 size={12} />
-      </button>
-    </div>
-  );
-}
-
-/* ── Collapsible sub-section (reuse pattern from VideoForm) ── */
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <Icon size={15} className="text-slate-400 shrink-0" />
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          size={15}
-          className={cn(
-            'text-slate-400 transition-transform duration-200',
-            open && 'rotate-180',
-          )}
+        iconSize={11}
+        className="gap-1"
+      />
+      {isEditorOpen && item.image && (
+        <ImageEditorDialog
+          imageUrl={item.image}
+          preferredCropAspectRatio="square"
+          onClose={() => setIsEditorOpen(false)}
+          onApply={(editedFile) => {
+            setIsEditorOpen(false);
+            void handleFile(editedFile);
+          }}
         />
-      </button>
-      {open && (
-        <div className="p-3 space-y-3 bg-white dark:bg-slate-900">
-          {children}
-        </div>
       )}
     </div>
   );
@@ -258,6 +231,10 @@ export const ProductListForm = ({
   setDemoProducts,
   isLoading,
   defaultExpanded = true,
+  className,
+  openSections: openSectionsProp,
+  onToggleSection: onToggleSectionProp,
+  showToggleAll = true,
 }: {
   productSelectionMode: ProductSelectionMode;
   setProductSelectionMode: (value: ProductSelectionMode) => void;
@@ -274,45 +251,59 @@ export const ProductListForm = ({
   isLoading?: boolean;
   /** create = true (mở hết), edit = false (đóng hết) */
   defaultExpanded?: boolean;
+  className?: string;
+  openSections?: Record<string, boolean>;
+  onToggleSection?: (key: any, open?: boolean) => void;
+  showToggleAll?: boolean;
 }) => {
-  const deleteImage = useMutation(api.storage.deleteImage);
+  const localSectionsState = useFormSectionsState(
+    ['products'],
+    defaultExpanded
+  );
 
-  const addDemoItem = () => {
-    setDemoProducts(prev => [...prev, {
-      id: `demo-${Date.now()}`,
-      name: '',
-      image: '',
-      price: '',
-      originalPrice: '',
-      category: '',
-      tag: '' as const,
-    }]);
-  };
+  const activeOpenSections = openSectionsProp ?? localSectionsState.openSections;
+  const activeToggleSection = onToggleSectionProp ?? ((key: string, open?: boolean) => localSectionsState.toggleSection(key as any, open));
+  const activeHasClosedSection = openSectionsProp
+    ? !activeOpenSections['products']
+    : localSectionsState.hasClosedSection;
+  const activeHandleToggleAll = openSectionsProp
+    ? (() => activeToggleSection('products', activeHasClosedSection))
+    : localSectionsState.handleToggleAll;
 
-  const updateDemoItem = (id: string, patch: Partial<DemoProductItem>) => {
-    setDemoProducts(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
-  };
-
-  const removeDemoItem = async (id: string) => {
-    const item = demoProducts.find(d => d.id === id);
-    if (demoProducts.length <= 1) { return; }
-
-    // Delete storage image if uploaded
-    if (item?.storageId) {
-      try { await deleteImage({ storageId: item.storageId as Id<'_storage'> }); } catch { /* ignore */ }
-    }
-    setDemoProducts(prev => prev.filter(d => d.id !== id));
-  };
-
-  const loadDefaultDemo = () => {
-    setDemoProducts(DEFAULT_DEMO_PRODUCTS.map((d, i) => ({ ...d, id: `demo-${Date.now() + i}` })));
-  };
+  const { add: addDemoItem, update: updateDemoItem, remove: removeDemoItem, loadDefault: loadDefaultDemo } = useDemoItemList(
+    demoProducts,
+    setDemoProducts,
+    {
+      createEmpty: () => ({ name: '', image: '', price: '', originalPrice: '', category: '', tag: '' as const, link: '' }),
+      defaults: DEFAULT_DEMO_PRODUCTS,
+    },
+  );
 
   return (
-    <Card className="mb-6">
-      <CardContent className="p-4 space-y-3">
+    <div className={cn('mb-6 space-y-3', className)}>
+      <AiDemoProductsImport onApply={setDemoProducts} />
+      {showToggleAll && (
+        <FormSectionsToggleAllButton hasClosedSection={activeHasClosedSection} onToggleAll={activeHandleToggleAll} />
+      )}
+
         {/* ── Nguồn dữ liệu ── */}
-        <SubSection icon={Package} title="Nguồn dữ liệu" defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={Package}
+          title="Nguồn dữ liệu"
+          open={activeOpenSections.products}
+          onOpenChange={(open) => activeToggleSection('products', open)}
+          actions={productSelectionMode === 'demo' ? (
+            <>
+              <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={loadDefaultDemo}>
+                <Bot size={11} /> Mẫu mặc định
+              </Button>
+              <AiDemoProductsImport onApply={setDemoProducts} />
+              <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addDemoItem}>
+                <Plus size={12} /> Thêm
+              </Button>
+            </>
+          ) : undefined}
+        >
           <div className="space-y-2">
             <Label>Chế độ chọn sản phẩm</Label>
             <div className="flex gap-2">
@@ -496,57 +487,17 @@ export const ProductListForm = ({
 
           {productSelectionMode === 'demo' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Sản phẩm demo ({demoProducts.length})</Label>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
-                    onClick={loadDefaultDemo}>
-                    <Bot size={11} /> Mẫu mặc định
-                  </Button>
-                  <AiDemoProductsImport onApply={setDemoProducts} />
-                  <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
-                    onClick={addDemoItem}>
-                    <Plus size={12} /> Thêm
-                  </Button>
-                </div>
-              </div>
+              <Label>Sản phẩm demo ({demoProducts.length})</Label>
 
               <div className="space-y-2 max-h-[500px] overflow-y-auto">
                 {demoProducts.map((item, index) => (
-                  <div
+                  <DemoItemRowShell
                     key={item.id}
-                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"
-                  >
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      <span className="w-5 h-5 flex items-center justify-center bg-amber-500 text-white text-[10px] rounded-full font-medium shrink-0">
-                        {index + 1}
-                      </span>
-                      <DemoItemImageUploader
-                        item={item}
-                        onImageChange={(url, storageId) => updateDemoItem(item.id, { image: url, storageId })}
-                      />
-                      <Input
-                        placeholder="Tên sản phẩm *"
-                        className="h-8 flex-1 text-xs min-w-0"
-                        value={item.name}
-                        onChange={(e) => updateDemoItem(item.id, { name: e.target.value })}
-                      />
-                      <Input
-                        placeholder="Giá (VD: 1.990.000đ)"
-                        className="h-8 w-32 text-xs shrink-0"
-                        value={item.price ?? ''}
-                        onChange={(e) => updateDemoItem(item.id, { price: e.target.value })}
-                      />
-
-                      <Button
-                        type="button" variant="ghost" size="icon"
-                        className="h-7 w-7 shrink-0 text-slate-400 hover:text-red-500"
-                        onClick={() => void removeDemoItem(item.id)}
-                      >
-                        <Trash2 size={13} />
-                      </Button>
-                    </div>
-                    <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-1.5">
+                    index={index}
+                    image={item.image}
+                    onRemove={() =>  removeDemoItem(item.id)}
+                    placeholderIcon={<Package size={12} />}
+                    footer={
                       <div className="grid grid-cols-2 gap-2">
                         <Input
                           placeholder="Giá gốc (tuỳ chọn)"
@@ -561,8 +512,26 @@ export const ProductListForm = ({
                           onChange={(e) => updateDemoItem(item.id, { category: e.target.value })}
                         />
                       </div>
-                    </div>
-                  </div>
+                    }
+                  >
+                    <DemoItemImageUploader
+                      item={item}
+                      onImageChange={(url, storageId) => updateDemoItem(item.id, { image: url, storageId })}
+                    />
+                    <DemoPrimaryFields
+                      name={item.name}
+                      namePlaceholder="Tên sản phẩm *"
+                      onNameChange={v => updateDemoItem(item.id, { name: v })}
+                      link={item.link ?? ''}
+                      onLinkChange={v => updateDemoItem(item.id, { link: v })}
+                    />
+                    <Input
+                      placeholder="Giá (VD: 1.990.000đ)"
+                      className="h-8 w-28 text-xs shrink-0"
+                      value={item.price ?? ''}
+                      onChange={(e) => updateDemoItem(item.id, { price: e.target.value })}
+                    />
+                  </DemoItemRowShell>
                 ))}
               </div>
 
@@ -584,7 +553,6 @@ export const ProductListForm = ({
             </div>
           )}
         </SubSection>
-      </CardContent>
-    </Card>
+    </div>
   );
 };

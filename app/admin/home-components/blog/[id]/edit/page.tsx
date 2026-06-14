@@ -1,5 +1,7 @@
 'use client';
 
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,6 +13,8 @@ import { toast } from 'sonner';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
@@ -23,6 +27,7 @@ import { DEFAULT_BLOG_CONFIG, sortBlogPosts } from '../../_lib/constants';
 import { enforceToggleDisabled } from '@/lib/experiences/module-toggle-guards';
 import {
   normalizeBlogConfig,
+  type BlogCardRadius,
   type BlogSelectionMode,
   type BlogStyle,
   type DemoBlogItem,
@@ -30,14 +35,40 @@ import {
 
 const COMPONENT_TYPE = 'Blog';
 
-export default function BlogEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type BlogEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function BlogEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: BlogEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
   const postsData = useQuery(api.posts.listAll, { limit: 100 });
   const postCategoriesData = useQuery(api.postCategories.listAll, { limit: 200 });
@@ -73,8 +104,10 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
   const [badgeText, setBadgeText] = useState('');
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
   const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
+  const [cornerRadius, setCornerRadius] = useState<BlogCardRadius>(DEFAULT_BLOG_CONFIG.cornerRadius);
 
   const canShowAuthor = useMemo(() => {
     if (postsModuleData === undefined || postsModuleFields === undefined) {
@@ -108,7 +141,7 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
 
   useEffect(() => {
     if (component) {
-      if (component.type !== 'Blog') {
+      if (!snapshotComponent && component.type !== 'Blog') {
         router.replace(`/admin/home-components/${id}/edit`);
         return;
       }
@@ -134,6 +167,8 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
       setBlogSelectionMode(nextSelectionMode);
       setSelectedPostIds(nextSelectedPostIds);
       setDemoPosts((guardedConfig.demoPosts as DemoBlogItem[]) ?? []);
+      setDesktopColumns(guardedConfig.desktopColumns);
+      setCornerRadius(guardedConfig.cornerRadius);
 
       // Load header config
       const config = component.config ?? {};
@@ -148,11 +183,7 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
       setUppercaseText(headerConfig.uppercaseText ?? false);
       setShowBadge(headerConfig.showBadge ?? true);
       setBadgeText(headerConfig.badgeText || '');
-
-      // Load desktop columns
-      const rawDesktopCols = (component.config as Record<string, unknown> | undefined)?.desktopColumns;
-      const loadedDesktopColumns: 3 | 4 = rawDesktopCols === 3 ? 3 : 4;
-      setDesktopColumns(loadedDesktopColumns);
+      setSpacing(headerConfig.spacing ?? DEFAULT_SECTION_SPACING);
 
       const snapshot = JSON.stringify({
         title: component.title,
@@ -177,11 +208,15 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
         uppercaseText: headerConfig.uppercaseText,
         showBadge: headerConfig.showBadge,
         badgeText: headerConfig.badgeText || '',
-        desktopColumns: loadedDesktopColumns,
+        spacing: headerConfig.spacing ?? DEFAULT_SECTION_SPACING,
+        desktopColumns: guardedConfig.desktopColumns,
+        cornerRadius: guardedConfig.cornerRadius,
+        noBorderRadius: guardedConfig.cornerRadius === 'none',
+        noVerticalMargin: (headerConfig.spacing ?? DEFAULT_SECTION_SPACING) === 'none',
       });
       setInitialState(snapshot);
     }
-  }, [canShowAuthor, component, id, router]);
+  }, [canShowAuthor, component, id, router, snapshotComponent]);
 
   useEffect(() => {
     setBlogConfig((prev) => enforceToggleDisabled(prev, 'showAuthor', canShowAuthor));
@@ -240,21 +275,27 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
     uppercaseText,
     showBadge,
     badgeText,
+    spacing,
     desktopColumns,
-  }), [active, badgeText, blogConfig.itemCount, blogConfig.showAuthor, blogConfig.showDate, blogConfig.showExcerpt, blogConfig.sortBy, blogSelectionMode, blogStyle, demoPosts, desktopColumns, headerAlign, headerSubtitle, hideHeader, selectedPostIds, showBadge, showSubtitle, showTitleHeader, subtitleAboveTitle, title, titleColorPrimary, uppercaseText]);
+    cornerRadius,
+    noBorderRadius: cornerRadius === 'none',
+    noVerticalMargin: spacing === 'none',
+  }), [active, badgeText, blogConfig.itemCount, blogConfig.showAuthor, blogConfig.showDate, blogConfig.showExcerpt, blogConfig.sortBy, blogSelectionMode, blogStyle, cornerRadius, demoPosts, desktopColumns, headerAlign, headerSubtitle, hideHeader, selectedPostIds, showBadge, showSubtitle, showTitleHeader, spacing, subtitleAboveTitle, title, titleColorPrimary, uppercaseText]);
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
   const hasChanges = initialState.length > 0 && (currentState !== initialState || customChanged || customFontChanged);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,16 +341,24 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
         uppercaseText,
         showBadge,
         badgeText,
+        spacing,
+        noVerticalMargin: spacing === 'none',
         desktopColumns,
+        cornerRadius,
+        noBorderRadius: cornerRadius === 'none',
       };
 
-      await updateMutation({
-        active,
-        config: nextConfig,
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: nextConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -319,7 +368,7 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -328,7 +377,7 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
       }
       toast.success('Đã cập nhật Blog');
       setInitialState(currentState);
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -336,7 +385,7 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -385,7 +434,8 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Blog</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500">Snapshot: {snapshotLabel}</p> : null}
       </div>
 
 
@@ -413,8 +463,8 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleLabel="Tiêu đề section"
           titlePlaceholder="VD: Tin tức mới nhất, Bài viết nổi bật..."
         />
@@ -464,12 +514,16 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           defaultExpanded={false}
           desktopColumns={desktopColumns}
           onDesktopColumnsChange={setDesktopColumns}
+          spacing={spacing}
+          onSpacingChange={setSpacing}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={setCornerRadius}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Blog"
                 enabled={customState.enabled}
@@ -497,7 +551,7 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
                 onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: value }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Blog"
                 enabled={customFontState.enabled}
@@ -535,6 +589,8 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
               subtitleAboveTitle={subtitleAboveTitle}
               uppercaseText={uppercaseText}
               desktopColumns={desktopColumns}
+              spacing={spacing}
+              cornerRadius={cornerRadius}
             />
           </div>
         </div>
@@ -543,7 +599,7 @@ export default function BlogEditPage({ params }: { params: Promise<{ id: string 
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
           disableSave={saveDisabled}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}

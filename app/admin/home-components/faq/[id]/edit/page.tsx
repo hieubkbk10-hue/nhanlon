@@ -1,17 +1,23 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { HelpCircle, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
+import { Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { HomeComponentDisplaySettingsSection } from '../../../_shared/components/HomeComponentDisplaySettingsSection';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
@@ -19,9 +25,35 @@ import { FaqForm } from '../../_components/FaqForm';
 import { FaqPreview } from '../../_components/FaqPreview';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { DEFAULT_FAQ_CONFIG, DEFAULT_FAQ_ITEMS, FAQ_STYLES } from '../../_lib/constants';
-import type { FaqConfig, FaqItem, FaqStyle } from '../../_types';
+import {
+  normalizeFaqDesktopColumns,
+  normalizeFaqRounded,
+  normalizeFaqSpacing,
+  type FaqConfig,
+  type FaqItem,
+  type FaqRounded,
+  type FaqSpacing,
+  type FaqStyle,
+} from '../../_types';
 
 const COMPONENT_TYPE = 'FAQ';
+
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type FaqEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
 
 const FALLBACK_FAQ_ITEMS: FaqItem[] = DEFAULT_FAQ_ITEMS.map((item, idx) => ({
   ...item,
@@ -29,9 +61,9 @@ const FALLBACK_FAQ_ITEMS: FaqItem[] = DEFAULT_FAQ_ITEMS.map((item, idx) => ({
 }));
 
 const toFaqStyle = (value: unknown): FaqStyle => {
-  if (typeof value !== 'string') {return 'accordion';}
+  if (typeof value !== 'string') {return 'wine-list';}
   const matchedStyle = FAQ_STYLES.find((style) => style.id === value);
-  return matchedStyle?.id ?? 'accordion';
+  return matchedStyle?.id ?? 'wine-list';
 };
 
 const toFaqItems = (value: unknown): FaqItem[] => {
@@ -77,11 +109,23 @@ const toFaqConfig = (value: Record<string, unknown> | null | undefined): FaqConf
     uppercaseText: typeof config.uppercaseText === 'boolean' ? config.uppercaseText : DEFAULT_FAQ_CONFIG.uppercaseText,
     showBadge: typeof config.showBadge === 'boolean' ? config.showBadge : DEFAULT_FAQ_CONFIG.showBadge,
     badgeText: typeof config.badgeText === 'string' ? config.badgeText : DEFAULT_FAQ_CONFIG.badgeText,
+    spacing: normalizeFaqSpacing(config.spacing, config.noVerticalMargin),
+    cornerRadius: normalizeFaqRounded(config.cornerRadius ?? config.rounded, config.noBorderRadius),
+    rounded: normalizeFaqRounded(config.cornerRadius ?? config.rounded, config.noBorderRadius),
+    desktopColumns: normalizeFaqDesktopColumns(config.desktopColumns),
   };
 };
 
-export default function FaqEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function FaqEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: FaqEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
@@ -89,17 +133,26 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
 
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
-  const [faqItems, setFaqItems] = useState<FaqItem[]>(FALLBACK_FAQ_ITEMS);
-  const [faqStyle, setFaqStyle] = useState<FaqStyle>('accordion');
+  const {
+    state: faqItems,
+    set: setFaqItems,
+    undo: undofaqItems,
+    redo: redofaqItems,
+    canUndo: canUndofaqItems,
+    canRedo: canRedofaqItems,
+    reset: resetfaqItems,
+  } = useUndoRedo<FaqItem[]>(FALLBACK_FAQ_ITEMS, { maxHistory: 15 });
+  const [faqStyle, setFaqStyle] = useState<FaqStyle>('wine-list');
   const [faqConfig, setFaqConfig] = useState<FaqConfig>(DEFAULT_FAQ_CONFIG);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections, toggleSection } = useFormSectionsState(['header', 'display'], false);
   const [faqExpanded, setFaqExpanded] = useState(false);
   
   // Header state
@@ -113,6 +166,9 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
   const [badgeText, setBadgeText] = useState('');
+  const [spacing, setSpacing] = useState<FaqSpacing>(DEFAULT_FAQ_CONFIG.spacing ?? 'normal');
+  const [rounded, setRounded] = useState<FaqRounded>(DEFAULT_FAQ_CONFIG.rounded ?? 'none');
+  const [desktopColumns, setDesktopColumns] = useState<3 | 4>(DEFAULT_FAQ_CONFIG.desktopColumns ?? 4);
   
   const [initialData, setInitialData] = useState<{
     title: string;
@@ -125,7 +181,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
   useEffect(() => {
     if (!component) {return;}
 
-    if (component.type !== 'FAQ') {
+    if (!snapshotComponent && component.type !== 'FAQ') {
       router.replace(`/admin/home-components/${id}/edit`);
       return;
     }
@@ -138,7 +194,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
     const nextFaqStyle = toFaqStyle(config.style);
     const nextFaqConfig = toFaqConfig(config);
 
-    setFaqItems(nextFaqItems);
+    resetfaqItems(nextFaqItems);
     setFaqStyle(nextFaqStyle);
     setFaqConfig(nextFaqConfig);
     
@@ -153,6 +209,9 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
     setUppercaseText(nextFaqConfig.uppercaseText ?? false);
     setShowBadge(nextFaqConfig.showBadge ?? true);
     setBadgeText(nextFaqConfig.badgeText ?? '');
+    setSpacing(nextFaqConfig.spacing ?? 'normal');
+    setRounded(nextFaqConfig.rounded ?? 'none');
+    setDesktopColumns(nextFaqConfig.desktopColumns ?? 4);
     
     setInitialData({
       title: component.title,
@@ -169,13 +228,13 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
 
     const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
     const resolvedInitialSecondary = resolveSecondaryByMode(initialCustom.mode, initialCustom.primary, initialCustom.secondary);
-    const customChanged = showCustomBlock
+    const customChanged = enableTypeOverrides && showCustomBlock
       ? customState.enabled !== initialCustom.enabled
         || customState.mode !== initialCustom.mode
         || customState.primary !== initialCustom.primary
         || resolvedCustomSecondary !== resolvedInitialSecondary
       : false;
-    const customFontChanged = showFontCustomBlock
+    const customFontChanged = enableTypeOverrides && showFontCustomBlock
       ? customFontState.enabled !== initialFontCustom.enabled
         || customFontState.fontKey !== initialFontCustom.fontKey
       : false;
@@ -188,7 +247,10 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
       || subtitleAboveTitle !== initialData.faqConfig.subtitleAboveTitle
       || uppercaseText !== initialData.faqConfig.uppercaseText
       || showBadge !== initialData.faqConfig.showBadge
-      || badgeText !== initialData.faqConfig.badgeText;
+      || badgeText !== initialData.faqConfig.badgeText
+      || spacing !== initialData.faqConfig.spacing
+      || rounded !== initialData.faqConfig.rounded
+      || desktopColumns !== initialData.faqConfig.desktopColumns;
     const changed = title !== initialData.title
       || active !== initialData.active
       || faqStyle !== initialData.faqStyle
@@ -199,7 +261,9 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
       || headerChanged;
 
     setHasChanges(changed);
-  }, [title, active, faqItems, faqStyle, faqConfig, initialData, customState, initialCustom, showCustomBlock, hideHeader, showTitle, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText]);
+  }, [title, active, faqItems, faqStyle, faqConfig, initialData, customState, initialCustom, enableTypeOverrides, showCustomBlock, hideHeader, showTitle, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing, rounded, desktopColumns]);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,32 +286,44 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
         uppercaseText,
         showBadge,
         badgeText,
+        spacing,
+        cornerRadius: rounded,
+        rounded,
+        desktopColumns,
       };
 
-      await updateMutation({
-        active,
-        config: {
-          buttonLink: nextConfig.buttonLink,
-          buttonText: nextConfig.buttonText,
-          description: nextConfig.description,
-          items: faqItems.map((item) => ({ answer: item.answer, question: item.question })),
-          style: faqStyle,
-          // Header fields
-          hideHeader: nextConfig.hideHeader,
-          showTitle: nextConfig.showTitle,
-          showSubtitle: nextConfig.showSubtitle,
-          subtitle: nextConfig.subtitle,
-          headerAlign: nextConfig.headerAlign,
-          titleColorPrimary: nextConfig.titleColorPrimary,
-          subtitleAboveTitle: nextConfig.subtitleAboveTitle,
-          uppercaseText: nextConfig.uppercaseText,
-          showBadge: nextConfig.showBadge,
-          badgeText: nextConfig.badgeText,
-        },
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      const persistConfig = {
+        buttonLink: nextConfig.buttonLink,
+        buttonText: nextConfig.buttonText,
+        description: nextConfig.description,
+        items: faqItems.map((item) => ({ answer: item.answer, question: item.question })),
+        style: faqStyle,
+        hideHeader: nextConfig.hideHeader,
+        showTitle: nextConfig.showTitle,
+        showSubtitle: nextConfig.showSubtitle,
+        subtitle: nextConfig.subtitle,
+        headerAlign: nextConfig.headerAlign,
+        titleColorPrimary: nextConfig.titleColorPrimary,
+        subtitleAboveTitle: nextConfig.subtitleAboveTitle,
+        uppercaseText: nextConfig.uppercaseText,
+        showBadge: nextConfig.showBadge,
+        badgeText: nextConfig.badgeText,
+        spacing: nextConfig.spacing,
+        cornerRadius: nextConfig.cornerRadius,
+        rounded: nextConfig.rounded,
+        desktopColumns: nextConfig.desktopColumns,
+      };
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: persistConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: persistConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -257,7 +333,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -273,7 +349,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
         faqStyle,
         faqConfig: nextConfig,
       });
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         setInitialCustom({
           enabled: customState.enabled,
@@ -282,7 +358,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
           secondary: resolvedCustomSecondary,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -315,30 +391,11 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa FAQ</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <HelpCircle size={20} />
-              FAQ
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
-                value={title}
-                onChange={(e) => { setTitle(e.target.value); }}
-                required
-                placeholder="Nhập tiêu đề component..."
-              />
-            </div>
-</CardContent>
-        </Card>
-
         <HeaderConfigSection
           hideHeader={hideHeader}
           title={title}
@@ -362,9 +419,47 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={openSections.header}
+          onExpandedChange={(open) => toggleSection('header', open)}
         />
+
+        <div className="mb-3">
+          <HomeComponentDisplaySettingsSection
+            open={openSections.display}
+            onOpenChange={(open) => toggleSection('display', open)}
+            cornerRadius={rounded}
+            onCornerRadiusChange={(cornerRadius) => setRounded(cornerRadius as FaqRounded)}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+          >
+              {faqStyle === 'cards' ? (
+                <div className="space-y-2">
+                  <Label>Số cột desktop</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[3, 4].map((option) => {
+                      const selected = desktopColumns === option;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setDesktopColumns(option as 3 | 4)}
+                          className={cn(
+                            'h-9 rounded-md border text-xs transition-colors',
+                            selected
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                              : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                          )}
+                        >
+                          {option} cột
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-slate-500">4 cột: tablet/mobile 2. 3 cột: tablet 3, mobile 1.</p>
+                </div>
+              ) : null}
+          </HomeComponentDisplaySettingsSection>
+        </div>
 
         <FaqForm
           faqItems={faqItems}
@@ -378,7 +473,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
         />
 
         <div className="space-y-4">
-          {showCustomBlock && (
+          {enableTypeOverrides && showCustomBlock && (
             <TypeColorOverrideCard
               title="Màu custom cho FAQ"
               enabled={customState.enabled}
@@ -405,7 +500,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
               onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: value }))}
             />
           )}
-          {showFontCustomBlock && (
+          {enableTypeOverrides && showFontCustomBlock && (
             <TypeFontOverrideCard
               title="Font custom cho FAQ"
               enabled={customFontState.enabled}
@@ -429,7 +524,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
               mode={brandMode}
               selectedStyle={faqStyle}
               onStyleChange={setFaqStyle}
-              config={faqConfig}
+              config={{ ...faqConfig, spacing, cornerRadius: rounded, rounded, desktopColumns }}
               title={title}
               fontStyle={fontStyle}
               fontClassName="font-active"
@@ -443,6 +538,7 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
               uppercaseText={uppercaseText}
               showBadge={showBadge}
               badgeText={badgeText}
+              spacing={spacing}
             />
           </div>
         </div>
@@ -450,10 +546,17 @@ export default function FaqEditPage({ params }: { params: Promise<{ id: string }
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() => { router.push('/admin/home-components'); }}
+          onCancel={() => { router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndofaqItems,
+          canRedo: canRedofaqItems,
+          onUndo: undofaqItems,
+          onRedo: redofaqItems,
+        }}
         />
       </form>
     </div>

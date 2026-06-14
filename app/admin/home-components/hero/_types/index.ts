@@ -1,9 +1,17 @@
 'use client';
 
 import type { ImageItem } from '../../../components/MultiImageUploader';
+import {
+  DEFAULT_SECTION_SPACING,
+  normalizeSectionSpacing,
+  type SectionSpacing,
+} from '../../_shared/types/sectionSpacing';
+import type { HomeComponentCornerRadius } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 
-export type HeroStyle = 'slider' | 'fade' | 'bento' | 'triple' | 'triple2' | 'fullscreen' | 'split' | 'parallax';
+export type HeroStyle = 'slider' | 'fade' | 'builderCoffee' | 'bento' | 'triple' | 'triple2' | 'fullscreen' | 'conquest' | 'split' | 'parallax';
 export type HeroHarmony = 'analogous' | 'complementary' | 'triadic';
+export type HeroSpacing = SectionSpacing;
+export type HeroCornerRadius = HomeComponentCornerRadius;
 
 export interface HeroContent {
   badge?: string;
@@ -33,4 +41,26 @@ export interface HeroSlide extends ImageItem {
   link: string;
   mediaType?: 'image' | 'video';
 }
+
+export const DEFAULT_HERO_SPACING: HeroSpacing = DEFAULT_SECTION_SPACING;
+export const normalizeHeroSpacing = normalizeSectionSpacing;
+
+export const DEFAULT_HERO_CORNER_RADIUS: HeroCornerRadius = 'lg';
+
+export const normalizeHeroCornerRadius = (
+  value: unknown,
+  legacyNoBorderRadius?: unknown,
+): HeroCornerRadius => {
+  if (value === 'none' || value === 'sm' || value === 'lg') {
+    return value;
+  }
+  return legacyNoBorderRadius === true ? 'none' : DEFAULT_HERO_CORNER_RADIUS;
+};
+
+export const getHeroCornerRadiusClassName = (value: HeroCornerRadius) => {
+  if (value === 'none') {
+    return '';
+  }
+  return value === 'sm' ? 'rounded-lg' : 'rounded-2xl';
+};
 

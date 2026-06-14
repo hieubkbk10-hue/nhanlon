@@ -2,24 +2,39 @@
 
 import React, { useState } from 'react';
 import { Shield } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../components/ui';
+import { Button } from '../../../components/ui';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
-import { AiTrustBadgesImport } from '../../gallery/_components/AiTrustBadgesImport';
 import { TrustBadgesPreview } from '../../gallery/_components/TrustBadgesPreview';
-import type { TrustBadgesStyle } from '../../gallery/_types';
-import type { ImageItem } from '../../../components/MultiImageUploader';
-import { MultiImageUploader } from '../../../components/MultiImageUploader';
+import { DEFAULT_STACK_DESCRIPTION, DEFAULT_STACK_HEADING, DEFAULT_TRUST_CUE_TEXT } from '../../gallery/_components/TrustBadgesSectionShared';
+import { TrustBadgesForm } from '../../trust-badges/_components/TrustBadgesForm';
+import {
+  DEFAULT_TRUST_BADGES_CORNER_RADIUS,
+  type GalleryItem,
+  type TrustBadgesCornerRadius,
+  type TrustBadgesStyle,
+} from '../../gallery/_types';
 
-interface TrustBadgeItem extends ImageItem {
+interface TrustBadgeItem extends GalleryItem {
   id: string | number;
   url: string;
   link: string;
   name?: string;
 }
+
+const DEMO_TRUST_BADGE_ITEMS: TrustBadgeItem[] = [
+  { id: 'demo-1', link: '', name: 'ISO 9001', url: '/demo/trust-badges/certificate-1.png' },
+  { id: 'demo-2', link: '', name: 'Chứng nhận chất lượng', url: '/demo/trust-badges/certificate-2.png' },
+  { id: 'demo-3', link: '', name: 'Đối tác xác thực', url: '/demo/trust-badges/certificate-3.png' },
+  { id: 'demo-4', link: '', name: 'Giải thưởng thương hiệu', url: '/demo/trust-badges/certificate-4.png' },
+  { id: 'demo-5', link: '', name: 'Cam kết xanh', url: '/demo/trust-badges/certificate-5.png' },
+  { id: 'demo-6', link: '', name: 'Bảo mật giao dịch', url: '/demo/trust-badges/certificate-6.png' },
+];
 
 export default function TrustBadgesCreatePage() {
   const COMPONENT_TYPE = 'TrustBadges';
@@ -35,7 +50,12 @@ export default function TrustBadgesCreatePage() {
   ]);
   const [trustBadgesStyle, setTrustBadgesStyle] = useState<TrustBadgesStyle>('cards');
   const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
-  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const [cornerRadius, setCornerRadius] = useState<TrustBadgesCornerRadius>(DEFAULT_TRUST_BADGES_CORNER_RADIUS);
+  const [showBorder] = useState(true);
+  const [trustCueText, setTrustCueText] = useState(DEFAULT_TRUST_CUE_TEXT);
+  const [stackHeading, setStackHeading] = useState(DEFAULT_STACK_HEADING);
+  const [stackDescription, setStackDescription] = useState(DEFAULT_STACK_DESCRIPTION);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header'], true);
   const headerState = useSectionHeaderState({
     badgeText: 'Được tin chọn',
     headerAlign: 'center',
@@ -46,9 +66,15 @@ export default function TrustBadgesCreatePage() {
 
   const onSubmit = (e: React.FormEvent) => {
     void handleSubmit(e, {
-      items: trustBadgeItems.map((item) => ({ link: item.link, name: item.name, url: item.url })),
+      items: trustBadgeItems.map((item) => ({ link: item.link, name: item.name, url: item.url, storageId: item.storageId })),
       style: trustBadgesStyle,
       desktopColumns,
+      cornerRadius,
+      noBorderRadius: cornerRadius === 'none',
+      showBorder,
+      trustCueText,
+      stackHeading,
+      stackDescription,
       hideHeader: headerState.hideHeader,
       showTitle: headerState.showTitle,
       subtitle: headerState.subtitle,
@@ -59,7 +85,13 @@ export default function TrustBadgesCreatePage() {
       uppercaseText: headerState.uppercaseText,
       showBadge: headerState.showBadge,
       badgeText: headerState.badgeText,
+      spacing: headerState.spacing,
+      noVerticalMargin: headerState.spacing === 'none',
     });
+  };
+
+  const handleUseDemoImages = () => {
+    setTrustBadgeItems(DEMO_TRUST_BADGE_ITEMS);
   };
 
   return (
@@ -80,6 +112,8 @@ export default function TrustBadgesCreatePage() {
       setCustomFontState={setCustomFontState}
       skipTitleInput={true}
     >
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+
       <HeaderConfigSection
         hideHeader={headerState.hideHeader}
         title={title}
@@ -103,70 +137,36 @@ export default function TrustBadgesCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={expandedSections.header}
-        onExpandedChange={(value) => setExpandedSections({ header: value })}
+        expanded={openSections.header}
+        onExpandedChange={(value) => toggleSection('header', value)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Shield size={20} />
-            Cấu hình hiển thị
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label>Số cột desktop</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {[3, 4].map((option) => {
-              const selected = desktopColumns === option;
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setDesktopColumns(option as 3 | 4)}
-                  className={cn(
-                    'h-9 rounded-md border text-xs transition-colors',
-                    selected
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                      : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
-                  )}
-                >
-                  {option} cột
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center justify-between gap-3">
-            <span>Danh sách chứng nhận</span>
-            <AiTrustBadgesImport onApply={(items) => setTrustBadgeItems(items as TrustBadgeItem[])} />
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <MultiImageUploader<TrustBadgeItem>
-            items={trustBadgeItems}
-            onChange={setTrustBadgeItems}
-            folder="trust-badges"
-            imageKey="url"
-            extraFields={[{ key: 'name', placeholder: 'Tên chứng nhận (VD: ISO 9001)', type: 'text' }]}
-            minItems={1}
-            maxItems={20}
-            aspectRatio="square"
-            columns={2}
-            showReorder={true}
-            addButtonText="Thêm chứng nhận"
-            emptyText="Chưa có chứng nhận nào"
-            layout="vertical"
-          />
-        </CardContent>
-      </Card>
+      <TrustBadgesForm
+        items={trustBadgeItems}
+        setItems={setTrustBadgeItems}
+        cornerRadius={cornerRadius}
+        setCornerRadius={setCornerRadius}
+        desktopColumns={desktopColumns}
+        setDesktopColumns={setDesktopColumns}
+        selectedStyle={trustBadgesStyle}
+        trustCueText={trustCueText}
+        setTrustCueText={setTrustCueText}
+        stackHeading={stackHeading}
+        setStackHeading={setStackHeading}
+        stackDescription={stackDescription}
+        setStackDescription={setStackDescription}
+        spacing={headerState.spacing}
+        setSpacing={headerState.setSpacing}
+        onAiImport={(items) => setTrustBadgeItems(items as TrustBadgeItem[])}
+        actions={(
+          <Button type="button" variant="outline" size="sm" onClick={handleUseDemoImages}>
+            Dùng ảnh demo
+          </Button>
+        )}
+      />
 
       <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
         <div className="flex items-start gap-3">
@@ -179,43 +179,43 @@ export default function TrustBadgesCreatePage() {
               {trustBadgesStyle === 'grid' && (
                 <div className="space-y-1">
                   <p><strong className="text-emerald-900 dark:text-emerald-100">Grid</strong></p>
-                  <p>• Ảnh: <strong>300×300px</strong> (tỷ lệ 1:1, vuông)</p>
-                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Grid vuông với zoom icon</p>
+                  <p>• Ảnh: <strong>A4 dọc</strong> (tỷ lệ 210:297)</p>
+                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Grid chứng nhận dạng giấy đứng</p>
                 </div>
               )}
               {trustBadgesStyle === 'cards' && (
                 <div className="space-y-1">
                   <p><strong className="text-emerald-900 dark:text-emerald-100">Cards</strong></p>
-                  <p>• Ảnh: <strong>400×320px</strong> (tỷ lệ 5:4)</p>
-                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Feature cards lớn, hover zoom effect</p>
+                  <p>• Ảnh: <strong>A4 dọc</strong> (tỷ lệ 210:297)</p>
+                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Feature cards lớn cho chứng nhận dọc</p>
                 </div>
               )}
               {trustBadgesStyle === 'stack' && (
                 <div className="space-y-1">
                   <p><strong className="text-emerald-900 dark:text-emerald-100">Stack</strong></p>
-                  <p>• Ảnh: <strong>240×160px</strong> (tỷ lệ 3:2)</p>
-                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Trust proof strips kiểu SaaS, dễ scan</p>
+                  <p>• Ảnh: <strong>A4 dọc</strong> (tỷ lệ 210:297)</p>
+                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Trust proof strips với thumbnail giấy đứng</p>
                 </div>
               )}
               {trustBadgesStyle === 'wall' && (
                 <div className="space-y-1">
                   <p><strong className="text-emerald-900 dark:text-emerald-100">Wall</strong></p>
-                  <p>• Ảnh: <strong>250×300px</strong> (tỷ lệ 5:6)</p>
+                  <p>• Ảnh: <strong>A4 dọc</strong> (tỷ lệ 210:297)</p>
                   <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Khung ảnh dọc kiểu treo tường</p>
                 </div>
               )}
               {trustBadgesStyle === 'carousel' && (
                 <div className="space-y-1">
                   <p><strong className="text-emerald-900 dark:text-emerald-100">Carousel</strong></p>
-                  <p>• Ảnh: <strong>280×280px</strong> (tỷ lệ 1:1)</p>
-                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Horizontal carousel với arrows</p>
+                  <p>• Ảnh: <strong>A4 dọc</strong> (tỷ lệ 210:297)</p>
+                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Horizontal carousel với chứng nhận dọc</p>
                 </div>
               )}
               {trustBadgesStyle === 'seal' && (
                 <div className="space-y-1">
                   <p><strong className="text-emerald-900 dark:text-emerald-100">Seal</strong></p>
-                  <p>• Ảnh: <strong>240×240px</strong> (tỷ lệ 1:1)</p>
-                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Hub xác thực trung tâm + badge vệ tinh</p>
+                  <p>• Ảnh: <strong>A4 dọc</strong> (tỷ lệ 210:297)</p>
+                  <p className="text-emerald-500 dark:text-emerald-400 italic">Layout: Hub xác thực + thumbnail chứng nhận dọc</p>
                 </div>
               )}
             </div>
@@ -233,6 +233,14 @@ export default function TrustBadgesCreatePage() {
         desktopColumns={desktopColumns}
         config={{
           badgeText: headerState.badgeText,
+          cornerRadius,
+          noBorderRadius: cornerRadius === 'none',
+          showBorder,
+          trustCueText,
+          stackHeading,
+          stackDescription,
+          spacing: headerState.spacing,
+          noVerticalMargin: headerState.spacing === 'none',
           headerAlign: headerState.headerAlign,
           heading: title,
           hideHeader: headerState.hideHeader,

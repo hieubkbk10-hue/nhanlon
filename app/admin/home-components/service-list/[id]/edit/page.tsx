@@ -1,16 +1,22 @@
 'use client';
 
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
+import { SectionSpacingControl } from '../../../_shared/components/SectionSpacingControl';
+import { CollapsibleSubSection as SubSection } from '../../../_shared/components/CollapsibleSubSection';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
@@ -22,22 +28,57 @@ import {
   DEFAULT_SERVICE_LIST_CONFIG,
 } from '../../_lib/constants';
 import type {
+  ServiceListCardRadius,
   DemoServiceItem,
+  ServiceListDesktopColumns,
   ServiceListConfig,
   ServiceListStyle,
   ServiceSelectionMode,
 } from '../../_types';
+import {
+  DEFAULT_SERVICE_LIST_CARD_RADIUS,
+  DEFAULT_SERVICE_LIST_DESKTOP_COLUMNS,
+  normalizeServiceListCardRadius,
+  normalizeServiceListDesktopColumns,
+} from '../../_types';
+import { Label, cn } from '../../../../components/ui';
 
 const COMPONENT_TYPE = 'ServiceList';
 
-export default function ServiceListEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type ServiceListEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function ServiceListEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: ServiceListEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
   const servicesData = useQuery(api.services.listAll, { limit: 100 });
 
@@ -53,7 +94,7 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
   const [demoServices, setDemoServices] = useState<DemoServiceItem[]>([]);
 
   // Header config state (shared HeaderConfigSection)
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
   const [hideHeader, setHideHeader] = useState(false);
   const [showTitle, setShowTitle] = useState(true);
   const [subtitle, setSubtitle] = useState('');
@@ -64,10 +105,13 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
   const [badgeText, setBadgeText] = useState('');
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const [cardRadius, setCardRadius] = useState<ServiceListCardRadius>(DEFAULT_SERVICE_LIST_CARD_RADIUS);
+  const [desktopColumns, setDesktopColumns] = useState<ServiceListDesktopColumns>(DEFAULT_SERVICE_LIST_DESKTOP_COLUMNS);
 
   useEffect(() => {
     if (component) {
-      if (component.type !== 'ServiceList') {
+      if (!snapshotComponent && component.type !== 'ServiceList') {
         router.replace(`/admin/home-components/${id}/edit`);
         return;
       }
@@ -77,7 +121,10 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
 
       const config = component.config ?? {};
       const nextConfig: ServiceListConfig = {
+        cardRadius: normalizeServiceListCardRadius(config.cardRadius),
+        desktopColumns: normalizeServiceListDesktopColumns(config.desktopColumns),
         itemCount: (config.itemCount as number) ?? DEFAULT_SERVICE_LIST_CONFIG.itemCount,
+        spacing: (config.spacing as SectionSpacing) ?? DEFAULT_SERVICE_LIST_CONFIG.spacing,
         sortBy: (config.sortBy as ServiceListConfig['sortBy']) ?? DEFAULT_SERVICE_LIST_CONFIG.sortBy,
         selectionMode: (config.selectionMode as ServiceSelectionMode) ?? DEFAULT_SERVICE_LIST_CONFIG.selectionMode,
         selectedServiceIds: ((config.selectedServiceIds as string[]) ?? []),
@@ -102,6 +149,9 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
       setUppercaseText(headerConfig.uppercaseText ?? false);
       setShowBadge(headerConfig.showBadge ?? true);
       setBadgeText(headerConfig.badgeText ?? '');
+      setSpacing(headerConfig.spacing ?? DEFAULT_SECTION_SPACING);
+      setCardRadius(normalizeServiceListCardRadius(config.cardRadius));
+      setDesktopColumns(normalizeServiceListDesktopColumns(config.desktopColumns));
     }
   }, [component, id, router]);
 
@@ -123,6 +173,9 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
     uppercaseText: boolean;
     showBadge: boolean;
     badgeText: string;
+    spacing: SectionSpacing;
+    cardRadius: ServiceListCardRadius;
+    desktopColumns: ServiceListDesktopColumns;
     demoServices: DemoServiceItem[];
   }) => JSON.stringify(payload);
 
@@ -149,6 +202,9 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
       uppercaseText: hc.uppercaseText ?? false,
       showBadge: hc.showBadge ?? true,
       badgeText: hc.badgeText ?? '',
+      spacing: hc.spacing ?? DEFAULT_SECTION_SPACING,
+      cardRadius: normalizeServiceListCardRadius(config.cardRadius),
+      desktopColumns: normalizeServiceListDesktopColumns(config.desktopColumns),
       demoServices: Array.isArray(config.demoServices) ? (config.demoServices as DemoServiceItem[]) : [],
     }));
   }, [component]);
@@ -171,17 +227,20 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
     uppercaseText,
     showBadge,
     badgeText,
+  spacing,
+  cardRadius,
+  desktopColumns,
     demoServices: serviceSelectionMode === 'demo' ? demoServices : [],
   });
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
@@ -212,6 +271,8 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
     );
   };
 
+  useUnsavedGuard(hasChanges);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) {return;}
@@ -235,15 +296,22 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
         uppercaseText,
         showBadge,
         badgeText,
+        spacing,
+        cardRadius,
+        desktopColumns,
       };
 
-      await updateMutation({
-        active,
-        config: nextConfig,
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: nextConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -253,7 +321,7 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -279,10 +347,13 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
         uppercaseText,
         showBadge,
         badgeText,
+        spacing,
+        cardRadius,
+        desktopColumns,
         demoServices: nextConfig.selectionMode === 'demo' ? demoServices : [],
       }));
 
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -290,7 +361,7 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -323,7 +394,8 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Danh sách Dịch vụ</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -350,12 +422,55 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
           titlePlaceholder="Nhập tiêu đề component..."
         />
+
+        <div className="mb-3">
+          <SubSection icon={Settings2} title="Cấu hình hiển thị" defaultOpen={true}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Bo góc card</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  value={cardRadius}
+                  onChange={(event) => setCardRadius(event.target.value as ServiceListCardRadius)}
+                >
+                  <option value="none">Không bo góc</option>
+                  <option value="sm">Bo góc ít</option>
+                  <option value="lg">Bo góc nhiều</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Số cột desktop</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[3, 4].map((option) => {
+                    const selected = desktopColumns === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setDesktopColumns(option as ServiceListDesktopColumns)}
+                        className={cn(
+                          'h-10 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                        )}
+                      >
+                        {option} cột
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <SectionSpacingControl value={spacing} onChange={setSpacing} />
+          </SubSection>
+        </div>
 
         <ServiceListForm
           selectionMode={serviceSelectionMode}
@@ -378,7 +493,7 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Danh sách dịch vụ"
                 enabled={customState.enabled}
@@ -406,7 +521,7 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
                 onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: value }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Danh sách dịch vụ"
                 enabled={customFontState.enabled}
@@ -443,6 +558,9 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
               uppercaseText={uppercaseText}
               showBadge={showBadge}
               badgeText={badgeText}
+              spacing={spacing}
+              cardRadius={cardRadius}
+              desktopColumns={desktopColumns}
               fontStyle={fontStyle}
               fontClassName="font-active"
             />
@@ -452,7 +570,7 @@ export default function ServiceListEditPage({ params }: { params: Promise<{ id: 
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}

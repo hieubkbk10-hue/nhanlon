@@ -1,5 +1,9 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,6 +13,9 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
+import { HomeComponentDisplaySettingsSection } from '../../../_shared/components/HomeComponentDisplaySettingsSection';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
@@ -25,25 +32,69 @@ import {
   serializeProcessFormSteps,
   type ProcessFormStep,
 } from '../../_lib/normalize';
-import type { ProcessBrandMode, ProcessStep, ProcessStyle } from '../../_types';
+import {
+  DEFAULT_PROCESS_CORNER_RADIUS,
+  type ProcessBrandMode,
+  type ProcessCornerRadius,
+  type ProcessStep,
+  type ProcessStyle,
+} from '../../_types';
+import { Label, cn } from '@/app/admin/components/ui';
 
 const COMPONENT_TYPE = 'Process';
 
-export default function ProcessEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type ProcessEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function ProcessEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: ProcessEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
-  const [steps, setSteps] = useState<ProcessFormStep[]>([]);
+  const {
+    state: steps,
+    set: setSteps,
+    undo: undosteps,
+    redo: redosteps,
+    canUndo: canUndosteps,
+    canRedo: canRedosteps,
+    reset: resetsteps,
+  } = useUndoRedo<ProcessFormStep[]>([], { maxHistory: 15 });
   const [processStyle, setProcessStyle] = useState<ProcessStyle>('horizontal');
   const [desktopColumns, setDesktopColumns] = useState<3 | 4>(4);
+  const [cornerRadius, setCornerRadius] = useState<ProcessCornerRadius>(DEFAULT_PROCESS_CORNER_RADIUS);
+  const [circularCtaText, setCircularCtaText] = useState('');
+  const [circularCtaLink, setCircularCtaLink] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Header config states
@@ -57,13 +108,14 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
   const [badgeText, setBadgeText] = useState('');
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const { openSections, toggleSection } = useFormSectionsState(['header', 'display'], false);
 
-  const [initialSnapshot, setInitialSnapshot] = useState('');
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
   useEffect(() => {
     if (component) {
-      if (component.type !== 'Process') {
+      if (!snapshotComponent && component.type !== 'Process') {
         router.replace(`/admin/home-components/${id}/edit`);
         return;
       }
@@ -73,9 +125,12 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
 
       setTitle(component.title);
       setActive(component.active);
-      setSteps(normalizedFormSteps);
+      resetsteps(normalizedFormSteps);
       setProcessStyle(normalizedConfig.style);
       setDesktopColumns(normalizedConfig.desktopColumns ?? 4);
+      setCornerRadius(normalizedConfig.cornerRadius);
+      setCircularCtaText(normalizedConfig.circularCtaText ?? '');
+      setCircularCtaLink(normalizedConfig.circularCtaLink ?? '');
 
       // Load header config via shared extractor
       const config = component.config ?? {};
@@ -90,6 +145,7 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
       setUppercaseText(hc.uppercaseText ?? false);
       setShowBadge(hc.showBadge ?? true);
       setBadgeText(hc.badgeText ?? '');
+      setSpacing(normalizedConfig.spacing);
     }
   }, [component, id, router]);
 
@@ -99,6 +155,8 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
     steps: ProcessStep[];
     style: ProcessStyle;
     desktopColumns: 3 | 4;
+    cornerRadius: ProcessCornerRadius;
+    noBorderRadius: boolean;
     hideHeader: boolean;
     showTitle: boolean;
     subtitle: string;
@@ -109,6 +167,10 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
     uppercaseText: boolean;
     showBadge: boolean;
     badgeText: string;
+    spacing: SectionSpacing;
+    noVerticalMargin: boolean;
+    circularCtaText: string;
+    circularCtaLink: string;
   }) => JSON.stringify(payload);
 
   useEffect(() => {
@@ -125,6 +187,8 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
       steps: serializedSteps,
       style: normalizedConfig.style,
       desktopColumns: normalizedConfig.desktopColumns ?? 4,
+      cornerRadius: normalizedConfig.cornerRadius,
+      noBorderRadius: normalizedConfig.cornerRadius === 'none',
       hideHeader: hc.hideHeader ?? false,
       showTitle: hc.showTitle ?? true,
       subtitle: hc.subtitle ?? '',
@@ -135,6 +199,10 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
       uppercaseText: hc.uppercaseText ?? false,
       showBadge: hc.showBadge ?? true,
       badgeText: hc.badgeText ?? '',
+      spacing: normalizedConfig.spacing,
+      noVerticalMargin: normalizedConfig.spacing === 'none',
+      circularCtaText: normalizedConfig.circularCtaText ?? '',
+      circularCtaLink: normalizedConfig.circularCtaLink ?? '',
     }));
   }, [component]);
 
@@ -144,6 +212,8 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
     steps: serializeProcessFormSteps(steps),
     style: processStyle,
     desktopColumns,
+    cornerRadius,
+    noBorderRadius: cornerRadius === 'none',
     hideHeader,
     showTitle,
     subtitle,
@@ -154,21 +224,27 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
     uppercaseText,
     showBadge,
     badgeText,
+    spacing,
+    noVerticalMargin: spacing === 'none',
+    circularCtaText,
+    circularCtaLink,
   });
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
 
-  const hasChanges = currentSnapshot !== initialSnapshot || customChanged || customFontChanged;
+  const hasChanges = initialSnapshot !== null && (currentSnapshot !== initialSnapshot || customChanged || customFontChanged);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -178,28 +254,40 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
     try {
       const serializedSteps = serializeProcessFormSteps(steps);
 
-      await updateMutation({
-        active,
-        config: {
-          steps: serializedSteps,
-          style: processStyle,
-          desktopColumns,
-          // Header config
-          hideHeader,
-          showTitle,
-          subtitle,
-          showSubtitle,
-          headerAlign,
-          titleColorPrimary,
-          subtitleAboveTitle,
-          uppercaseText,
-          showBadge,
-          badgeText,
-        },
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      const persistConfig = {
+        steps: serializedSteps,
+        style: processStyle,
+        desktopColumns,
+        cornerRadius,
+        noBorderRadius: cornerRadius === 'none',
+        spacing,
+        noVerticalMargin: spacing === 'none',
+        // Header config
+        hideHeader,
+        showTitle,
+        subtitle,
+        showSubtitle,
+        headerAlign,
+        titleColorPrimary,
+        subtitleAboveTitle,
+        uppercaseText,
+        showBadge,
+        badgeText,
+        circularCtaText,
+        circularCtaLink,
+      };
+
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: persistConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: persistConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -209,7 +297,7 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -219,7 +307,7 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
 
       toast.success('Đã cập nhật Process');
       setInitialSnapshot(currentSnapshot);
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -227,7 +315,7 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -261,7 +349,8 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Process</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -288,19 +377,64 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={openSections.header}
+          onExpandedChange={(open) => toggleSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
           titlePlaceholder="Nhập tiêu đề component..."
         />
 
-        <ProcessForm steps={steps} onChange={setSteps} secondary={effectiveColors.secondary} defaultExpanded={false} desktopColumns={desktopColumns} onDesktopColumnsChange={setDesktopColumns} />
+        <div className="mb-3">
+          <HomeComponentDisplaySettingsSection
+            open={openSections.display}
+            onOpenChange={(open) => toggleSection('display', open)}
+            cornerRadius={cornerRadius}
+            onCornerRadiusChange={setCornerRadius}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+          >
+              <div className="space-y-2">
+                <Label>Số cột desktop</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([3, 4] as const).map((option) => {
+                    const selected = desktopColumns === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setDesktopColumns(option)}
+                        className={cn(
+                          'h-9 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                        )}
+                      >
+                        {option} cột
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+          </HomeComponentDisplaySettingsSection>
+        </div>
+
+        <ProcessForm
+          steps={steps}
+          onChange={setSteps}
+          secondary={effectiveColors.secondary}
+          defaultExpanded={false}
+          style={processStyle}
+          circularCtaText={circularCtaText}
+          circularCtaLink={circularCtaLink}
+          onChangeCircularCtaText={setCircularCtaText}
+          onChangeCircularCtaLink={setCircularCtaLink}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Process"
                 enabled={customState.enabled}
@@ -328,7 +462,7 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
               }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Process"
                 enabled={customFontState.enabled}
@@ -361,6 +495,10 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
               fontStyle={fontStyle}
               fontClassName="font-active"
               desktopColumns={desktopColumns}
+              spacing={spacing}
+              cornerRadius={cornerRadius}
+              circularCtaText={circularCtaText}
+              circularCtaLink={circularCtaLink}
             />
           </div>
         </div>
@@ -368,10 +506,17 @@ export default function ProcessEditPage({ params }: { params: Promise<{ id: stri
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() => { router.push('/admin/home-components'); }}
+          onCancel={() => { router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndosteps,
+          canRedo: canRedosteps,
+          onUndo: undosteps,
+          onRedo: redosteps,
+        }}
         />
       </form>
     </div>

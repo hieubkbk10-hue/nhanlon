@@ -8,6 +8,7 @@ import { SnapshotRouter2 } from './SnapshotRouter2';
 import { SnapshotRouter3 } from './SnapshotRouter3';
 import { GenericSnapshotEditor, type BaseHeaderConfig, type SnapshotAdapter } from './GenericSnapshotEditor';
 import HomeComponentLegacyEditor from '../../_shared/legacy/HomeComponentLegacyEditor';
+import { saveSnapshotComponent } from '../_lib/snapshotComponentSave';
 import { StatsForm, type StatsFormItem } from '../../stats/_components/StatsForm';
 import { StatsPreview } from '../../stats/_components/StatsPreview';
 import { DEFAULT_STATS_CONFIG, DEFAULT_STATS_ITEMS } from '../../stats/_lib/constants';
@@ -28,11 +29,13 @@ import { BlogPreview } from '../../blog/_components/BlogPreview';
 import { sortBlogPosts } from '../../blog/_lib/constants';
 import {
   normalizeBlogConfig,
+  type BlogCardRadius,
   type BlogSelectionMode,
   type BlogSortBy,
   type BlogStyle,
   type DemoBlogItem,
 } from '../../blog/_types';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { ProductGridForm, type CategoryTabItem, type ProductGridProductItem } from '../../product-grid/_components/ProductGridForm';
 import { ProductGridPreview } from '../../product-grid/_components/ProductGridPreview';
 import { DEFAULT_PRODUCT_GRID_CONFIG, resolveGridStyle } from '../../product-grid/_lib/constants';
@@ -41,10 +44,26 @@ import type { ProductGridSelectionMode, ProductGridSortBy, ProductGridStyle } fr
 import { PartnersForm } from '../../partners/_components/PartnersForm';
 import { PartnersPreview } from '../../partners/_components/PartnersPreview';
 import {
+  DEFAULT_PARTNERS_CORNER_RADIUS,
+  DEFAULT_PARTNERS_LOGO_SIZE,
+  DEFAULT_PARTNERS_SHOW_BORDER,
+  DEFAULT_PARTNERS_SPACING,
+  getPartnersLogoColorModeFromIntensity,
+  normalizePartnersCornerRadius,
   normalizePartnersDisplayMode,
+  normalizePartnersLogoColorIntensity,
+  normalizePartnersLogoColorMode,
+  normalizePartnersLogoSize,
+  normalizePartnersShowBorder,
+  normalizePartnersSpacing,
   normalizePartnersStyle,
   type PartnerItem,
+  type PartnersCornerRadius,
   type PartnersDisplayMode,
+  type PartnersLogoColorIntensity,
+  type PartnersLogoColorMode,
+  type PartnersLogoSize,
+  type PartnersSpacing,
   type PartnersStyle,
 } from '../../partners/_types';
 
@@ -68,6 +87,7 @@ type ProductCategoriesSnapshotState = {
 };
 
 type BlogSnapshotState = {
+  cornerRadius: BlogCardRadius;
   demoPosts: DemoBlogItem[];
   desktopColumns: 3 | 4;
   itemCount: number;
@@ -77,6 +97,7 @@ type BlogSnapshotState = {
   showAuthor: boolean;
   showDate: boolean;
   showExcerpt: boolean;
+  spacing: SectionSpacing;
   sortBy: BlogSortBy;
   style: BlogStyle;
 };
@@ -96,8 +117,14 @@ type ProductGridSnapshotState = {
 };
 
 type PartnersSnapshotState = {
+  cornerRadius: PartnersCornerRadius;
   displayMode: PartnersDisplayMode;
   items: PartnerItem[];
+  logoColorIntensity: PartnersLogoColorIntensity;
+  logoColorMode: PartnersLogoColorMode;
+  logoSize: PartnersLogoSize;
+  showBorder: boolean;
+  spacing: PartnersSpacing;
   style: PartnersStyle;
 };
 
@@ -316,7 +343,7 @@ const productCategoriesSnapshotAdapter: SnapshotAdapter<ProductCategoriesSnapsho
     demoCategories: Array.isArray(rawConfig.demoCategories) ? sanitizeDemoCategories(rawConfig.demoCategories as DemoProductCategoryItem[]) : [],
     selectionMode: rawConfig.selectionMode === 'demo' ? 'demo' : 'real',
     showProductCount: typeof rawConfig.showProductCount === 'boolean' ? rawConfig.showProductCount : true,
-    style: (rawConfig.style as ProductCategoriesStyle) || 'grid',
+    style: (rawConfig.style as ProductCategoriesStyle) || 'image-strip',
   }),
   toConfig: (state, headerConfig) => {
     const sanitizedSubtitle = headerConfig.subtitle.trim();
@@ -432,6 +459,10 @@ function BlogSnapshotForm({
       defaultExpanded={true}
       desktopColumns={state.desktopColumns}
       onDesktopColumnsChange={(desktopColumns) => setState((current) => ({ ...current, desktopColumns }))}
+      spacing={state.spacing}
+      onSpacingChange={(spacing) => setState((current) => ({ ...current, spacing }))}
+      cornerRadius={state.cornerRadius}
+      onCornerRadiusChange={(cornerRadius) => setState((current) => ({ ...current, cornerRadius }))}
     />
   );
 }
@@ -502,6 +533,8 @@ function BlogSnapshotPreview({
       subtitleAboveTitle={headerConfig.subtitleAboveTitle}
       uppercaseText={headerConfig.uppercaseText}
       desktopColumns={state.desktopColumns}
+      spacing={state.spacing}
+      cornerRadius={state.cornerRadius}
     />
   );
 }
@@ -511,8 +544,9 @@ const blogSnapshotAdapter: SnapshotAdapter<BlogSnapshotState> = {
     const config = normalizeBlogConfig(rawConfig);
 
     return {
+      cornerRadius: config.cornerRadius,
       demoPosts: config.demoPosts ?? [],
-      desktopColumns: rawConfig.desktopColumns === 3 ? 3 : 4,
+      desktopColumns: config.desktopColumns,
       itemCount: config.itemCount,
       searchTerm: '',
       selectedPostIds: config.selectedPostIds,
@@ -520,6 +554,7 @@ const blogSnapshotAdapter: SnapshotAdapter<BlogSnapshotState> = {
       showAuthor: config.showAuthor,
       showDate: config.showDate,
       showExcerpt: config.showExcerpt,
+      spacing: config.spacing,
       sortBy: config.sortBy,
       style: config.style,
     };
@@ -527,6 +562,8 @@ const blogSnapshotAdapter: SnapshotAdapter<BlogSnapshotState> = {
   toConfig: (state, headerConfig) => ({
     ...headerConfig,
     badgeText: headerConfig.badgeText.trim(),
+    cornerRadius: state.cornerRadius,
+    noBorderRadius: state.cornerRadius === 'none',
     demoPosts: state.selectionMode === 'demo' ? state.demoPosts : [],
     desktopColumns: state.desktopColumns,
     itemCount: state.itemCount,
@@ -535,6 +572,8 @@ const blogSnapshotAdapter: SnapshotAdapter<BlogSnapshotState> = {
     showAuthor: state.showAuthor,
     showDate: state.showDate,
     showExcerpt: state.showExcerpt,
+    spacing: state.spacing,
+    noVerticalMargin: state.spacing === 'none',
     sortBy: state.sortBy,
     style: state.style,
     subtitle: headerConfig.subtitle.trim(),
@@ -739,6 +778,7 @@ function ProductGridSnapshotPreview({
       subtitle={state.sectionTitle}
       fontStyle={fontStyle}
       fontClassName={fontClassName}
+      desktopColumns={state.desktopColumns}
       categoryTabs={categoryTabs}
       hideHeader={headerConfig.hideHeader}
       showTitle={headerConfig.showTitle}
@@ -759,12 +799,12 @@ const productGridSnapshotAdapter: SnapshotAdapter<ProductGridSnapshotState> = {
     desktopColumns: normalizeProductGridColumns(rawConfig.desktopColumns),
     itemCount: typeof rawConfig.itemCount === 'number' ? rawConfig.itemCount : DEFAULT_PRODUCT_GRID_CONFIG.itemCount,
     productSearchTerm: '',
-    sectionTitle: typeof rawConfig.sectionTitle === 'string' ? rawConfig.sectionTitle : DEFAULT_PRODUCT_GRID_CONFIG.sectionTitle,
+    sectionTitle: typeof rawConfig.subtitle === 'string' ? rawConfig.subtitle : DEFAULT_PRODUCT_GRID_CONFIG.sectionTitle,
     selectedProductIds: Array.isArray(rawConfig.selectedProductIds) ? rawConfig.selectedProductIds.filter((id): id is string => typeof id === 'string') : [],
     selectionMode: rawConfig.selectionMode === 'manual' || rawConfig.selectionMode === 'demo' ? rawConfig.selectionMode : DEFAULT_PRODUCT_GRID_CONFIG.selectionMode,
     sortBy: rawConfig.sortBy === 'bestseller' || rawConfig.sortBy === 'random' ? rawConfig.sortBy : DEFAULT_PRODUCT_GRID_CONFIG.sortBy,
     style: resolveGridStyle(typeof rawConfig.style === 'string' ? rawConfig.style : undefined),
-    subTitle: typeof rawConfig.subTitle === 'string' ? rawConfig.subTitle : DEFAULT_PRODUCT_GRID_CONFIG.subTitle,
+    subTitle: typeof rawConfig.badgeText === 'string' ? rawConfig.badgeText : DEFAULT_PRODUCT_GRID_CONFIG.subTitle,
   }),
   toConfig: (state, headerConfig) => ({
     ...headerConfig,
@@ -773,13 +813,11 @@ const productGridSnapshotAdapter: SnapshotAdapter<ProductGridSnapshotState> = {
     demoProducts: state.selectionMode === 'demo' ? state.demoProducts : undefined,
     desktopColumns: state.desktopColumns,
     itemCount: state.itemCount,
-    sectionTitle: state.sectionTitle,
     selectedProductIds: state.selectionMode === 'manual' ? state.selectedProductIds : [],
     selectionMode: state.selectionMode,
     showCategoryTabs: true,
     sortBy: state.sortBy,
     style: state.style,
-    subTitle: state.subTitle,
     subtitle: state.sectionTitle,
   }),
   renderForm: (state, setState) => (
@@ -813,26 +851,49 @@ const normalizePartnerItems = (items: unknown): PartnerItem[] => {
 
 const partnersSnapshotAdapter: SnapshotAdapter<PartnersSnapshotState> = {
   normalizeState: (rawConfig) => ({
+    cornerRadius: normalizePartnersCornerRadius(rawConfig.cornerRadius ?? DEFAULT_PARTNERS_CORNER_RADIUS),
     displayMode: normalizePartnersDisplayMode(rawConfig.displayMode),
     items: normalizePartnerItems(rawConfig.items),
+    logoColorIntensity: normalizePartnersLogoColorIntensity(rawConfig.logoColorIntensity, rawConfig.logoColorMode),
+    logoColorMode: getPartnersLogoColorModeFromIntensity(normalizePartnersLogoColorIntensity(rawConfig.logoColorIntensity, normalizePartnersLogoColorMode(rawConfig.logoColorMode))),
+    logoSize: normalizePartnersLogoSize(rawConfig.logoSize ?? DEFAULT_PARTNERS_LOGO_SIZE),
+    showBorder: normalizePartnersShowBorder(rawConfig.showBorder ?? DEFAULT_PARTNERS_SHOW_BORDER),
+    spacing: normalizePartnersSpacing(rawConfig.spacing ?? DEFAULT_PARTNERS_SPACING),
     style: normalizePartnersStyle(rawConfig.style),
   }),
   toConfig: (state, headerConfig) => ({
     ...headerConfig,
+    cornerRadius: state.cornerRadius,
     displayMode: state.displayMode,
     items: state.items.map((item) => ({
       link: item.link ?? '',
       name: item.name ?? '',
       url: item.url ?? '',
     })),
+    logoColorIntensity: state.logoColorIntensity,
+    logoColorMode: state.logoColorMode,
+    logoSize: state.logoSize,
+    showBorder: state.showBorder,
+    spacing: state.spacing,
     style: state.style,
   }),
   renderForm: (state, setState) => (
     <PartnersForm
       items={state.items}
       setItems={(items) => setState((current) => ({ ...current, items }))}
-      displayMode={state.displayMode}
-      setDisplayMode={(displayMode) => setState((current) => ({ ...current, displayMode }))}
+      cornerRadius={state.cornerRadius}
+      setCornerRadius={(cornerRadius) => setState((current) => ({ ...current, cornerRadius }))}
+      logoSize={state.logoSize}
+      setLogoSize={(logoSize) => setState((current) => ({ ...current, logoSize }))}
+      showBorder={state.showBorder}
+      setShowBorder={(showBorder) => setState((current) => ({ ...current, showBorder }))}
+      spacing={state.spacing}
+      setSpacing={(spacing) => setState((current) => ({ ...current, spacing }))}
+      selectedStyle={state.style}
+      logoColorIntensity={state.logoColorIntensity}
+      setLogoColorIntensity={(logoColorIntensity) => setState((current) => ({ ...current, logoColorIntensity, logoColorMode: getPartnersLogoColorModeFromIntensity(logoColorIntensity) }))}
+      logoColorMode={state.logoColorMode}
+      setLogoColorMode={(logoColorMode) => setState((current) => ({ ...current, logoColorMode, logoColorIntensity: normalizePartnersLogoColorIntensity(current.logoColorIntensity, logoColorMode) }))}
     />
   ),
   renderPreview: (state, setState, title, headerConfig, colors, fontStyle, fontClassName) => (
@@ -847,6 +908,12 @@ const partnersSnapshotAdapter: SnapshotAdapter<PartnersSnapshotState> = {
       subheading={headerConfig.subtitle}
       align={headerConfig.headerAlign}
       displayMode={state.displayMode}
+      cornerRadius={state.cornerRadius}
+      logoSize={state.logoSize}
+      showBorder={state.showBorder}
+      spacing={state.spacing}
+      logoColorIntensity={state.logoColorIntensity}
+      logoColorMode={state.logoColorMode}
       onDisplayModeChange={(displayMode) => setState((current) => ({ ...current, displayMode }))}
       fontStyle={fontStyle}
       fontClassName={fontClassName}
@@ -910,29 +977,16 @@ export function SnapshotRouterMain(props: any) {
         type: props.component.type,
       }}
       onSnapshotSave={async (next: any) => {
-        const order = Number(props.component.order);
-        const nextComponent = {
+        await saveSnapshotComponent({
           active: next.active,
-          componentKey: props.component.componentKey,
+          component: props.component,
           config: next.config,
-          fallbackUsed: props.component.fallbackUsed,
-          mediaRefs: props.component.mediaRefs,
-          order: Number.isFinite(order) ? order : 0,
-          title: next.title.trim() || props.component.type,
-          type: props.component.type,
-        };
-        const nextComponents = props.payload.homepage.components.map((item: any) => (
-          item.componentKey === props.decodedKey ? nextComponent : item
-        )).sort((a: any, b: any) => a.order - b.order);
-
-        await props.updateSnapshot({
+          decodedKey: props.decodedKey,
           label: props.snapshotLabel,
-          payload: {
-            ...props.payload,
-            manifest: { ...props.payload.manifest, componentCount: nextComponents.length, snapshotLabel: props.snapshotLabel },
-            homepage: { ...props.payload.homepage, componentOrder: nextComponents.map((item: any) => item.componentKey), components: nextComponents },
-          },
+          payload: props.payload,
           snapshotId: props.snapshotId,
+          title: next.title,
+          updateSnapshot: props.updateSnapshot,
         });
         
         props.onCancel();

@@ -10,9 +10,9 @@ export interface SiteSettings {
   site_brand_primary: string;
   site_brand_secondary: string;
   site_brand_mode: 'single' | 'dual';
-  site_brand_color: string;
   site_timezone: string;
   site_language: string;
+  site_dark_mode?: 'light' | 'dark' | 'system';
 }
 
 export interface SEOSettings {
@@ -85,17 +85,16 @@ const SETTINGS_KEYS = {
     "site_brand_primary",
     "site_brand_secondary",
     "site_brand_mode",
-    "site_brand_color",
     "site_timezone",
     "site_language",
+    "site_dark_mode",
   ],
 };
 
 const normalizeSiteSettings = (settings: Record<string, unknown>): SiteSettings => ({
-  site_brand_primary: (settings.site_brand_primary as string) || (settings.site_brand_color as string) || "#3b82f6",
+  site_brand_primary: (settings.site_brand_primary as string) || "#3b82f6",
   site_brand_secondary: (settings.site_brand_secondary as string) || "",
   site_brand_mode: settings.site_brand_mode === 'single' ? 'single' : 'dual',
-  site_brand_color: (settings.site_brand_primary as string) || (settings.site_brand_color as string) || "#3b82f6",
   site_favicon: (settings.site_favicon as string) || "",
   site_language: (settings.site_language as string) || "vi",
   site_logo: (settings.site_logo as string) || "",
@@ -103,6 +102,7 @@ const normalizeSiteSettings = (settings: Record<string, unknown>): SiteSettings 
   site_tagline: (settings.site_tagline as string) || "",
   site_timezone: (settings.site_timezone as string) || "Asia/Ho_Chi_Minh",
   site_url: (settings.site_url as string) || "",
+  site_dark_mode: (settings.site_dark_mode as any) || "light",
 });
 
 const normalizeSEOSettings = (settings: Record<string, unknown>): SEOSettings => ({

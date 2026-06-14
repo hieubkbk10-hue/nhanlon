@@ -6,6 +6,9 @@ import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { BenefitsForm } from '../../benefits/_components/BenefitsForm';
 import { BenefitsPreview } from '../../benefits/_components/BenefitsPreview';
 import { DEFAULT_BENEFITS_EDITOR_STATE, DEFAULT_BENEFITS_HARMONY } from '../../benefits/_lib/constants';
@@ -73,6 +76,7 @@ const toPersistConfig = (state: BenefitsEditorState): BenefitsConfig => ({
   gridColumnsMobile: state.gridColumnsMobile,
   headerAlign: state.headerAlign,
   highlightIndex: state.highlightIndex,
+  cornerRadius: state.cornerRadius,
   harmony: state.harmony,
   heading: state.heading,
   items: state.items.map(toPersistItem),
@@ -100,7 +104,7 @@ const buildPreviewConfig = ({
   state: BenefitsEditorState;
   header: Pick<
     BenefitsConfig,
-    'hideHeader' | 'showTitle' | 'subtitle' | 'showSubtitle' | 'headerAlign' | 'titleColorPrimary' | 'subtitleAboveTitle' | 'uppercaseText' | 'showBadge' | 'badgeText'
+    'hideHeader' | 'showTitle' | 'subtitle' | 'showSubtitle' | 'headerAlign' | 'titleColorPrimary' | 'subtitleAboveTitle' | 'uppercaseText' | 'showBadge' | 'badgeText' | 'spacing'
   >;
 }): BenefitsConfig => ({
   ...toPersistConfig(state),
@@ -119,7 +123,7 @@ export default function BenefitsCreatePage() {
   const [editorState, setEditorState] = useState<BenefitsEditorState>(normalizeCreateState);
   
   // Header config state
-  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header'], true);
   const [hideHeader, setHideHeader] = useState(DEFAULT_BENEFITS_EDITOR_STATE.hideHeader ?? false);
   const [showTitle, setShowTitle] = useState(DEFAULT_BENEFITS_EDITOR_STATE.showTitle ?? true);
   const [subtitle, setSubtitle] = useState(DEFAULT_BENEFITS_EDITOR_STATE.subtitle ?? '');
@@ -130,6 +134,7 @@ export default function BenefitsCreatePage() {
   const [uppercaseText, setUppercaseText] = useState(DEFAULT_BENEFITS_EDITOR_STATE.uppercaseText ?? false);
   const [showBadge, setShowBadge] = useState(DEFAULT_BENEFITS_EDITOR_STATE.showBadge ?? true);
   const [badgeText, setBadgeText] = useState(DEFAULT_BENEFITS_EDITOR_STATE.badgeText ?? '');
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
 
   const validation = useMemo(() => getBenefitsValidationResult({
     primary,
@@ -154,6 +159,7 @@ export default function BenefitsCreatePage() {
       uppercaseText,
       showBadge,
       badgeText,
+      spacing,
     };
     void handleSubmit(event, configWithHeader);
   };
@@ -176,6 +182,8 @@ export default function BenefitsCreatePage() {
       setCustomFontState={setCustomFontState}
       skipTitleInput={true}
     >
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+
       <HeaderConfigSection
         hideHeader={hideHeader}
         title={title}
@@ -199,14 +207,22 @@ export default function BenefitsCreatePage() {
         onUppercaseTextChange={setUppercaseText}
         onShowBadgeChange={setShowBadge}
         onBadgeTextChange={setBadgeText}
-        expanded={expandedSections.header}
-        onExpandedChange={(value) => setExpandedSections({ header: value })}
+        expanded={openSections.header}
+        onExpandedChange={(value) => toggleSection('header', value)}
+        className="mb-3"
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <BenefitsForm state={editorState} onChange={setEditorState} mode={brandMode} />
+      <BenefitsForm
+        state={editorState}
+        onChange={setEditorState}
+        mode={brandMode}
+        spacing={spacing}
+        onSpacingChange={setSpacing}
+        className="mb-4"
+      />
 
       {warningMessages.length > 0 && (
         <div className="mb-6 space-y-2">
@@ -245,6 +261,7 @@ export default function BenefitsCreatePage() {
             uppercaseText,
             showBadge,
             badgeText,
+            spacing,
           },
         })}
         brandColor={primary}

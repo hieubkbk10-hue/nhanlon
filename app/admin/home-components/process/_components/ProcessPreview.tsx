@@ -1,10 +1,12 @@
 'use client';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 
 import React from 'react';
 import { ProcessSectionShared } from './ProcessSectionShared';
 import { normalizeProcessRenderSteps } from '../_lib/normalize';
-import type { ProcessBrandMode, ProcessStyle } from '../_types';
+import type { ProcessBrandMode, ProcessCornerRadius, ProcessStyle } from '../_types';
 import { usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import { usePreviewDark } from '../../_shared/components/PreviewWrapper';
 
 interface ProcessPreviewProps {
   steps: unknown;
@@ -24,9 +26,13 @@ interface ProcessPreviewProps {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
   desktopColumns?: 3 | 4;
+  cornerRadius?: ProcessCornerRadius;
+  circularCtaText?: string;
+  circularCtaLink?: string;
 }
 
 export const ProcessPreview = ({
@@ -50,8 +56,13 @@ export const ProcessPreview = ({
   fontStyle,
   fontClassName,
   desktopColumns = 4,
+  spacing,
+  cornerRadius,
+  circularCtaText,
+  circularCtaLink,
 }: ProcessPreviewProps) => {
   const { device, setDevice } = usePreviewDevice();
+  const { isDark } = usePreviewDark();
   const normalizedSteps = React.useMemo(() => normalizeProcessRenderSteps(steps), [steps]);
 
   return (
@@ -81,6 +92,11 @@ export const ProcessPreview = ({
       fontStyle={fontStyle}
       fontClassName={fontClassName}
       desktopColumns={desktopColumns}
+      spacing={spacing}
+      cornerRadius={cornerRadius}
+      circularCtaText={circularCtaText}
+      circularCtaLink={circularCtaLink}
+      isDark={isDark}
     />
   );
 };

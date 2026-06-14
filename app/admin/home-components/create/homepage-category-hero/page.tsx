@@ -7,12 +7,15 @@ import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverr
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HomepageCategoryHeroForm } from '../../homepage-category-hero/_components/HomepageCategoryHeroForm';
 import { HomepageCategoryHeroPreview } from '../../homepage-category-hero/_components/HomepageCategoryHeroPreview';
-import { DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG, DEMO_HERO_SLIDES, DEMO_CATEGORY_ITEMS, normalizeHomepageCategoryHeroCategories } from '../../homepage-category-hero/_lib/constants';
+import { DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG, DEMO_CATEGORIES_DATA, DEMO_HERO_SLIDES, DEMO_CATEGORY_ITEMS, normalizeHomepageCategoryHeroCategories } from '../../homepage-category-hero/_lib/constants';
 import { useHomepageCategoryHeroAutoGenerate } from '../../homepage-category-hero/_lib/useHomepageCategoryHeroAutoGenerate';
 import type {
   HomepageCategoryHeroBrandMode,
+  HomepageCategoryHeroCornerRadius,
   HomepageCategoryHeroSelectionMode,
 } from '../../homepage-category-hero/_types';
+import { DEFAULT_HOMEPAGE_CATEGORY_HERO_CORNER_RADIUS } from '../../homepage-category-hero/_types';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 
 const COMPONENT_TYPE = 'HomepageCategoryHero';
 
@@ -43,6 +46,7 @@ export default function HomepageCategoryHeroCreatePage() {
   const [categoryItems, setCategoryItems] = useState(
     normalizeHomepageCategoryHeroCategories(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.categories)
   );
+  const [demoCategoriesData, setDemoCategoriesData] = useState(DEMO_CATEGORIES_DATA);
   const [hideEmptyCategories, setHideEmptyCategories] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.hideEmptyCategories);
   const [showCategoryImage] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.showCategoryImage);
   const [categoryVisualMode, setCategoryVisualMode] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.categoryVisualMode);
@@ -53,6 +57,11 @@ export default function HomepageCategoryHeroCreatePage() {
   const [maxCategoriesMobile] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.maxCategoriesMobile);
   const [attachToHeader] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.attachToHeader);
   const [tabletBehavior] = useState(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.tabletBehavior);
+  const [cornerRadius, setCornerRadius] = useState<HomepageCategoryHeroCornerRadius>(
+    DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.cornerRadius ?? DEFAULT_HOMEPAGE_CATEGORY_HERO_CORNER_RADIUS
+  );
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.spacing ?? 'normal');
+  const [bannerImageFit, setBannerImageFit] = useState<'cover' | 'contain'>(DEFAULT_HOMEPAGE_CATEGORY_HERO_CONFIG.bannerImageFit ?? 'cover');
 
   const handleAutoGenerate = () => {
     const generated = generateFromRealData({ hideEmptyCategories });
@@ -75,6 +84,7 @@ export default function HomepageCategoryHeroCreatePage() {
   const handleLoadDemo = () => {
     setHeroSlides(DEMO_HERO_SLIDES as typeof heroSlides);
     setCategoryItems(normalizeHomepageCategoryHeroCategories(DEMO_CATEGORY_ITEMS));
+    setDemoCategoriesData(DEMO_CATEGORIES_DATA);
     toast.success('Tải dữ liệu demo thành công!');
   };
 
@@ -100,6 +110,12 @@ export default function HomepageCategoryHeroCreatePage() {
       maxCategoriesMobile,
       attachToHeader,
       tabletBehavior,
+      cornerRadius,
+      noBorderRadius: cornerRadius === 'none',
+      noVerticalMargin: spacing === 'none',
+      spacing,
+      bannerImageFit,
+      demoCategoriesData,
     });
   };
 
@@ -124,6 +140,7 @@ export default function HomepageCategoryHeroCreatePage() {
         <HomepageCategoryHeroForm
           heroSlides={heroSlides}
           setHeroSlides={setHeroSlides}
+          style={style}
           categoryItems={categoryItems}
           setCategoryItems={setCategoryItems}
           categoriesData={categoriesData}
@@ -144,6 +161,14 @@ export default function HomepageCategoryHeroCreatePage() {
           selectionMode={selectionMode}
           onSelectionModeChange={setSelectionMode}
           defaultExpanded={true}
+          demoCategoriesData={demoCategoriesData}
+          setDemoCategoriesData={setDemoCategoriesData}
+          cornerRadius={cornerRadius}
+          setCornerRadius={setCornerRadius}
+          spacing={spacing}
+          setSpacing={setSpacing}
+          bannerImageFit={bannerImageFit}
+          setBannerImageFit={setBannerImageFit}
         />
 
         <HomepageCategoryHeroPreview
@@ -168,6 +193,12 @@ export default function HomepageCategoryHeroCreatePage() {
             maxCategoriesMobile,
             attachToHeader,
             tabletBehavior,
+            cornerRadius,
+            noBorderRadius: cornerRadius === 'none',
+            noVerticalMargin: spacing === 'none',
+            spacing,
+            bannerImageFit,
+            demoCategoriesData,
           }}
           brandColor={primary}
           secondary={secondary}

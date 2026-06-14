@@ -244,6 +244,7 @@ export const calculateClientsAccentBalance = (
     layout05: { primary: 30, secondary: 10 },
     layout06: { primary: 32, secondary: 8 },
     layout07: { primary: 30, secondary: 10 },
+    layout08: { primary: 30, secondary: 10 },
   };
 
   const dist = distributions[style];

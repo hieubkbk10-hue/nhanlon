@@ -2,12 +2,15 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
+import { cn } from '@/app/admin/components/ui';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useBrandColors } from '@/components/site/hooks';
+import { useSiteSettings } from '@/components/site/hooks';
 import { useSnapshotDemoContext } from '@/components/modules/homepage/SnapshotDemoProvider';
 import { resolveTypeOverrideColors, type ColorOverrideState } from '@/app/admin/home-components/_shared/lib/typeColorOverride';
 import { resolveTypeOverrideFont, type FontOverrideState } from '@/app/admin/home-components/_shared/lib/typeFontOverride';
+import { getSectionSpacingClassName, normalizeSectionSpacing } from '@/app/admin/home-components/_shared/types/sectionSpacing';
 import { getHomepageCategoryHeroColors } from '@/app/admin/home-components/homepage-category-hero/_lib/colors';
 import { homeComponentRegistry } from './registry';
 import type { HomeComponentRecord } from './types';
@@ -24,6 +27,8 @@ interface HomeComponentRendererProps {
 
 export function HomeComponentRenderer({ component, snapshotComponentKey }: HomeComponentRendererProps) {
   const systemColors = useBrandColors();
+  const { isDark } = useSiteSettings();
+
   const snapshotCtx = useSnapshotDemoContext();
   const isSnapshotMode = Boolean(snapshotCtx);
 
@@ -81,6 +86,7 @@ export function HomeComponentRenderer({ component, snapshotComponentKey }: HomeC
         mode={resolvedColors.mode}
         title={component.title}
         snapshotComponentKey={snapshotComponentKey}
+        isDark={isDark}
         tokens={getHomepageCategoryHeroColors(
           resolvedColors.primary,
           resolvedColors.secondary,
@@ -96,15 +102,32 @@ export function HomeComponentRenderer({ component, snapshotComponentKey }: HomeC
         mode={resolvedColors.mode}
         title={component.title}
         snapshotComponentKey={snapshotComponentKey}
+        isDark={isDark}
       />
     );
 
   // Floating components use position:fixed — CSS `contain: layout` would break them
   // by creating a new containing block, making fixed children relative to the wrapper instead of viewport.
   const useContainment = sectionType !== 'SpeedDial' && sectionType !== 'Popup';
+  const hasInternalSpacing = sectionType === 'Hero'
+    || sectionType === 'CaseStudy'
+    || sectionType === 'CategoryProducts'
+    || sectionType === 'Career'
+    || sectionType === 'HomepageCategoryHero'
+    || sectionType === 'Partners'
+    || sectionType === 'Pricing'
+    || sectionType === 'ProductCategories'
+    || sectionType === 'ProductGrid'
+    || sectionType === 'Stats'
+    || sectionType === 'Team'
+    || sectionType === 'Video'
+    || sectionType === 'VoucherPromotions';
+  const spacingClassName = useContainment && !hasInternalSpacing
+    ? getSectionSpacingClassName(normalizeSectionSpacing(component.config.spacing))
+    : '';
 
   return (
-    <div className="font-active" style={{ '--font-active': `var(${resolvedFont.fontVariable})`, ...(useContainment ? { contain: 'layout' } : {}) } as React.CSSProperties}>
+    <div className={cn("font-active", spacingClassName, isDark ? "dark" : "")} style={{ '--font-active': `var(${resolvedFont.fontVariable})`, ...(useContainment ? { contain: 'layout' } : {}) } as React.CSSProperties}>
       {sectionNode}
     </div>
   );

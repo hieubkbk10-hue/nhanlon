@@ -6,7 +6,6 @@ import { getContactSettings, getSEOSettings, getSiteSettings, getSocialSettings 
 import { JsonLd, generateBreadcrumbSchema, generateServiceSchema } from '@/components/seo/JsonLd';
 import { buildSeoMetadata } from '@/lib/seo/metadata';
 import { buildDetailPath } from '@/lib/ia/route-mode';
-import { getIASettings } from '@/lib/ia/settings';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -38,13 +37,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     });
   }
   
-  const [service, site, seo, contact, social, iaSettings] = await Promise.all([
+  const [service, site, seo, contact, social] = await Promise.all([
     client.query(api.services.getBySlug, { slug }),
     getSiteSettings(),
     getSEOSettings(),
     getContactSettings(),
     getSocialSettings(),
-    getIASettings(),
   ]);
 
   if (!service) {
@@ -64,7 +62,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const category = await client.query(api.serviceCategories.getById, { id: service.categoryId });
   const canonicalPath = buildDetailPath({
     categorySlug: category?.slug,
-    mode: iaSettings.routeMode,
+    mode: 'unified',
     moduleKey: 'services',
     recordSlug: service.slug,
   });
@@ -96,20 +94,19 @@ export default async function ServiceLayout({ params, children }: Props) {
     notFound();
   }
   
-  const [service, site, seo, iaSettings] = await Promise.all([
+  const [service, site, seo] = await Promise.all([
     client.query(api.services.getBySlug, { slug }),
     getSiteSettings(),
     getSEOSettings(),
-    getIASettings(),
   ]);
 
   if (!service) {return children;}
 
   const category = await client.query(api.serviceCategories.getById, { id: service.categoryId });
-  if (iaSettings.routeMode === 'unified' && category?.slug) {
+  if (category?.slug) {
     permanentRedirect(buildDetailPath({
       categorySlug: category.slug,
-      mode: iaSettings.routeMode,
+      mode: 'unified',
       moduleKey: 'services',
       recordSlug: service.slug,
     }));
@@ -118,7 +115,7 @@ export default async function ServiceLayout({ params, children }: Props) {
   const baseUrl = (site.site_url || process.env.NEXT_PUBLIC_SITE_URL) ?? '';
   const servicePath = buildDetailPath({
     categorySlug: category?.slug,
-    mode: iaSettings.routeMode,
+    mode: 'unified',
     moduleKey: 'services',
     recordSlug: service.slug,
   });
@@ -147,7 +144,7 @@ export default async function ServiceLayout({ params, children }: Props) {
     { name: 'Trang chủ', url: baseUrl },
     {
       name: category?.name ?? 'Dịch vụ',
-      url: iaSettings.routeMode === 'unified' && category?.slug
+      url: category?.slug
         ? `${baseUrl}/${category.slug}`
         : `${baseUrl}/services`,
     },

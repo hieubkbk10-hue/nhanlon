@@ -10,6 +10,7 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import type { HomepageSnapshotPayload, SnapshotComponentPayload } from '@/lib/homepage-snapshot/types';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../../../components/ui';
+import { CopyableInput } from '../../../../../../components/CopyTextButton';
 import { ModuleGuard } from '../../../../../../components/ModuleGuard';
 import { COMPONENT_TYPES } from '../../../../../create/shared';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
@@ -31,6 +32,41 @@ import { ProductListForm } from '@/app/admin/home-components/product-list/_compo
 import { ProductListPreview } from '@/app/admin/home-components/product-list/_components/ProductListPreview';
 import { DEFAULT_PRODUCT_LIST_CONFIG } from '@/app/admin/home-components/product-list/_lib/constants';
 import type { DemoProductItem, ProductListConfig, ProductListStyle, ProductSelectionMode } from '@/app/admin/home-components/product-list/_types';
+import { HeroEditor } from '@/app/admin/home-components/hero/_components/HeroEditor';
+import FooterEditPage from '@/app/admin/home-components/footer/[id]/edit/page';
+import GalleryEditPage from '@/app/admin/home-components/gallery/[id]/edit/page';
+import ProductListEditPage from '@/app/admin/home-components/product-list/[id]/edit/page';
+import SpeedDialEditPage from '@/app/admin/home-components/speed-dial/[id]/edit/page';
+import FaqEditPage from '@/app/admin/home-components/faq/[id]/edit/page';
+import TeamEditPage from '@/app/admin/home-components/team/[id]/edit/page';
+import TestimonialsEditPage from '@/app/admin/home-components/testimonials/[id]/edit/page';
+import VideoEditPage from '@/app/admin/home-components/video/[id]/edit/page';
+import AboutEditPage from '@/app/admin/home-components/about/[id]/edit/page';
+import CtaEditPage from '@/app/admin/home-components/cta/[id]/edit/page';
+import FeaturesEditPage from '@/app/admin/home-components/features/[id]/edit/page';
+import CareerEditPage from '@/app/admin/home-components/career/[id]/edit/page';
+import BenefitsEditPage from '@/app/admin/home-components/benefits/[id]/edit/page';
+import ClientsEditPage from '@/app/admin/home-components/clients/[id]/edit/page';
+import ServicesEditPage from '@/app/admin/home-components/services/[id]/edit/page';
+import CountdownEditPage from '@/app/admin/home-components/countdown/[id]/edit/page';
+import VoucherPromotionsEditPage from '@/app/admin/home-components/voucher-promotions/[id]/edit/page';
+import ProcessEditPage from '@/app/admin/home-components/process/[id]/edit/page';
+import StatsEditPage from '@/app/admin/home-components/stats/[id]/edit/page';
+import ProductCategoriesEditPage from '@/app/admin/home-components/product-categories/[id]/edit/page';
+import BlogEditPage from '@/app/admin/home-components/blog/[id]/edit/page';
+import ProductGridEditPage from '@/app/admin/home-components/product-grid/[id]/edit/page';
+import PartnersEditPage from '@/app/admin/home-components/partners/[id]/edit/page';
+import HomepageCategoryHeroEditPage from '@/app/admin/home-components/homepage-category-hero/[id]/edit/page';
+import MarqueeEditPage from '@/app/admin/home-components/marquee/[id]/edit/page';
+import TrustBadgesEditPage from '@/app/admin/home-components/trust-badges/[id]/edit/page';
+import CategoryProductsEditPage from '@/app/admin/home-components/category-products/[id]/edit/page';
+import ServiceListEditPage from '@/app/admin/home-components/service-list/[id]/edit/page';
+import CaseStudyEditPage from '@/app/admin/home-components/case-study/[id]/edit/page';
+import PricingEditPage from '@/app/admin/home-components/pricing/[id]/edit/page';
+import PopupEditPage from '@/app/admin/home-components/popup/[id]/edit/page';
+import ContactEditPage from '@/app/admin/home-components/contact/[id]/edit/page';
+import { saveSnapshotComponent } from '@/app/admin/home-components/snapshots/_lib/snapshotComponentSave';
+import { collectSnapshotMediaRefs } from '@/app/admin/home-components/snapshots/_lib/collectSnapshotMediaRefs';
 import { SnapshotRouterMain } from '../../../../_components/SnapshotRouterMain';
 
 
@@ -63,6 +99,7 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
   const router = useRouter();
   const snapshot = useQuery(api.homepageSnapshots.getHomepageSnapshotById, { snapshotId: snapshotId as Id<'homeComponentSnapshots'> });
   const updateSnapshot = useMutation(api.homepageSnapshots.updateHomepageSnapshot);
+  const commitDraftUploads = useMutation(api.fileLifecycle.commitDraftUploadsByStorageIds);
   const { effectiveColors: footerColors } = useTypeColorOverrideState('Footer');
   const { effectiveColors: speedDialColors } = useTypeColorOverrideState('SpeedDial');
   const { effectiveColors: galleryColors } = useTypeColorOverrideState('Gallery');
@@ -88,12 +125,36 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
   const isFooter = component?.type === 'Footer';
   const isSpeedDial = component?.type === 'SpeedDial';
   const isGallery = component?.type === 'Gallery';
+  const isHero = component?.type === 'Hero';
+  const isFAQ = component?.type === 'FAQ';
   const isProductList = component?.type === 'ProductList';
+  const isTeam = component?.type === 'Team';
+  const isTestimonials = component?.type === 'Testimonials';
+  const isVideo = component?.type === 'Video';
+  const isAbout = component?.type === 'About';
+  const isCTA = component?.type === 'CTA';
+  const isFeatures = component?.type === 'Features';
+  const isCareer = component?.type === 'Career';
+  const isBenefits = component?.type === 'Benefits';
+  const isClients = component?.type === 'Clients';
+  const isServices = component?.type === 'Services';
+  const isCountdown = component?.type === 'Countdown';
+  const isVoucherPromotions = component?.type === 'VoucherPromotions';
+  const isProcess = component?.type === 'Process';
   const isStats = component?.type === 'Stats';
   const isProductCategories = component?.type === 'ProductCategories';
   const isBlog = component?.type === 'Blog';
   const isProductGrid = component?.type === 'ProductGrid';
   const isPartners = component?.type === 'Partners';
+  const isHomepageCategoryHero = component?.type === 'HomepageCategoryHero';
+  const isMarquee = component?.type === 'Marquee';
+  const isTrustBadges = component?.type === 'TrustBadges';
+  const isCategoryProducts = component?.type === 'CategoryProducts';
+  const isServiceList = component?.type === 'ServiceList';
+  const isCaseStudy = component?.type === 'CaseStudy';
+  const isPricing = component?.type === 'Pricing';
+  const isPopup = component?.type === 'Popup';
+  const isContact = component?.type === 'Contact';
   const isDedicatedFormType = isFooter || isSpeedDial || isGallery || isProductList;
   const effectiveColors = isPartners ? partnersColors : isProductGrid ? productGridColors : isBlog ? blogColors : isProductCategories ? productCategoriesColors : isStats ? statsColors : isProductList ? productListColors : isGallery ? galleryColors : isSpeedDial ? speedDialColors : footerColors;
   const effectiveFont = isPartners ? partnersFont : isProductGrid ? productGridFont : isBlog ? blogFont : isProductCategories ? productCategoriesFont : isStats ? statsFont : footerFont;
@@ -109,6 +170,59 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
     setComponent(found ? toEditableComponent(found) : null);
     setLoadedKey(decodedKey);
   }, [decodedKey, loadedKey, payload]);
+
+  const handleSaveSnapshotComponent = async ({
+    active,
+    config,
+    title,
+    order,
+    manualMediaRefs,
+  }: {
+    active: boolean;
+    config: unknown;
+    title: string;
+    order?: number | string;
+    manualMediaRefs?: string[];
+  }) => {
+    if (!payload || !snapshot || !component) {
+      toast.error('Component chưa sẵn sàng');
+      return;
+    }
+
+    const autoRefs = collectSnapshotMediaRefs(config);
+    const combinedRefs = Array.from(new Set([
+      ...autoRefs,
+      ...(manualMediaRefs ?? []),
+    ])).filter(Boolean);
+
+    setIsSaving(true);
+    try {
+      await saveSnapshotComponent({
+        active,
+        component,
+        config,
+        decodedKey,
+        label: snapshot.label,
+        mediaRefs: combinedRefs,
+        order,
+        payload,
+        snapshotId,
+        title,
+        updateSnapshot,
+      });
+
+      if (combinedRefs.length > 0) {
+        await commitDraftUploads({ storageIds: combinedRefs });
+      }
+
+      toast.success('Đã lưu component');
+      router.push(`/admin/home-components/snapshots/${snapshotId}/home-components`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể lưu component');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!payload || !snapshot || !component) {
@@ -126,13 +240,10 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
     if (component.type === 'Footer') {
       parsedConfig = normalizeFooterConfig(component.config as Partial<FooterConfig> | null | undefined);
     } else if (component.type === 'SpeedDial') {
-      // SpeedDial config đã được normalize và update trực tiếp qua component.config
       parsedConfig = component.config;
     } else if (component.type === 'Gallery') {
-      // Gallery config đã được normalize và update trực tiếp qua component.config
       parsedConfig = component.config;
     } else if (component.type === 'ProductList') {
-      // ProductList config đã được update trực tiếp qua component.config
       parsedConfig = component.config;
     } else {
       try {
@@ -143,46 +254,12 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
       }
     }
 
-    const nextComponent: SnapshotComponentPayload = {
+    await handleSaveSnapshotComponent({
       active: component.active,
-      componentKey: component.componentKey,
       config: parsedConfig,
-      fallbackUsed: component.fallbackUsed,
-      mediaRefs: component.mediaRefs,
+      title: component.title,
       order,
-      title: component.title.trim() || component.type,
-      type: component.type,
-    };
-    const nextComponents = payload.homepage.components.map((item) => (
-      item.componentKey === decodedKey ? nextComponent : item
-    )).sort((a, b) => a.order - b.order);
-
-    setIsSaving(true);
-    try {
-      await updateSnapshot({
-        label: snapshot.label,
-        payload: {
-          ...payload,
-          manifest: {
-            ...payload.manifest,
-            componentCount: nextComponents.length,
-            snapshotLabel: snapshot.label,
-          },
-          homepage: {
-            ...payload.homepage,
-            componentOrder: nextComponents.map((item) => item.componentKey),
-            components: nextComponents,
-          },
-        },
-        snapshotId: snapshotId as Id<'homeComponentSnapshots'>,
-      });
-      toast.success('Đã lưu component');
-      router.push(`/admin/home-components/snapshots/${snapshotId}/home-components`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Không thể lưu component');
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
   if (snapshot === undefined || (payload && loadedKey !== decodedKey)) {
@@ -195,6 +272,241 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
 
   if (snapshot === null || !payload || !component) {
     return <div className="text-center py-8 text-slate-500">Không tìm thấy component snapshot</div>;
+  }
+
+  if (isHero) {
+    return (
+      <HeroEditor
+        backHref={`/admin/home-components/snapshots/${snapshotId}/home-components`}
+        draftOwnerKey={`home-component:snapshot:${snapshotId}:hero:${decodedKey}`}
+        enableTypeOverrides={false}
+        heading="Chỉnh sửa Hero Banner"
+        initial={{
+          active: component.active,
+          config: (component.config ?? {}) as Record<string, any>,
+          title: component.title,
+        }}
+        showSnapshotLabel={snapshot.label}
+        onAfterSave={() => router.push(`/admin/home-components/snapshots/${snapshotId}/home-components`)}
+        onSave={async ({ active, config, storageIds, title }) => {
+          await handleSaveSnapshotComponent({
+            active,
+            config,
+            title,
+            manualMediaRefs: storageIds.map(String),
+          });
+        }}
+      />
+    );
+  }
+
+  if (isFooter || isSpeedDial || isGallery || isProductList) {
+    const SharedEditPage = isFooter
+      ? FooterEditPage
+      : isSpeedDial
+        ? SpeedDialEditPage
+        : isGallery
+          ? GalleryEditPage
+          : ProductListEditPage;
+
+    return (
+      <SharedEditPage
+        backHref={`/admin/home-components/snapshots/${snapshotId}/home-components`}
+        enableTypeOverrides={false}
+        snapshotLabel={snapshot.label}
+        snapshotComponent={{
+          _id: component.componentKey,
+          active: component.active,
+          config: component.config as Record<string, any>,
+          title: component.title,
+          type: component.type,
+        }}
+        onSnapshotSave={async (next) => {
+          await handleSaveSnapshotComponent({
+            active: next.active,
+            config: next.config,
+            title: next.title,
+          });
+        }}
+      />
+    );
+  }
+
+  if (isFAQ || isVideo || isTeam || isTestimonials) {
+    const SharedEditPage = isFAQ
+      ? FaqEditPage
+      : isVideo
+        ? VideoEditPage
+        : isTeam
+          ? TeamEditPage
+          : TestimonialsEditPage;
+
+    return (
+      <SharedEditPage
+        backHref={`/admin/home-components/snapshots/${snapshotId}/home-components`}
+        enableTypeOverrides={false}
+        snapshotLabel={snapshot.label}
+        snapshotComponent={{
+          _id: component.componentKey,
+          active: component.active,
+          config: component.config as Record<string, any>,
+          title: component.title,
+          type: component.type,
+        }}
+        onSnapshotSave={async (next) => {
+          await handleSaveSnapshotComponent({
+            active: next.active,
+            config: next.config,
+            title: next.title,
+          });
+        }}
+      />
+    );
+  }
+
+  if (isAbout || isCTA || isFeatures || isCareer || isBenefits || isClients) {
+    const SharedEditPage = isAbout
+      ? AboutEditPage
+      : isCTA
+        ? CtaEditPage
+        : isFeatures
+          ? FeaturesEditPage
+          : isCareer
+            ? CareerEditPage
+            : isBenefits
+              ? BenefitsEditPage
+              : ClientsEditPage;
+
+    return (
+      <SharedEditPage
+        backHref={`/admin/home-components/snapshots/${snapshotId}/home-components`}
+        enableTypeOverrides={false}
+        snapshotLabel={snapshot.label}
+        snapshotComponent={{
+          _id: component.componentKey,
+          active: component.active,
+          config: component.config as Record<string, any>,
+          title: component.title,
+          type: component.type,
+        }}
+        onSnapshotSave={async (next) => {
+          await handleSaveSnapshotComponent({
+            active: next.active,
+            config: next.config,
+            title: next.title,
+          });
+        }}
+      />
+    );
+  }
+
+  if (isServices || isCountdown || isVoucherPromotions || isProcess) {
+    const SharedEditPage = isServices
+      ? ServicesEditPage
+      : isCountdown
+        ? CountdownEditPage
+        : isVoucherPromotions
+          ? VoucherPromotionsEditPage
+          : ProcessEditPage;
+
+    return (
+      <SharedEditPage
+        backHref={`/admin/home-components/snapshots/${snapshotId}/home-components`}
+        enableTypeOverrides={false}
+        snapshotLabel={snapshot.label}
+        snapshotComponent={{
+          _id: component.componentKey,
+          active: component.active,
+          config: component.config as Record<string, any>,
+          title: component.title,
+          type: component.type,
+        }}
+        onSnapshotSave={async (next) => {
+          await handleSaveSnapshotComponent({
+            active: next.active,
+            config: next.config,
+            title: next.title,
+          });
+        }}
+      />
+    );
+  }
+
+  if (isStats || isProductCategories || isBlog || isProductGrid || isPartners) {
+    const SharedEditPage = isStats
+      ? StatsEditPage
+      : isProductCategories
+        ? ProductCategoriesEditPage
+        : isBlog
+          ? BlogEditPage
+          : isProductGrid
+            ? ProductGridEditPage
+            : PartnersEditPage;
+
+    return (
+      <SharedEditPage
+        backHref={`/admin/home-components/snapshots/${snapshotId}/home-components`}
+        enableTypeOverrides={false}
+        snapshotLabel={snapshot.label}
+        snapshotComponent={{
+          _id: component.componentKey,
+          active: component.active,
+          config: component.config as Record<string, any>,
+          title: component.title,
+          type: component.type,
+        }}
+        onSnapshotSave={async (next) => {
+          await handleSaveSnapshotComponent({
+            active: next.active,
+            config: next.config,
+            title: next.title,
+          });
+        }}
+      />
+    );
+  }
+
+
+  if (isHomepageCategoryHero || isMarquee || isTrustBadges || isCategoryProducts || isServiceList || isCaseStudy || isPricing || isPopup || isContact) {
+    const SharedEditPage = isHomepageCategoryHero
+      ? HomepageCategoryHeroEditPage
+      : isMarquee
+        ? MarqueeEditPage
+        : isTrustBadges
+          ? TrustBadgesEditPage
+          : isCategoryProducts
+            ? CategoryProductsEditPage
+            : isServiceList
+              ? ServiceListEditPage
+              : isCaseStudy
+                ? CaseStudyEditPage
+                : isPricing
+                  ? PricingEditPage
+                  : isPopup
+                    ? PopupEditPage
+                    : ContactEditPage;
+
+    return (
+      <SharedEditPage
+        backHref={`/admin/home-components/snapshots/${snapshotId}/home-components`}
+        enableTypeOverrides={false}
+        snapshotComponent={{
+          _id: `snapshot:${snapshotId}:${decodedKey}`,
+          active: component.active,
+          config: (component.config ?? {}) as Record<string, any>,
+          title: component.title,
+          type: component.type,
+        }}
+        snapshotLabel={snapshot.label}
+        onSnapshotSave={async ({ active, config, title }) => {
+          await handleSaveSnapshotComponent({
+            active,
+            config,
+            title,
+          });
+        }}
+      />
+    );
   }
 
   if (!isDedicatedFormType) {
@@ -251,9 +563,10 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
             <div className="grid gap-4 md:grid-cols-[1fr_160px]">
               <div className="space-y-2">
                 <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-                <Input
+                <CopyableInput
                   value={component.title}
                   onChange={(event) => setComponent({ ...component, title: event.target.value })}
+                  copyLabel="tiêu đề hiển thị"
                   required
                   placeholder="Nhập tiêu đề component..."
                 />
@@ -379,9 +692,10 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
             <div className="grid gap-4 md:grid-cols-[1fr_160px]">
               <div className="space-y-2">
                 <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-                <Input
+                <CopyableInput
                   value={component.title}
                   onChange={(event) => setComponent({ ...component, title: event.target.value })}
+                  copyLabel="tiêu đề hiển thị"
                   required
                   placeholder="Nhập tiêu đề component..."
                 />
@@ -506,9 +820,10 @@ function SnapshotComponentEditPage({ snapshotId, componentKey }: { snapshotId: s
             <div className="grid gap-4 md:grid-cols-[1fr_160px]">
               <div className="space-y-2">
                 <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-                <Input
+                <CopyableInput
                   value={component.title}
                   onChange={(event) => setComponent({ ...component, title: event.target.value })}
+                  copyLabel="tiêu đề hiển thị"
                   required
                   placeholder="Nhập tiêu đề component..."
                 />
@@ -743,9 +1058,10 @@ function SnapshotProductListEditor({
           <div className="grid gap-4 md:grid-cols-[1fr_160px]">
             <div className="space-y-2">
               <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
+              <CopyableInput
                 value={component.title}
                 onChange={(event) => setComponent((prev) => prev ? { ...prev, title: event.target.value } : prev)}
+                copyLabel="tiêu đề hiển thị"
                 required
                 placeholder="Nhập tiêu đề component..."
               />

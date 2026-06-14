@@ -1,5 +1,7 @@
 'use client';
 
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -8,9 +10,12 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Loader2, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Label } from '../../../../components/ui';
+import { CopyableInput } from '../../../../components/CopyTextButton';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
+import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
+import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { PopupForm } from '../../_components/PopupForm';
@@ -20,18 +25,46 @@ import type { PopupConfig } from '../../_types';
 
 const COMPONENT_TYPE = 'Popup';
 
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type PopupEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
 const toSnapshot = (payload: {
   title: string;
   active: boolean;
   config: PopupConfig;
 }) => JSON.stringify(payload);
 
-export default function PopupEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function PopupEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: PopupEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
+  const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [title, setTitle] = useState('');
@@ -43,7 +76,7 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
   useEffect(() => {
     if (!component) {return;}
 
-    if (component.type !== COMPONENT_TYPE) {
+    if (!snapshotComponent && component.type !== COMPONENT_TYPE) {
       router.replace(`/admin/home-components/${id}/edit`);
       return;
     }
@@ -61,13 +94,19 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
 
   const currentSnapshot = toSnapshot({ title, active, config });
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const hasChanges = initialSnapshot !== null && (currentSnapshot !== initialSnapshot || customChanged);
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
+    ? customFontState.enabled !== initialFontCustom.enabled
+      || customFontState.fontKey !== initialFontCustom.fontKey
+    : false;
+  const hasChanges = initialSnapshot !== null && (currentSnapshot !== initialSnapshot || customChanged || customFontChanged);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -75,14 +114,18 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
 
     setIsSubmitting(true);
     try {
-      await updateMutation({
-        active,
-        config,
-        id: id as Id<'homeComponents'>,
-        title,
-      });
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: config as Record<string, any>, title });
+      } else {
+        await updateMutation({
+          active,
+          config,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
 
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         await setTypeColorOverride({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -92,13 +135,27 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
         });
       }
 
+      if (enableTypeOverrides && showFontCustomBlock) {
+        await setTypeFontOverride({
+          enabled: customFontState.enabled,
+          fontKey: customFontState.fontKey,
+          type: COMPONENT_TYPE,
+        });
+      }
+
       setInitialSnapshot(toSnapshot({ title, active, config }));
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
           primary: customState.primary,
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
+        });
+      }
+      if (enableTypeOverrides && showFontCustomBlock) {
+        setInitialFontCustom({
+          enabled: customFontState.enabled,
+          fontKey: customFontState.fontKey,
         });
       }
       toast.success('Đã cập nhật Popup');
@@ -122,11 +179,14 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
     return <div className="py-8 text-center text-slate-500">Không tìm thấy component</div>;
   }
 
+  const fontStyle = { '--font-active': `var(${effectiveFont.fontVariable})` } as React.CSSProperties;
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Popup</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -140,9 +200,10 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-              <Input
+              <CopyableInput
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
+                copyLabel="tiêu đề hiển thị"
                 required
                 placeholder="Nhập tiêu đề component..."
               />
@@ -155,7 +216,7 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6 mt-6">
           <div />
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Popup"
                 enabled={customState.enabled}
@@ -183,9 +244,25 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
                 }))}
               />
             )}
+            {enableTypeOverrides && showFontCustomBlock && (
+              <TypeFontOverrideCard
+                title="Font custom cho Popup"
+                enabled={customFontState.enabled}
+                fontKey={customFontState.fontKey}
+                compact
+                toggleLabel="Custom"
+                fontLabel="Font"
+                onEnabledChange={(next) => setCustomFontState((prev) => ({ ...prev, enabled: next }))}
+                onFontChange={(next) => setCustomFontState((prev) => ({ ...prev, fontKey: next }))}
+              />
+            )}
             <PopupPreview
               config={config}
               brandColor={effectiveColors.primary}
+              secondary={effectiveColors.secondary}
+              mode={effectiveColors.mode}
+              fontStyle={fontStyle}
+              fontClassName="font-active"
               title={title}
               selectedStyle={config.style}
               onStyleChange={(style) => setConfig((current) => ({ ...current, style }))}
@@ -196,7 +273,7 @@ export default function PopupEditPage({ params }: { params: Promise<{ id: string
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() => router.push('/admin/home-components')}
+          onCancel={() => router.push(backHref)}
           submitLabel="Lưu thay đổi"
           active={active}
           onActiveChange={setActive}

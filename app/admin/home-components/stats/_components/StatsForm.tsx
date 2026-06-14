@@ -2,17 +2,23 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import * as LucideIcons from 'lucide-react';
-import { ChevronDown, ClipboardPaste, Loader2, Plus, Search, Sparkles, Trash2, Upload } from 'lucide-react';
+import { BarChart3, ChevronDown, Loader2, Plus, Search, Sparkles, Trash2, Upload } from 'lucide-react';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { toast } from 'sonner';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { resolveNamingContext } from '@/lib/image/uploadNaming';
+import { ImageEditorDialog } from '@/app/admin/components/ImageEditorDialog';
+import { ImageSourceActions } from '@/app/admin/components/ImageSourceActions';
 import { SettingsImageUploader } from '@/app/admin/components/SettingsImageUploader';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { useFileDraftUploads } from '@/app/admin/components/useFileDraftUploads';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { STATS_ICON_CHOICES, type StatsIconType, type StatsItem, type StatsMediaPlacement, type StatsMediaAlign } from '../_types';
 import { AiDemoStatsImport } from '../../product-list/_components/AiDemoProductsImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 export interface StatsFormItem extends StatsItem {
   id: number | string;
@@ -24,12 +30,14 @@ const resolveIconComponent = (iconName: string) => {
 };
 
 // ── Icon Upload ──────────────────────────────────────────────────
-function IconUpload({ value, onChange, index }: { value: string; onChange: (url: string) => void; index: number }) {
+function IconUpload({ value, onChange, index }: { value: string; onChange: (url: string, storageId?: string | null) => void; index: number }) {
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
   const saveImage = useMutation(api.storage.saveImage);
+  const { trackDraftUpload } = useFileDraftUploads('stats-icons');
 
   const handleFile = useCallback(async (file: File) => {
     const err = validateImageFile(file, 5);
@@ -43,10 +51,11 @@ function IconUpload({ value, onChange, index }: { value: string; onChange: (url:
       if (!res.ok) { throw new Error('Upload failed'); }
       const { storageId } = await res.json() as { storageId: string };
       const result = await saveImage({ storageId: storageId as Id<'_storage'>, filename: prepared.filename, folder: 'stats-icons', mimeType: prepared.mimeType, size: prepared.size, width: prepared.width, height: prepared.height });
-      onChange(result.url ?? '');
+      await trackDraftUpload(storageId as Id<'_storage'>, 'stats-icons');
+      onChange(result.url ?? '', storageId);
       toast.success('Tải icon thành công');
     } catch { toast.error('Lỗi tải icon'); } finally { setUploading(false); }
-  }, [generateUploadUrl, index, onChange, saveImage]);
+  }, [generateUploadUrl, index, onChange, saveImage, trackDraftUpload]);
 
   const handleClipboardPaste = useCallback(async () => {
     if (uploading) {return;}
@@ -73,40 +82,59 @@ function IconUpload({ value, onChange, index }: { value: string; onChange: (url:
   }, [handleFile, uploading]);
 
   return (
-    <div className="flex shrink-0 items-center gap-1">
-      <div className="relative shrink-0">
-      <input ref={ref} type="file" accept="image/*" className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleFile(f); } e.target.value = ''; }} />
-      <div
-        className={cn('h-8 w-8 cursor-pointer overflow-hidden rounded-md border-2 border-dashed transition-all', uploading && 'pointer-events-none', dragging ? 'border-blue-400 bg-blue-50 scale-110' : 'border-slate-200 hover:border-slate-300 dark:border-slate-600')}
-        onClick={() => { if (!uploading) { ref.current?.click(); } }}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
-        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); }}
-        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) { void handleFile(f); } }}
-      >
-        {uploading ? (
-          <div className="h-full w-full flex items-center justify-center bg-slate-100"><Loader2 size={12} className="animate-spin text-blue-500" /></div>
-        ) : value ? (
-          <img src={value} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center bg-slate-50 dark:bg-slate-800"><Upload size={10} className="text-slate-400" /></div>
-        )}
+    <>
+      <div className="flex shrink-0 items-center gap-1">
+        <div className="relative shrink-0">
+          <input ref={ref} type="file" accept="image/*" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleFile(f); } e.target.value = ''; }} />
+          <div
+            className={cn('h-8 w-8 cursor-pointer overflow-hidden rounded-md border-2 border-dashed transition-all', uploading && 'pointer-events-none', dragging ? 'border-blue-400 bg-blue-50 scale-110' : 'border-slate-200 hover:border-slate-300 dark:border-slate-600')}
+            onClick={() => { if (!uploading) { ref.current?.click(); } }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) { void handleFile(f); } }}
+          >
+            {uploading ? (
+              <div className="h-full w-full flex items-center justify-center bg-slate-100"><Loader2 size={12} className="animate-spin text-blue-500" /></div>
+            ) : value ? (
+              <img src={value} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center bg-slate-50 dark:bg-slate-800"><Upload size={10} className="text-slate-400" /></div>
+            )}
+          </div>
+          {value && (
+            <button type="button" className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); onChange('', null); }}>×</button>
+          )}
+        </div>
+        <ImageSourceActions
+          mode="upload"
+          onUpload={() => ref.current?.click()}
+          onUrl={() => {
+            const next = window.prompt('URL icon', value);
+            if (next !== null) { onChange(next.trim()); }
+          }}
+          onPaste={handleClipboardPaste}
+          onCrop={() => setIsEditorOpen(true)}
+          cropLabel="1:1"
+          cropDisabled={!value || uploading}
+          disabled={uploading}
+          iconSize={11}
+          className="gap-1"
+        />
       </div>
-      {value && (
-        <button type="button" className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center"
-          onClick={(e) => { e.stopPropagation(); onChange(''); }}>×</button>
+      {isEditorOpen && value && (
+        <ImageEditorDialog
+          imageUrl={value}
+          preferredCropAspectRatio="square"
+          onClose={() => setIsEditorOpen(false)}
+          onApply={(editedFile) => {
+            setIsEditorOpen(false);
+            void handleFile(editedFile);
+          }}
+        />
       )}
-      </div>
-      <button
-        type="button"
-        className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40 dark:hover:bg-emerald-500/10"
-        disabled={uploading}
-        onClick={() => { void handleClipboardPaste(); }}
-        title="Dán ảnh từ clipboard"
-      >
-        <ClipboardPaste size={13} />
-      </button>
-    </div>
+    </>
   );
 }
 
@@ -127,25 +155,48 @@ export const StatsForm = ({
   mediaPlacement,
   mediaAlign,
   backgroundImage,
+  backgroundImageStorageId,
   onMediaPlacementChange,
   onMediaAlignChange,
   onBackgroundImageChange,
   defaultExpanded = true,
+  className,
+  openSections: openSectionsProp,
+  onToggleSection: onToggleSectionProp,
+  showToggleAll = true,
 }: { 
   items: StatsFormItem[]; 
   onChange: (items: StatsFormItem[]) => void;
   mediaPlacement: StatsMediaPlacement;
   mediaAlign: StatsMediaAlign;
   backgroundImage?: string;
+  backgroundImageStorageId?: string | null;
   onMediaPlacementChange: (value: StatsMediaPlacement) => void;
   onMediaAlignChange: (value: StatsMediaAlign) => void;
-  onBackgroundImageChange?: (value: string) => void;
+  onBackgroundImageChange?: (value: string, storageId?: string | null) => void;
   defaultExpanded?: boolean;
+  className?: string;
+  openSections?: Record<string, boolean>;
+  onToggleSection?: (key: any, open?: boolean) => void;
+  showToggleAll?: boolean;
 }) => {
-  const [expanded, setExpanded] = useState(defaultExpanded);
   const [iconSearch, setIconSearch] = useState<Record<string | number, string>>({});
   const [expandedItem, setExpandedItem] = useState<string | number | null>(null);
   const MAX_ITEMS = 4;
+
+  const localSectionsState = useFormSectionsState(
+    ['stats'],
+    defaultExpanded
+  );
+
+  const activeOpenSections = openSectionsProp ?? localSectionsState.openSections;
+  const activeToggleSection = onToggleSectionProp ?? ((key: string, open?: boolean) => localSectionsState.toggleSection(key as any, open));
+  const activeHasClosedSection = openSectionsProp
+    ? !activeOpenSections['stats']
+    : localSectionsState.hasClosedSection;
+  const activeHandleToggleAll = openSectionsProp
+    ? (() => activeToggleSection('stats', activeHasClosedSection))
+    : localSectionsState.handleToggleAll;
 
   const handleAdd = () => {
     if (items.length >= MAX_ITEMS) {return;}
@@ -175,43 +226,40 @@ export const StatsForm = ({
   };
 
   return (
-    <Card className="mb-6">
-      <CardHeader className="pb-0">
-        <div
-          className="flex cursor-pointer items-center justify-between"
-          onClick={() => setExpanded((prev) => !prev)}
-        >
-          <CardTitle className="text-base">Số liệu thống kê ({items.length}/{MAX_ITEMS})</CardTitle>
-          <div className="flex items-center gap-2">
+    <div className={cn('mb-6', className)}>
+      {showToggleAll && (
+        <FormSectionsToggleAllButton hasClosedSection={activeHasClosedSection} onToggleAll={activeHandleToggleAll} />
+      )}
+
+      <SubSection
+        icon={BarChart3}
+        title={`Số liệu thống kê (${items.length}/${MAX_ITEMS})`}
+        open={activeOpenSections.stats}
+        onOpenChange={(open) => activeToggleSection('stats', open)}
+        actions={(
+          <>
             {items.length < MAX_ITEMS && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={(e) => { e.stopPropagation(); handleAdd(); }}
+                onClick={handleAdd}
                 className="gap-2"
               >
                 <Plus size={14} /> Thêm
               </Button>
             )}
-            <div onClick={(e) => e.stopPropagation()}>
-              <AiDemoStatsImport onApply={(items) => onChange(items as StatsFormItem[])} />
-            </div>
-            <ChevronDown
-              size={16}
-              className={cn('transition-transform duration-200 text-slate-400', expanded ? 'rotate-180' : '')}
-            />
-          </div>
-        </div>
-      </CardHeader>
-      {expanded && (
-        <CardContent className="space-y-3 pt-4">
+            <AiDemoStatsImport onApply={(items) => onChange(items as StatsFormItem[])} />
+          </>
+        )}
+      >
           {onBackgroundImageChange && (
             <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
               <SettingsImageUploader
                 label="Ảnh nền layout Hero ảnh nền"
                 value={backgroundImage}
-                onChange={(url) => onBackgroundImageChange(url ?? '')}
+                storageId={backgroundImageStorageId as Id<'_storage'>}
+                onChange={(url, storageId) => onBackgroundImageChange(url ?? '', storageId)}
                 folder="stats-backgrounds"
                 naming={{ entityName: 'stats', field: 'background-image', index: 1 }}
                 previewSize="md"
@@ -307,6 +355,7 @@ export const StatsForm = ({
                             iconName: newIconType === 'lucide' ? (item.iconName || STATS_ICON_CHOICES[0]) : undefined,
                             iconType: newIconType,
                             iconUrl: (newIconType === 'url' || newIconType === 'upload') ? item.iconUrl : undefined,
+                            iconStorageId: newIconType === 'upload' ? item.iconStorageId : null,
                           });
                           // Mở picker lucide khi chọn lucide
                           if (newIconType === 'lucide') {
@@ -367,7 +416,7 @@ export const StatsForm = ({
                     <div className="flex items-center gap-2">
                       <IconUpload
                         value={item.iconUrl ?? ''}
-                        onChange={(url) => { handleUpdate(item.id, { iconUrl: url }); }}
+                        onChange={(url, storageId) => { handleUpdate(item.id, { iconUrl: url, iconStorageId: storageId }); }}
                         index={idx + 1}
                       />
                       {item.iconUrl ? (
@@ -442,8 +491,7 @@ export const StatsForm = ({
               </div>
             );
           })}
-        </CardContent>
-      )}
-    </Card>
+      </SubSection>
+    </div>
   );
 };

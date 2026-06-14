@@ -29,4 +29,6 @@ export const DEFAULT_TESTIMONIALS_CONFIG: TestimonialsConfig = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  spacing: 'normal',
+  cornerRadius: 'lg',
 };

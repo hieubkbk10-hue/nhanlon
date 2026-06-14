@@ -1,11 +1,13 @@
 'use client';
 
 import React from 'react';
+import useEmblaCarousel from 'embla-carousel-react';
 import { formatHex, oklch } from 'culori';
 import { APCAcontrast, sRGBtoY } from 'apca-w3';
 import { PublicImage } from '@/components/shared/PublicImage';
-import { icons } from 'lucide-react';
-import type { ServiceItem, ServiceItemMediaAlign, ServiceItemMediaPlacement, ServicesColorTokens, ServicesStyle } from '@/app/admin/home-components/services/_types';
+import { ChevronLeft, ChevronRight, icons } from 'lucide-react';
+import { cn } from '@/app/admin/components/ui';
+import { DEFAULT_SERVICES_CORNER_RADIUS, DEFAULT_SERVICES_SPACING, getServicesCornerRadiusClassName, type ServiceItem, type ServiceItemMediaAlign, type ServiceItemMediaPlacement, type ServicesColorTokens, type ServicesCornerRadius, type ServicesSpacing, type ServicesStyle } from '@/app/admin/home-components/services/_types';
 import { getAPCATextColor } from '@/app/admin/home-components/services/_lib/colors';
 
 const StarIcon = icons.Star;
@@ -50,10 +52,10 @@ const getServiceKey = (item: ServiceItem, index: number) => {
   return `${item.mediaType}-${item.icon}-${item.image}-${item.title}-${item.description}-${index}`;
 };
 
-const serviceTitleClassName = 'text-[13px] font-bold uppercase leading-tight tracking-wide';
-const serviceBodyClassName = 'mt-0.5 text-[12px] leading-4';
-const serviceTitleFontStyle = { fontFamily: 'var(--font-roboto-slab), var(--font-be-vietnam-pro), serif' } as React.CSSProperties;
-const serviceBodyFontStyle = { fontFamily: 'var(--font-be-vietnam-pro), sans-serif' } as React.CSSProperties;
+const serviceTitleClassName = 'text-[13px] font-bold uppercase leading-tight tracking-wide tv:text-lg tv:tracking-widest';
+const serviceBodyClassName = 'mt-0.5 text-[12px] leading-4 tv:text-[15px] tv:leading-6 tv:mt-2';
+const serviceTitleFontStyle = { fontFamily: 'var(--font-active), var(--font-be-vietnam-pro), sans-serif' } as React.CSSProperties;
+const serviceBodyFontStyle = { fontFamily: 'var(--font-active), var(--font-be-vietnam-pro), sans-serif' } as React.CSSProperties;
 
 const getDisplayTitle = (title?: string) => title?.trim() || 'Dịch vụ';
 
@@ -136,6 +138,25 @@ const getCarouselItemBackground = (baseColor: string, index: number, total: numb
   }));
 };
 
+const hexToRgbTuple = (value: string): [number, number, number] | null => {
+  const parsed = oklch(value);
+  if (!parsed) {return null;}
+  const normalized = formatHex(parsed).replace('#', '');
+  if (normalized.length < 6) {return null;}
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return [r, g, b].some((channel) => Number.isNaN(channel)) ? null : [r, g, b];
+};
+
+const getAPCALc = (text: string, background: string) => {
+  const textRgb = hexToRgbTuple(text);
+  const backgroundRgb = hexToRgbTuple(background);
+  if (!textRgb || !backgroundRgb) {return 0;}
+  const lc = Math.abs(APCAcontrast(sRGBtoY(textRgb), sRGBtoY(backgroundRgb)));
+  return Number.isFinite(lc) ? lc : 0;
+};
+
 export type ServicesCoreDevice = 'desktop' | 'tablet' | 'mobile';
 
 export const ServicesSectionCore = ({
@@ -150,6 +171,8 @@ export const ServicesSectionCore = ({
   showSubtitle = true,
   title,
   colors,
+  spacing = DEFAULT_SERVICES_SPACING,
+  cornerRadius = DEFAULT_SERVICES_CORNER_RADIUS,
   device = 'desktop',
   isPreview = false,
   carouselId,
@@ -165,24 +188,47 @@ export const ServicesSectionCore = ({
   showSubtitle?: boolean;
   title: string;
   colors: ServicesColorTokens;
+  spacing?: ServicesSpacing;
+  cornerRadius?: ServicesCornerRadius;
   device?: ServicesCoreDevice;
   isPreview?: boolean;
   carouselId?: string;
 }) => {
   void carouselId;
+  void spacing;
   const sectionTitle = getDisplayTitle(title);
   const sectionSubtitle = subtitle?.trim() || '';
   const shouldShowTitle = showTitle !== false;
   const shouldShowSubtitle = showSubtitle !== false && Boolean(sectionSubtitle);
   const headerAlignClassName = headerAlign === 'center' ? 'text-center' : headerAlign === 'right' ? 'text-right' : 'text-left';
+  const radiusClassName = getServicesCornerRadiusClassName(cornerRadius);
+  const compactRadiusClassName = cornerRadius === 'none' ? 'rounded-none' : cornerRadius === 'lg' ? 'rounded-xl' : 'rounded-sm';
+  const [carouselRef, carouselApi] = useEmblaCarousel({ align: 'start', containScroll: 'trimSnaps', dragFree: true });
+  const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+  const [canScrollNext, setCanScrollNext] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!carouselApi) {return;}
+    const update = () => {
+      setCanScrollPrev(carouselApi.canScrollPrev());
+      setCanScrollNext(carouselApi.canScrollNext());
+    };
+    update();
+    carouselApi.on('select', update);
+    carouselApi.on('reInit', update);
+    return () => {
+      carouselApi.off('select', update);
+      carouselApi.off('reInit', update);
+    };
+  }, [carouselApi]);
 
   const renderSectionHeader = () => {
     if (!shouldShowTitle && !shouldShowSubtitle) {return null;}
 
     return (
       <div className={`space-y-2 ${headerAlignClassName}`}>
-        {shouldShowTitle ? <h2 className="text-2xl font-bold tracking-tight md:text-3xl" style={{ color: colors.heading }}>{sectionTitle}</h2> : null}
-        {shouldShowSubtitle ? <p className="text-sm font-medium" style={{ color: colors.subheading }}>{sectionSubtitle}</p> : null}
+        {shouldShowTitle ? <h2 className="text-2xl font-bold tracking-tight md:text-3xl tv:text-5xl" style={{ color: colors.heading }}>{sectionTitle}</h2> : null}
+        {shouldShowSubtitle ? <p className="text-sm font-medium tv:text-xl" style={{ color: colors.subheading }}>{sectionSubtitle}</p> : null}
       </div>
     );
   };
@@ -192,24 +238,29 @@ export const ServicesSectionCore = ({
     ? (device === 'mobile'
       ? (desktopColumns === 4 ? 'grid grid-cols-2 gap-4' : 'grid grid-cols-1 gap-4')
       : device === 'tablet'
-        ? (desktopColumns === 4 ? 'grid grid-cols-2 gap-4' : 'grid grid-cols-3 gap-4')
-        : (desktopColumns === 4 ? 'grid grid-cols-4 gap-4' : 'grid grid-cols-3 gap-4'))
-    : (desktopColumns === 4 ? 'grid grid-cols-2 gap-4 md:grid-cols-2 lg:grid-cols-4' : 'grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-3');
+        ? (desktopColumns === 4 ? 'grid grid-cols-2 gap-4 tv:gap-8' : 'grid grid-cols-3 gap-4 tv:gap-8')
+        : (desktopColumns === 4 ? 'grid grid-cols-4 gap-4 tv:gap-8' : 'grid grid-cols-3 gap-4 tv:gap-8'))
+    : (desktopColumns === 4 ? 'grid grid-cols-2 gap-4 md:grid-cols-2 lg:grid-cols-4 tv:gap-8' : 'grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-3 tv:gap-8');
   const stripGridClassName = isPreview
     ? (device === 'mobile'
-      ? (desktopColumns === 4 ? 'grid grid-cols-2' : 'grid grid-cols-1')
+      ? (desktopColumns === 4 ? 'grid grid-cols-2 tv:gap-8' : 'grid grid-cols-1 tv:gap-8')
       : device === 'tablet'
-        ? (desktopColumns === 4 ? 'grid grid-cols-2' : 'grid grid-cols-3')
-        : (desktopColumns === 4 ? 'grid grid-cols-4' : 'grid grid-cols-3'))
-    : (desktopColumns === 4 ? 'grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4' : 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3');
+        ? (desktopColumns === 4 ? 'grid grid-cols-2 tv:gap-8' : 'grid grid-cols-3 tv:gap-8')
+        : (desktopColumns === 4 ? 'grid grid-cols-4 tv:gap-8' : 'grid grid-cols-3 tv:gap-8'))
+    : (desktopColumns === 4 ? 'grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 tv:gap-8' : 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 tv:gap-8');
 
   const visibleForRuntime = items.slice(0, 6);
   const displayFeaturedItems = isPreview ? visibleForPreview : visibleForRuntime;
-
+  const responsivePolicyTitleClassName = isPreview
+    ? (device === 'mobile' ? 'text-[12px]' : device === 'tablet' ? 'text-[13px]' : 'text-[14px]')
+    : 'text-[12px] md:text-[13px] lg:text-[14px]';
+  const responsivePolicyBodyClassName = isPreview
+    ? (device === 'mobile' ? 'text-[10.5px] leading-[16px]' : device === 'tablet' ? 'text-[11.5px] leading-[17px]' : 'text-[12.5px] leading-[18px]')
+    : 'text-[10.5px] leading-[16px] md:text-[11.5px] md:leading-[17px] lg:text-[12.5px] lg:leading-[18px]';
   if (items.length === 0) {
     return (
-      <section className="px-4 py-10">
-        <div className="mx-auto max-w-4xl rounded-xl border p-8 text-center" style={{ backgroundColor: colors.placeholderBackground, borderColor: colors.neutralBorder }}>
+      <section className="px-4">
+        <div className={cn('mx-auto max-w-4xl border p-8 text-center', radiusClassName)} style={{ backgroundColor: colors.placeholderBackground, borderColor: colors.neutralBorder }}>
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg" style={{ backgroundColor: colors.placeholderIconBackground }}>
             <ServiceIcon size={24} style={{ color: colors.placeholderIcon }} />
           </div>
@@ -228,10 +279,10 @@ export const ServicesSectionCore = ({
     const divider = text === '#ffffff' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.1)';
 
     return (
-      <section className="px-4 pb-5 pt-2 md:pb-[22px] md:pt-2">
-        <div className="mx-auto max-w-7xl space-y-2">
+      <section className="px-4">
+        <div className="mx-auto max-w-7xl tv:max-w-[1536px] space-y-2">
           {renderSectionHeader()}
-          <div className="overflow-hidden rounded-sm" style={{ backgroundColor: background }}>
+          <div className={cn('overflow-hidden', compactRadiusClassName)} style={{ backgroundColor: background }}>
             <div className={`${stripGridClassName} divide-y md:divide-y-0`} style={{ borderColor: divider }}>
               {displayFeaturedItems.map((item, idx) => {
                 const stackedLayout = mediaPlacement !== 'left';
@@ -294,7 +345,7 @@ export const ServicesSectionCore = ({
     return (
       <section>
         <div style={{ backgroundColor: stripBg }}>
-          <div className="mx-auto max-w-7xl px-4 pb-5 pt-2 md:pb-[22px] md:pt-2">
+          <div className="mx-auto max-w-7xl tv:max-w-[1536px] px-4">
             <div className={`${stripGridClassName} gap-y-5`}>
               {displayFeaturedItems.map((item, idx) => {
                 if (stackedLayout) {
@@ -349,10 +400,10 @@ export const ServicesSectionCore = ({
 
   if (style === 'bigNumber') {
     return (
-      <section className="px-4 pb-5 pt-2 md:pb-[22px] md:pt-2">
-        <div className="mx-auto max-w-7xl space-y-2">
+      <section className="px-4">
+        <div className="mx-auto max-w-7xl tv:max-w-[1536px] space-y-2">
           {renderSectionHeader()}
-          <div className="overflow-hidden rounded-[32px] border" style={{ borderColor: colors.cardBorder, backgroundColor: colors.cardBackground }}>
+          <div className={cn('overflow-hidden border', cornerRadius === 'lg' ? 'rounded-[32px]' : radiusClassName)} style={{ borderColor: colors.cardBorder, backgroundColor: colors.cardBackground }}>
             <div className={`${stripGridClassName} divide-y md:divide-y-0`} style={{ borderColor: colors.neutralBorder }}>
               {displayFeaturedItems.slice(0, desktopColumns).map((item, idx) => {
                 const stackedLayout = mediaPlacement !== 'left';
@@ -406,12 +457,12 @@ export const ServicesSectionCore = ({
 
   if (style === 'cards') {
     return (
-      <section className="px-4 pb-5 pt-2 md:pb-[22px] md:pt-2">
-        <div className="mx-auto max-w-7xl space-y-2">
+      <section className="px-4">
+        <div className="mx-auto max-w-7xl tv:max-w-[1536px] space-y-2">
           {renderSectionHeader()}
           <div className={cardsGridClassName}>
             {displayFeaturedItems.map((item, idx) => (
-              <article key={getServiceKey(item, idx)} className="rounded-xl border bg-white px-1.5 py-2.5" style={{ borderColor: colors.cardBorder, backgroundColor: colors.cardBackground }}>
+              <article key={getServiceKey(item, idx)} className={cn('border bg-white px-1.5 py-2.5', radiusClassName)} style={{ borderColor: colors.cardBorder, backgroundColor: colors.cardBackground }}>
                 {mediaPlacement === 'left' ? (
                   <div className="flex items-start gap-3">
                     {renderAlignedMedia({
@@ -456,13 +507,40 @@ export const ServicesSectionCore = ({
 
   if (style === 'carousel') {
     const carouselItems = displayFeaturedItems;
+    const carouselSlideClassName = desktopColumns === 4
+      ? 'basis-1/2 md:basis-1/2 lg:basis-1/4'
+      : 'basis-full md:basis-1/3 lg:basis-1/3';
 
     return (
-      <section className="px-4 pb-5 pt-2 md:pb-[22px] md:pt-2">
-        <div className="mx-auto max-w-7xl space-y-2">
-          {renderSectionHeader()}
-          <div className="overflow-hidden rounded-sm">
-            <div className={`${stripGridClassName} divide-y md:divide-y-0`}>
+      <section className="px-4">
+        <div className="mx-auto max-w-7xl tv:max-w-[1536px] space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {renderSectionHeader()}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                aria-label="Dịch vụ trước"
+                disabled={!canScrollPrev}
+                onClick={() => carouselApi?.scrollPrev()}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="Dịch vụ tiếp theo"
+                disabled={!canScrollNext}
+                onClick={() => carouselApi?.scrollNext()}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+          <div className={cn('overflow-hidden', compactRadiusClassName)} ref={carouselRef}>
+            <div className="flex">
               {carouselItems.map((item, idx) => {
                 const stackedLayout = mediaPlacement !== 'left';
                 const textAlignClassName = stackedLayout ? getTextAlignClassName(mediaAlign) : 'text-left';
@@ -474,7 +552,7 @@ export const ServicesSectionCore = ({
                 const itemSubtext = itemText === '#ffffff' ? 'rgba(255,255,255,0.78)' : 'rgba(15,23,42,0.72)';
                 const itemMediaSurface = itemText === '#ffffff' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.48)';
                 return (
-                  <article key={getServiceKey(item, idx)} className={articleClassName} style={{ backgroundColor: itemBackground }}>
+                  <article key={getServiceKey(item, idx)} className={cn(articleClassName, 'min-w-0 shrink-0', carouselSlideClassName)} style={{ backgroundColor: itemBackground }}>
                     {renderAlignedMedia({
                       item,
                       placement: mediaPlacement,
@@ -500,25 +578,25 @@ export const ServicesSectionCore = ({
   }
 
   if (style === 'builderPolicy') {
-    const policyItems = displayFeaturedItems.slice(0, 4);
+    const policyItems = displayFeaturedItems;
     const stackedLayout = mediaPlacement !== 'left';
     const policyTextAlignClassName = stackedLayout ? getTextAlignClassName(mediaAlign) : 'text-left';
     const policyMediaAlignClassName = stackedLayout ? getMediaAlignClassName(mediaAlign) : 'justify-center';
     const gridClassName = isPreview
       ? (device === 'mobile'
-        ? 'grid grid-cols-1 gap-[30px]'
+        ? (desktopColumns === 4 ? 'grid grid-cols-2 gap-[18px]' : 'grid grid-cols-1 gap-[18px]')
         : device === 'tablet'
-          ? 'grid grid-cols-2 gap-[30px]'
-          : 'grid grid-cols-4 gap-[30px]')
-      : 'grid grid-cols-1 gap-[30px] sm:grid-cols-2 lg:grid-cols-4';
+          ? (desktopColumns === 4 ? 'grid grid-cols-2 gap-[24px]' : 'grid grid-cols-3 gap-[24px]')
+          : (desktopColumns === 4 ? 'grid grid-cols-4 gap-[30px]' : 'grid grid-cols-3 gap-[30px]'))
+      : (desktopColumns === 4 ? 'grid grid-cols-2 gap-[18px] md:gap-[24px] lg:grid-cols-4 lg:gap-[30px]' : 'grid grid-cols-1 gap-[18px] md:grid-cols-3 md:gap-[24px] lg:gap-[30px]');
 
     return (
-      <section className="px-4 pb-5 pt-2 md:pb-[22px] md:pt-2">
+      <section className="px-4">
         <div className="mx-auto max-w-[1320px] space-y-2">
           {renderSectionHeader()}
           <div
-            className="relative overflow-hidden rounded-[20px] p-[30px]"
-            style={{ backgroundColor: '#d71920', fontFamily: 'Mulish, var(--font-active), var(--font-be-vietnam-pro), sans-serif' }}
+            className={cn('relative overflow-hidden p-[30px]', radiusClassName)}
+            style={{ backgroundColor: colors.primary, fontFamily: 'var(--font-active), var(--font-be-vietnam-pro), sans-serif' }}
           >
             <div className={gridClassName}>
               {policyItems.map((item, idx) => (
@@ -540,20 +618,136 @@ export const ServicesSectionCore = ({
                           />
                         </span>
                       ) : (
-                        <ServiceIcon name={item.icon} size={60} style={{ color: '#ffffff' }} />
+                        <ServiceIcon name={item.icon} size={60} style={{ color: getAPCATextColor(colors.primary, 16, 700) }} />
                       )}
                     </div>
-                    <div className={`min-w-0 text-white ${policyTextAlignClassName}`}>
-                      <div className="text-base font-bold leading-6">
+                    <div className={`min-w-0 ${policyTextAlignClassName}`} style={{ color: getAPCATextColor(colors.primary, 16, 700) }}>
+                      <div className={cn('font-bold leading-6', responsivePolicyTitleClassName)}>
                         {item.title || 'Tiêu đề'}
                       </div>
-                      <div className="text-sm font-normal leading-[21px] text-white">
+                      <div className={cn('font-normal opacity-85', responsivePolicyBodyClassName)}>
                         {item.description || 'Mô tả dịch vụ...'}
                       </div>
                     </div>
                   </div>
                 </article>
               ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (style === 'builderFeatureCircle') {
+    const featureItems = displayFeaturedItems;
+    const gridClassName = isPreview
+      ? (device === 'mobile'
+        ? (desktopColumns === 4 ? 'grid grid-cols-2 gap-[18px]' : 'grid grid-cols-1 gap-[18px]')
+        : device === 'tablet'
+          ? (desktopColumns === 4 ? 'grid grid-cols-2 gap-[24px]' : 'grid grid-cols-3 gap-[24px]')
+          : (desktopColumns === 4 ? 'grid grid-cols-4 gap-[30px]' : 'grid grid-cols-3 gap-[30px]'))
+      : (desktopColumns === 4 ? 'grid grid-cols-2 gap-[18px] md:gap-[24px] lg:grid-cols-4 lg:gap-[30px]' : 'grid grid-cols-1 gap-[18px] md:grid-cols-3 md:gap-[24px] lg:gap-[30px]');
+    const featureBackground = `color-mix(in srgb, ${colors.neutralBackground} 82%, ${colors.neutralBorder})`;
+    const brandOnWhiteLc = getAPCALc(colors.primary, '#ffffff');
+    const useWhiteBase = brandOnWhiteLc >= 45;
+    const iconBaseBackground = useWhiteBase ? '#ffffff' : colors.primary;
+    const iconBaseColor = useWhiteBase ? colors.primary : '#ffffff';
+    const iconHoverBackground = useWhiteBase ? colors.primary : '#ffffff';
+    const iconHoverColor = useWhiteBase ? '#ffffff' : colors.primary;
+    const stackedLayout = mediaPlacement !== 'left';
+    const featureTextAlignClassName = stackedLayout ? getTextAlignClassName(mediaAlign) : 'text-left';
+    const featureMediaAlignClassName = stackedLayout ? getMediaAlignClassName(mediaAlign) : 'justify-center';
+    const featureUnderlineClassName = !stackedLayout || mediaAlign === 'left'
+      ? 'after:left-0'
+      : mediaAlign === 'right'
+        ? 'after:right-0'
+        : 'after:left-1/2 after:-translate-x-1/2';
+    const featureTextWidthClassName = !stackedLayout || mediaAlign === 'left'
+      ? 'mr-auto'
+      : mediaAlign === 'right'
+        ? 'ml-auto'
+        : 'mx-auto';
+
+    return (
+      <section className="px-4">
+        <div className="mx-auto max-w-[1320px] space-y-2">
+          {renderSectionHeader()}
+          <div className={cn('relative overflow-hidden p-[30px]', radiusClassName)} style={{ background: featureBackground, fontFamily: 'var(--font-active), var(--font-be-vietnam-pro), sans-serif' }}>
+            <div className="mx-auto w-full max-w-[1200px] px-[15px]">
+              <div className={cn(gridClassName, 'md:-mx-[15px]')}>
+                {featureItems.map((item, idx) => {
+                  const iconElement = (
+                    <div className={stackedLayout ? cn('mb-[15px] flex', featureMediaAlignClassName) : 'flex shrink-0'}>
+                      <div
+                        className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors duration-300 md:h-12 md:w-12 lg:h-[52px] lg:w-[52px]"
+                        style={{ backgroundColor: iconBaseBackground, borderColor: colors.neutralBorder, color: iconBaseColor }}
+                        onMouseEnter={(event) => {
+                          event.currentTarget.style.backgroundColor = iconHoverBackground;
+                          event.currentTarget.style.color = iconHoverColor;
+                        }}
+                        onMouseLeave={(event) => {
+                          event.currentTarget.style.backgroundColor = iconBaseBackground;
+                          event.currentTarget.style.color = iconBaseColor;
+                        }}
+                      >
+                        <div className="relative z-10 flex h-full w-full items-center justify-center transition-colors duration-300">
+                          {item.mediaType === 'image' && item.image ? (
+                            <span className="relative block h-8 w-8 md:h-9 md:w-9 lg:h-10 lg:w-10">
+                              <PublicImage
+                                src={item.image}
+                                alt={item.title || 'Service image'}
+                                fill
+                                sizes="40px"
+                                className="object-contain"
+                                mode="logo"
+                              />
+                            </span>
+                          ) : (
+                            <ServiceIcon name={item.icon} size={34} style={{ color: 'currentColor' }} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                  const textElement = (
+                    <div className="min-w-0">
+                      <h3
+                        className={cn(
+                          'relative mb-3 min-h-[2.45em] pb-3 font-bold uppercase leading-[1.25] text-balance after:absolute after:bottom-0 after:h-[2px] after:w-[54px] after:bg-slate-900',
+                          featureUnderlineClassName,
+                          responsivePolicyTitleClassName,
+                        )}
+                        style={{ color: colors.bodyText, fontFamily: 'var(--font-active), var(--font-be-vietnam-pro), sans-serif' }}
+                      >
+                        {item.title || 'Tiêu đề'}
+                      </h3>
+                      <p
+                        className={cn('max-w-[270px] font-normal text-balance', featureTextWidthClassName, responsivePolicyBodyClassName)}
+                        style={{ color: colors.mutedText, fontFamily: 'var(--font-active), var(--font-be-vietnam-pro), sans-serif' }}
+                      >
+                        {item.description || 'Mô tả dịch vụ...'}
+                      </p>
+                    </div>
+                  );
+
+                  return (
+                    <article key={getServiceKey(item, idx)} className={cn('group px-[15px]', featureTextAlignClassName)}>
+                      {stackedLayout ? (
+                        <>
+                          {iconElement}
+                          {textElement}
+                        </>
+                      ) : (
+                        <div className="flex items-start gap-3">
+                          {iconElement}
+                          {textElement}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -573,15 +767,20 @@ export const ServicesSectionCore = ({
   const ribbonHighlightColor = getRibbonShadeColor(ribbonBg, 0.06, 1.02);
 
   return (
-    <section className="px-4 pb-5 pt-2 md:pb-[22px] md:pt-2">
-      <div className="mx-auto max-w-7xl space-y-2">
+    <section className="px-4">
+      <div className="mx-auto max-w-7xl tv:max-w-[1536px] space-y-2">
         {renderSectionHeader()}
         <div className={cardsGridClassName}>
           {displayFeaturedItems.map((item, idx) => {
             return (
               <article
                 key={getServiceKey(item, idx)}
-                className="relative flex min-h-[54px] flex-col justify-center rounded-md py-2.5 pl-[76px] pr-4 text-left shadow-sm"
+                className={cn(
+                  "relative flex min-h-[54px] flex-col justify-center rounded-md py-2.5 pr-4 text-left shadow-sm",
+                  isPreview
+                    ? (device === 'mobile' ? 'pl-4' : 'pl-[76px]')
+                    : 'pl-4 md:pl-[76px]'
+                )}
                 style={{ backgroundColor: cardBg }}
               >
                 <div
@@ -626,10 +825,27 @@ export const ServicesSectionCore = ({
                 </div>
 
                 <div className="relative z-0">
-                  <h3 className={serviceTitleClassName} style={{ ...serviceTitleFontStyle, color: cardTitleColor }}>
+                  <h3
+                    className={cn(
+                      serviceTitleClassName,
+                      isPreview
+                        ? (device === 'mobile' ? 'pl-[56px] min-h-[42px] text-[11px]' : 'pl-0 min-h-0 text-[13px]')
+                        : 'pl-[56px] md:pl-0 min-h-[42px] md:min-h-0 text-[11px] md:text-[13px]'
+                    )}
+                    style={{ ...serviceTitleFontStyle, color: cardTitleColor }}
+                  >
                     {item.title || 'Tiêu đề'}
                   </h3>
-                  <p className={serviceBodyClassName} style={{ ...serviceBodyFontStyle, color: cardDescColor }}>
+                  <p
+                    className={cn(
+                      serviceBodyClassName,
+                      "pl-0",
+                      isPreview
+                        ? (device === 'mobile' ? 'mt-2 text-[10px]' : 'mt-0.5 text-[12px]')
+                        : 'mt-2 md:mt-0.5 text-[10px] md:text-[12px]'
+                    )}
+                    style={{ ...serviceBodyFontStyle, color: cardDescColor }}
+                  >
                     {item.description || 'Mô tả dịch vụ...'}
                   </p>
                 </div>

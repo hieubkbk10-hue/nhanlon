@@ -1,32 +1,64 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ArrowLeft, ArrowRight, CaseSensitive, Loader2, Pause, Play } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
+import { HomeComponentDisplaySettingsSection } from '../../../_shared/components/HomeComponentDisplaySettingsSection';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { MarqueePreview } from '../../_components/MarqueePreview';
 import { MarqueeForm } from '../../_components/MarqueeForm';
+import { MarqueeDisplayConfig } from '../../_components/MarqueeDisplayConfig';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
-import { DEFAULT_MARQUEE_CONFIG, SCALE_OPTIONS, SPEED_OPTIONS } from '../../_lib/constants';
-import type { MarqueeConfig, MarqueeItem, MarqueeStyle, MarqueeBrandMode, MarqueeDirection, MarqueeScale, MarqueeSpeed } from '../../_types';
-import { normalizeMarqueeItem, normalizeMarqueeStyle, normalizeMarqueeDirection, normalizeMarqueeSpeed, normalizeMarqueeScale, toMarqueePersistItem } from '../../_types';
+import { DEFAULT_MARQUEE_CONFIG } from '../../_lib/constants';
+import type { MarqueeConfig, MarqueeItem, MarqueeStyle, MarqueeBrandMode, MarqueeCornerRadius, MarqueeDirection, MarqueeScale, MarqueeSpeed } from '../../_types';
+import { normalizeMarqueeCornerRadius, normalizeMarqueeItem, normalizeMarqueeSpacing, normalizeMarqueeStyle, normalizeMarqueeDirection, normalizeMarqueeSpeed, normalizeMarqueeScale, toMarqueePersistItem } from '../../_types';
 
 const COMPONENT_TYPE = 'Marquee';
 
-export default function MarqueeEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type MarqueeEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function MarqueeEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: MarqueeEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
@@ -34,12 +66,21 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
 
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
-  const [items, setItems] = useState<MarqueeItem[]>([]);
+  const {
+    state: items,
+    set: setItems,
+    undo: undoitems,
+    redo: redoitems,
+    canUndo: canUndoitems,
+    canRedo: canRedoitems,
+    reset: resetitems,
+  } = useUndoRedo<MarqueeItem[]>([], { maxHistory: 15 });
   const [style, setStyle] = useState<MarqueeStyle>('ribbon');
   const [direction, setDirection] = useState<MarqueeDirection>('left');
   const [speed, setSpeed] = useState<MarqueeSpeed>('normal');
@@ -61,11 +102,13 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(false);
   const [badgeText, setBadgeText] = useState('');
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const [cornerRadius, setCornerRadius] = useState<MarqueeCornerRadius>(DEFAULT_MARQUEE_CONFIG.cornerRadius ?? 'none');
+  const { openSections, toggleSection } = useFormSectionsState(['header', 'display'], false);
 
   useEffect(() => {
     if (!component) { return; }
-    if (component.type !== 'Marquee') { router.replace(`/admin/home-components/${id}/edit`); return; }
+    if (!snapshotComponent && component.type !== 'Marquee') { router.replace(`/admin/home-components/${id}/edit`); return; }
 
     setTitle(component.title);
     setActive(component.active);
@@ -75,7 +118,7 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
       ? rawConfig.items.map((item, idx) => normalizeMarqueeItem(item, idx))
       : DEFAULT_MARQUEE_CONFIG.items.map((item, idx) => normalizeMarqueeItem(item, idx));
 
-    setItems(loadedItems);
+    resetitems(loadedItems);
     setStyle(normalizeMarqueeStyle(rawConfig.style));
     setDirection(normalizeMarqueeDirection(rawConfig.direction));
     setSpeed(normalizeMarqueeSpeed(rawConfig.speed));
@@ -92,43 +135,53 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
     setTitleColorPrimary(headerConfig.titleColorPrimary ?? false);
     setSubtitleAboveTitle(headerConfig.subtitleAboveTitle ?? false);
     setUppercaseText(headerConfig.uppercaseText ?? false);
-    setShowBadge(headerConfig.showBadge ?? false);
-    setBadgeText(headerConfig.badgeText ?? '');
+    const resolvedBadgeText = headerConfig.badgeText ?? '';
+    setShowBadge((headerConfig.showBadge ?? false) || resolvedBadgeText.trim().length > 0);
+    setBadgeText(resolvedBadgeText);
+    setSpacing(normalizeMarqueeSpacing(headerConfig.spacing, rawConfig.noVerticalMargin));
+    setCornerRadius(normalizeMarqueeCornerRadius(rawConfig.cornerRadius, rawConfig.noBorderRadius));
 
-    const snapshot = JSON.stringify({ active: component.active, items: loadedItems, style: rawConfig.style, direction: rawConfig.direction, speed: rawConfig.speed, pauseOnHover: rawConfig.pauseOnHover, scale: rawConfig.scale, uppercase: rawConfig.uppercase, title: component.title, hideHeader: headerConfig.hideHeader, showTitle: headerConfig.showTitle, showSubtitle: headerConfig.showSubtitle, subtitle: headerConfig.subtitle, headerAlign: headerConfig.headerAlign, titleColorPrimary: headerConfig.titleColorPrimary, subtitleAboveTitle: headerConfig.subtitleAboveTitle, uppercaseText: headerConfig.uppercaseText, showBadge: headerConfig.showBadge, badgeText: headerConfig.badgeText });
+    const snapshot = JSON.stringify({ active: component.active, items: loadedItems, style: rawConfig.style, direction: rawConfig.direction, speed: rawConfig.speed, pauseOnHover: rawConfig.pauseOnHover, scale: rawConfig.scale, uppercase: rawConfig.uppercase, title: component.title, hideHeader: headerConfig.hideHeader, showTitle: headerConfig.showTitle, showSubtitle: headerConfig.showSubtitle, subtitle: headerConfig.subtitle, headerAlign: headerConfig.headerAlign, titleColorPrimary: headerConfig.titleColorPrimary, subtitleAboveTitle: headerConfig.subtitleAboveTitle, uppercaseText: headerConfig.uppercaseText, showBadge: headerConfig.showBadge, badgeText: headerConfig.badgeText, spacing: normalizeMarqueeSpacing(headerConfig.spacing, rawConfig.noVerticalMargin), cornerRadius: normalizeMarqueeCornerRadius(rawConfig.cornerRadius, rawConfig.noBorderRadius) });
     setInitialSnapshot(snapshot);
     setHasChanges(false);
   }, [component, id, router]);
 
   useEffect(() => {
     if (!component || !initialSnapshot) { return; }
-    const snapshot = JSON.stringify({ active, items, style, direction, speed, pauseOnHover, scale, uppercase, title, hideHeader, showTitle: showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText });
+    const snapshot = JSON.stringify({ active, items, style, direction, speed, pauseOnHover, scale, uppercase, title, hideHeader, showTitle: showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing, cornerRadius });
     const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-    const customChanged = showCustomBlock ? customState.enabled !== initialCustom.enabled || customState.mode !== initialCustom.mode || customState.primary !== initialCustom.primary || resolvedCustomSecondary !== initialCustom.secondary : false;
-    const customFontChanged = showFontCustomBlock ? customFontState.enabled !== initialFontCustom.enabled || customFontState.fontKey !== initialFontCustom.fontKey : false;
+    const customChanged = enableTypeOverrides && showCustomBlock ? customState.enabled !== initialCustom.enabled || customState.mode !== initialCustom.mode || customState.primary !== initialCustom.primary || resolvedCustomSecondary !== initialCustom.secondary : false;
+    const customFontChanged = enableTypeOverrides && showFontCustomBlock ? customFontState.enabled !== initialFontCustom.enabled || customFontState.fontKey !== initialFontCustom.fontKey : false;
     setHasChanges(snapshot !== initialSnapshot || customChanged || customFontChanged);
-  }, [title, active, items, style, direction, speed, pauseOnHover, scale, uppercase, component, initialSnapshot, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock, hideHeader, showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText]);
+  }, [title, active, items, style, direction, speed, pauseOnHover, scale, uppercase, component, initialSnapshot, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock, hideHeader, showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing, cornerRadius]);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isSubmitting || !hasChanges) { return; }
     setIsSubmitting(true);
     try {
-      await updateMutation({
-        active, id: id as Id<'homeComponents'>, title,
-        config: { items: items.map(toMarqueePersistItem), style, direction, speed, pauseOnHover, scale, uppercase, hideHeader, showTitle: showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText },
-      });
-      if (showCustomBlock) {
+      const nextConfig = { items: items.map(toMarqueePersistItem), style, direction, speed, pauseOnHover, scale, uppercase, hideHeader, showTitle: showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing, cornerRadius };
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig, title });
+      } else {
+        await updateMutation({
+          active, id: id as Id<'homeComponents'>, title,
+          config: nextConfig,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         await setTypeColorOverride({ enabled: customState.enabled, mode: customState.mode, primary: customState.primary, secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary), type: COMPONENT_TYPE });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({ enabled: customFontState.enabled, fontKey: customFontState.fontKey, type: COMPONENT_TYPE });
       }
       toast.success('Đã cập nhật Marquee');
-      const snapshot = JSON.stringify({ active, items, style, direction, speed, pauseOnHover, scale, uppercase, title, hideHeader, showTitle: showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText });
+      const snapshot = JSON.stringify({ active, items, style, direction, speed, pauseOnHover, scale, uppercase, title, hideHeader, showTitle: showTitleHeader, showSubtitle, subtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing, cornerRadius });
       setInitialSnapshot(snapshot);
-      if (showCustomBlock) { setInitialCustom({ enabled: customState.enabled, mode: customState.mode, primary: customState.primary, secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary) }); }
-      if (showFontCustomBlock) { setInitialFontCustom({ enabled: customFontState.enabled, fontKey: customFontState.fontKey }); }
+      if (enableTypeOverrides && showCustomBlock) { setInitialCustom({ enabled: customState.enabled, mode: customState.mode, primary: customState.primary, secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary) }); }
+      if (enableTypeOverrides && showFontCustomBlock) { setInitialFontCustom({ enabled: customFontState.enabled, fontKey: customFontState.fontKey }); }
       setHasChanges(false);
     } catch (error) { toast.error('Lỗi khi cập nhật'); console.error(error); } finally { setIsSubmitting(false); }
   };
@@ -142,7 +195,8 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Chạy chữ</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -153,63 +207,34 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
           onHideHeaderChange={setHideHeader} onTitleChange={setTitle} onShowTitleChange={setShowTitleHeader}
           onSubtitleChange={setSubtitle} onShowSubtitleChange={setShowSubtitle} onHeaderAlignChange={setHeaderAlign}
           onTitleColorPrimaryChange={setTitleColorPrimary} onSubtitleAboveTitleChange={setSubtitleAboveTitle}
-          onUppercaseTextChange={setUppercaseText} onShowBadgeChange={setShowBadge} onBadgeTextChange={setBadgeText}
-          expanded={headerExpanded} onExpandedChange={setHeaderExpanded}
+          onUppercaseTextChange={setUppercaseText} onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={(value) => { setBadgeText(value); if (value.trim()) { setShowBadge(true); } }}
+          expanded={openSections.header} onExpandedChange={(open) => toggleSection('header', open)}
         />
+
+        <div className="mb-3">
+          <HomeComponentDisplaySettingsSection
+            open={openSections.display}
+            onOpenChange={(open) => toggleSection('display', open)}
+            cornerRadius={cornerRadius}
+            onCornerRadiusChange={(value) => setCornerRadius(value as MarqueeCornerRadius)}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+          />
+        </div>
 
         <MarqueeForm items={items} setItems={setItems} defaultExpanded={false} />
 
-        <Card className="mb-6">
-          <CardHeader className="pb-0"><CardTitle className="text-base">Cấu hình hiệu ứng</CardTitle></CardHeader>
-          <CardContent className="pt-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Hướng chạy</Label>
-                <div className="flex gap-1">
-                  {(['left', 'right'] as const).map((d) => (
-                    <button key={d} type="button" onClick={() => setDirection(d)}
-                      className={cn('flex-1 flex items-center justify-center gap-1 h-8 rounded-md border text-xs transition-all',
-                        direction === d ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
-                      {d === 'left' ? <><ArrowLeft size={12} /> Trái</> : <>Phải <ArrowRight size={12} /></>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tốc độ</Label>
-                <select className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={speed} onChange={(e) => setSpeed(e.target.value as MarqueeSpeed)}>
-                  {SPEED_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Dừng khi hover</Label>
-                <button type="button" onClick={() => setPauseOnHover(!pauseOnHover)}
-                  className={cn('flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs transition-all w-full',
-                    pauseOnHover ? 'bg-green-50 border-green-300 text-green-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
-                  {pauseOnHover ? <Pause size={12} /> : <Play size={12} />} {pauseOnHover ? 'Bật' : 'Tắt'}
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Kích thước</Label>
-                <select className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
-                  value={scale} onChange={(e) => setScale(Number(e.target.value) as MarqueeScale)}>
-                  {SCALE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Chữ in hoa</Label>
-                <button type="button" onClick={() => setUppercase(!uppercase)}
-                  className={cn('flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs transition-all w-full',
-                    uppercase ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
-                  <CaseSensitive size={14} /> {uppercase ? 'Bật' : 'Tắt'}
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <MarqueeDisplayConfig
+          direction={direction} setDirection={setDirection}
+          speed={speed} setSpeed={setSpeed}
+          pauseOnHover={pauseOnHover} setPauseOnHover={setPauseOnHover}
+          scale={scale} setScale={setScale}
+          uppercase={uppercase} setUppercase={setUppercase}
+        />
 
         <div className="space-y-4">
-          {showCustomBlock && (
+          {enableTypeOverrides && showCustomBlock && (
             <TypeColorOverrideCard
               title="Màu custom cho Marquee" enabled={customState.enabled} mode={customState.mode}
               primary={customState.primary} secondary={customState.secondary}
@@ -219,7 +244,7 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
               onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: prev.mode === 'single' ? prev.primary : value }))}
             />
           )}
-          {showFontCustomBlock && (
+          {enableTypeOverrides && showFontCustomBlock && (
             <TypeFontOverrideCard title="Font custom cho Marquee" enabled={customFontState.enabled} fontKey={customFontState.fontKey}
               compact toggleLabel="Custom" fontLabel="Font"
               onEnabledChange={(next) => setCustomFontState((prev) => ({ ...prev, enabled: next }))}
@@ -239,14 +264,23 @@ export default function MarqueeEditPage({ params }: { params: Promise<{ id: stri
               title={title} subtitle={subtitle} hideHeader={hideHeader} showTitle={showTitleHeader}
               showSubtitle={showSubtitle} headerAlign={headerAlign} titleColorPrimary={titleColorPrimary}
               subtitleAboveTitle={subtitleAboveTitle} uppercaseText={uppercaseText} showBadge={showBadge} badgeText={badgeText}
+              spacing={spacing}
+              cornerRadius={cornerRadius}
             />
           </div>
         </div>
 
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting} hasChanges={hasChanges}
-          onCancel={() => { router.push('/admin/home-components'); }}
+          onCancel={() => { router.push(backHref); }}
           submitLabel="Lưu thay đổi" active={active} onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndoitems,
+          canRedo: canRedoitems,
+          onUndo: undoitems,
+          onRedo: redoitems,
+        }}
         />
       </form>
     </div>

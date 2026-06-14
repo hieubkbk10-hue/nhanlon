@@ -12,6 +12,7 @@ Mục tiêu:
 - chặn drift giữa 6 styles,
 - chặn lỗi breakpoint/container query,
 - chặn lỗi config/fallback/render mapping,
+- chặn lỗi upload file tạo orphan storage,
 - giảm vòng lặp “fix cả trăm lần mới đúng”.
 
 Skill này **không thay thế** `create-home-component`.
@@ -40,7 +41,8 @@ Trước khi đề xuất hoặc code, luôn map với:
 1. `.factory/skills/create-home-component/SKILL.md`
 2. `.factory/skills/experience-preview-extractor/SKILL.md`
 3. `.factory/skills/system-extension-guideline/SKILL.md`
-4. Component reference gần nhất trong repo đang hoạt động tốt
+4. `.factory/skills/file-lifecycle-service/SKILL.md` nếu component có upload
+5. Component reference gần nhất trong repo đang hoạt động tốt
 
 Nếu repo đã có pattern nội bộ phù hợp thì **ưu tiên repo trước**, chỉ dùng `docs-seeker` khi domain mới hoặc thiếu pattern nội bộ.
 
@@ -145,6 +147,20 @@ Phải kiểm tra:
 - runtime `ComponentRenderer` có đọc đúng type không
 - nội dung style-specific có bị hardcode sai chỗ không
 - màu / secondary / mode / override state có được preserve không
+
+### Phase 6.5 — File Lifecycle Guard (FAIL CRITICAL)
+
+> [!CAUTION]
+> **FAIL CRITICAL**: Bất kỳ hành động upload media mới nào mà form component chỉ trả về URL hoặc serializer bỏ qua/strip mất `storageId` đều bị coi là vi phạm nghiêm trọng và sẽ fail validation ngay lập tức.
+
+Nếu config có field file/media (`image`, `imageUrl`, `avatar`, `icon`, `logo`, `gallery`, `video`, `storageId`):
+- **Upload mới bắt buộc phải persist `storageId`**: Không được phép tạo upload mới chỉ lưu URL; uploader, callback và config lưu trữ bắt buộc phải đồng bộ giữ `storageId`.
+- Upload mới phải được register draft qua shared uploader hoặc `useFileDraftUploads`.
+- Config lưu `storageId` khi uploader có trả về; nếu legacy chỉ có URL thì backend `homeComponents` phải resolve được làm fallback.
+- Create/edit save phải gọi `homeComponents.create/update/updateConfig` để sync `fileReferences`.
+- Xóa/đổi ảnh trong form không được bypass FLS bằng xóa storage trực tiếp sau khi record đã lưu.
+- Delete/bulk delete list page phải dùng `api.homeComponents.remove`.
+- Checklist pass/fail phải ghi rõ lifecycle: upload chưa save, save, replace, remove, delete record, bulk delete.
 
 ### Phase 7 — Final Report
 

@@ -1,11 +1,14 @@
 'use client';
-
+ 
 import React, { useState } from 'react';
-import { ChevronDown, GripVertical, HelpCircle, Plus, Trash2 } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { GripVertical, HelpCircle, Plus, Trash2, Layout } from 'lucide-react';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { AiDemoFaqImport } from '../../product-list/_components/AiDemoProductsImport';
 import type { FaqConfig, FaqItem, FaqStyle } from '../_types';
-
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+ 
 export const FaqForm = ({
   faqItems,
   setFaqItems,
@@ -27,12 +30,22 @@ export const FaqForm = ({
 }) => {
   const [draggedId, setDraggedId] = useState<number | string | null>(null);
   const [dragOverId, setDragOverId] = useState<number | string | null>(null);
-
+ 
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['faqItems', 'layoutConfig'],
+    expanded
+  );
+ 
+  // Đồng bộ trạng thái mở rộng của phần câu hỏi thường gặp ngược lên component cha
+  React.useEffect(() => {
+    onExpandedChange?.(openSections.faqItems);
+  }, [openSections.faqItems, onExpandedChange]);
+ 
   const handleAddFaq = () =>{
     setFaqItems([...faqItems, { answer: '', id: Date.now(), question: '' }]);
   };
   const handleRemoveFaq = (id: number | string) => faqItems.length > 1 && setFaqItems(faqItems.filter(f => f.id !== id));
-
+ 
   const dragProps = (id: number | string) => ({
     draggable: true,
     onDragEnd: () => { setDraggedId(null); setDragOverId(null); },
@@ -51,46 +64,30 @@ export const FaqForm = ({
       setDragOverId(null);
     }
   });
-
+ 
   return (
     <>
-      <Card className="mb-6">
-        <CardHeader 
-          className="flex flex-row items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-          onClick={() => onExpandedChange?.(!expanded)}
-        >
-          <CardTitle className="text-base flex items-center gap-2">
-            Câu hỏi thường gặp
-            <ChevronDown 
-              size={16} 
-              className={cn(
-                "text-slate-400 transition-transform",
-                expanded && "rotate-180"
-              )}
-            />
-          </CardTitle>
-          {expanded && (
-            <div className="flex items-center gap-2">
-              <div onClick={(e) => e.stopPropagation()}>
-                <AiDemoFaqImport onApply={(items) => setFaqItems(items as FaqItem[])} />
-              </div>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAddFaq();
-                }} 
-                className="gap-2"
-              >
+      <FormSectionsToggleAllButton
+        hasClosedSection={hasClosedSection}
+        onToggleAll={handleToggleAll}
+      />
+ 
+      <div className="mb-6">
+        <SubSection
+          icon={HelpCircle}
+          title="Câu hỏi thường gặp"
+          open={openSections.faqItems}
+          onOpenChange={(open) => toggleSection('faqItems', open)}
+          actions={(
+            <>
+              <AiDemoFaqImport onApply={(items) => setFaqItems(items as FaqItem[])} />
+              <Button type="button" variant="outline" size="sm" onClick={handleAddFaq} className="gap-2">
                 <Plus size={14} /> Thêm
               </Button>
-            </div>
+            </>
           )}
-        </CardHeader>
-        {expanded && (
-          <CardContent className="space-y-3">
+        >
+          <div className="space-y-3">
           {faqItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: `${brandColor}10` }}>
@@ -142,16 +139,19 @@ export const FaqForm = ({
               </div>
             ))
           )}
-        </CardContent>
-        )}
-      </Card>
-
+          </div>
+        </SubSection>
+      </div>
+ 
       {faqStyle === 'two-column' && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">Cấu hình layout Showcase</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <SubSection
+          icon={Layout}
+          title="Cấu hình layout Showcase"
+          open={openSections.layoutConfig}
+          onOpenChange={(open) => toggleSection('layoutConfig', open)}
+          className="mb-6"
+        >
+          <div className="space-y-4">
             <div>
               <Label className="text-sm mb-1.5 block">Mô tả ngắn</Label>
               <Input 
@@ -179,8 +179,8 @@ export const FaqForm = ({
               </div>
             </div>
             <p className="text-xs text-slate-500">Để trống nút CTA nếu không muốn hiển thị</p>
-          </CardContent>
-        </Card>
+          </div>
+        </SubSection>
       )}
     </>
   );

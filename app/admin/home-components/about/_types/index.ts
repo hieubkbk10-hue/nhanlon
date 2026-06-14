@@ -1,3 +1,4 @@
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 export interface AboutPersistStat {
   value: string;
   label: string;
@@ -14,9 +15,10 @@ export interface AboutEditorStat extends AboutPersistStat {
   id: string;
 }
 
-export type AboutStyle = 'classic' | 'bento' | 'minimal' | 'split' | 'timeline' | 'showcase' | 'spaCollage' | 'solarFeature';
+export type AboutStyle = 'classic' | 'bento' | 'minimal' | 'split' | 'timeline' | 'showcase' | 'spaCollage' | 'solarFeature' | 'kanban';
 export type AboutBrandMode = 'single' | 'dual';
 export type AboutHarmony = 'analogous' | 'complementary' | 'triadic';
+export type AboutCornerRadius = 'none' | 'sm' | 'lg';
 
 export interface AboutConfig {
   layout?: string;
@@ -45,6 +47,10 @@ export interface AboutConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  cornerRadius?: AboutCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
 }
 
 export interface AboutEditorFeature extends AboutPersistFeature {
@@ -76,6 +82,10 @@ export interface AboutEditorState {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  cornerRadius?: AboutCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
 }
 
 export interface AboutStyleOption {

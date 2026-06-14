@@ -1,13 +1,15 @@
 import { DEFAULT_VOUCHER_STYLE, type VoucherPromotionsStyle } from '@/lib/home-components/voucher-promotions';
-import type { DemoVoucherPromotionItem, VoucherPromotionsConfigState, VoucherPromotionsTexts } from '../_types';
+import { DEFAULT_SECTION_SPACING } from '../../_shared/types/sectionSpacing';
+import type { DemoVoucherPromotionItem, VoucherPromotionsConfigState, VoucherPromotionsCornerRadius, VoucherPromotionsTexts } from '../_types';
 
 export const VOUCHER_PROMOTIONS_STYLES: { id: VoucherPromotionsStyle; label: string }[] = [
-  { id: 'enterpriseCards', label: 'Enterprise Cards' },
-  { id: 'ticketHorizontal', label: 'Ticket Ngang' },
-  { id: 'couponGrid', label: 'Coupon Grid' },
-  { id: 'stackedBanner', label: 'Stacked Banner' },
-  { id: 'carousel', label: 'Carousel' },
-  { id: 'minimal', label: 'Minimal' },
+  { id: 'enterpriseCards', label: '(1) Dạng thẻ' },
+  { id: 'ticketHorizontal', label: '(2) Vé ngang' },
+  { id: 'imageTicket', label: '(3) Vé ảnh' },
+  { id: 'couponGrid', label: '(4) Lưới thẻ' },
+  { id: 'stackedBanner', label: '(5) Xếp chồng' },
+  { id: 'carousel', label: '(6) Trượt ngang' },
+  { id: 'minimal', label: '(7) Tối giản' },
 ];
 
 export const AVAILABLE_VOUCHER_PROMOTION_ICONS = [
@@ -27,6 +29,8 @@ export const AVAILABLE_VOUCHER_PROMOTION_ICONS = [
   'ClipboardCheck', 'MousePointerClick', 'HandHeart', 'Handshake', 'Rocket',
   'Send', 'MailCheck', 'MessageCircleMore', 'MessagesSquare', 'SmilePlus',
 ] as const;
+
+export const DEFAULT_VOUCHER_PROMOTIONS_CORNER_RADIUS: VoucherPromotionsCornerRadius = 'lg';
 
 export const DEFAULT_VOUCHER_PROMOTIONS_TEXTS: VoucherPromotionsTexts = {
   heading: 'Voucher khuyến mãi',
@@ -101,6 +105,35 @@ export const normalizeDemoVouchers = (items?: Partial<DemoVoucherPromotionItem>[
   }));
 };
 
+export const normalizeVoucherPromotionsCornerRadius = (
+  value: unknown,
+  legacyNoBorderRadius?: unknown,
+): VoucherPromotionsCornerRadius => {
+  if (value === 'none' || value === 'sm' || value === 'lg') {
+    return value;
+  }
+
+  if (legacyNoBorderRadius === true) {
+    return 'none';
+  }
+
+  return DEFAULT_VOUCHER_PROMOTIONS_CORNER_RADIUS;
+};
+
+export const getVoucherPromotionsCornerRadiusClassName = (
+  value: VoucherPromotionsCornerRadius = DEFAULT_VOUCHER_PROMOTIONS_CORNER_RADIUS,
+) => {
+  if (value === 'none') {
+    return 'rounded-none';
+  }
+
+  if (value === 'sm') {
+    return 'rounded-md';
+  }
+
+  return 'rounded-xl';
+};
+
 export const DEFAULT_VOUCHER_PROMOTIONS_CONFIG: VoucherPromotionsConfigState = {
   ctaUrl: '/promotions',
   showCta: true,
@@ -120,6 +153,8 @@ export const DEFAULT_VOUCHER_PROMOTIONS_CONFIG: VoucherPromotionsConfigState = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  spacing: DEFAULT_SECTION_SPACING,
   desktopColumns: 4,
+  cornerRadius: DEFAULT_VOUCHER_PROMOTIONS_CORNER_RADIUS,
   iconName: 'BadgePercent',
 };

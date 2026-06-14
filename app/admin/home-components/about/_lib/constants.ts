@@ -1,5 +1,6 @@
 import type {
   AboutConfig,
+  AboutCornerRadius,
   AboutEditorState,
   AboutEditorFeature,
   AboutEditorStat,
@@ -11,16 +12,18 @@ import type {
 } from '../_types';
 
 export const DEFAULT_ABOUT_HARMONY: AboutHarmony = 'analogous';
+export const DEFAULT_ABOUT_CORNER_RADIUS: AboutCornerRadius = 'lg';
 
 export const ABOUT_STYLES: AboutStyleOption[] = [
-  { id: 'classic', label: 'Mẫu Spa (Layout 1)' },
-  { id: 'bento', label: 'Mẫu Xây dựng 1 (Layout 2)' },
-  { id: 'minimal', label: 'Mẫu Xây dựng 2 (Layout 3)' },
-  { id: 'split', label: 'Mẫu Kỹ thuật (Layout 4)' },
-  { id: 'timeline', label: 'Mẫu Thời trang (Layout 5)' },
-  { id: 'showcase', label: 'Mẫu Sản phẩm (Layout 6)' },
-  { id: 'spaCollage', label: 'Mẫu Spa Premium (Layout 7)' },
-  { id: 'solarFeature', label: 'Mẫu Năng lượng (Layout 8)' },
+  { id: 'classic', label: '(1) Cổ điển' },
+  { id: 'bento', label: '(2) Ô ghép' },
+  { id: 'minimal', label: '(3) Tối giản' },
+  { id: 'split', label: '(4) Chia đôi' },
+  { id: 'timeline', label: '(5) Tiến trình' },
+  { id: 'showcase', label: '(6) Trưng bày' },
+  { id: 'spaCollage', label: '(7) Ghép ảnh' },
+  { id: 'solarFeature', label: '(8) Khối lớn' },
+  { id: 'kanban', label: '(9) Lưới thẻ' },
 ];
 
 const ABOUT_STYLE_SET = new Set<AboutStyle>(ABOUT_STYLES.map((style) => style.id));
@@ -68,6 +71,30 @@ export const normalizeAboutHarmony = (value?: string): AboutHarmony => {
     return value;
   }
   return 'analogous';
+};
+
+export const normalizeAboutCornerRadius = (value: unknown, noBorderRadius?: unknown): AboutCornerRadius => {
+  if (noBorderRadius === true) {
+    return 'none';
+  }
+
+  if (value === 'none' || value === 'sm' || value === 'lg') {
+    return value;
+  }
+
+  return DEFAULT_ABOUT_CORNER_RADIUS;
+};
+
+export const getAboutCornerRadiusClassName = (value: AboutCornerRadius = DEFAULT_ABOUT_CORNER_RADIUS) => {
+  if (value === 'none') {
+    return 'rounded-none';
+  }
+
+  if (value === 'sm') {
+    return 'rounded-md';
+  }
+
+  return 'rounded-2xl';
 };
 
 export const normalizeAboutPersistStats = (input: unknown): AboutPersistStat[] => {
@@ -202,6 +229,9 @@ export const DEFAULT_ABOUT_CONFIG: AboutConfig = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  cornerRadius: DEFAULT_ABOUT_CORNER_RADIUS,
+  noBorderRadius: false,
+  noVerticalMargin: false,
 };
 
 export const DEFAULT_ABOUT_EDITOR_STATE: AboutEditorState = {
@@ -236,4 +266,7 @@ export const DEFAULT_ABOUT_EDITOR_STATE: AboutEditorState = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  cornerRadius: DEFAULT_ABOUT_CORNER_RADIUS,
+  noBorderRadius: false,
+  noVerticalMargin: false,
 };

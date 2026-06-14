@@ -425,23 +425,28 @@ export const getFaqColors = ({
   }
 
   if (style === 'wine-list') {
+    const wineSurface = '#fbfaf7';
+    const wineBorder = '#e7e5df';
+    const wineText = '#1f2933';
+    const wineBody = '#4b5563';
+
     return {
       ...base,
       sectionBg: '#ffffff',
-      heading: '#9b2c3b',
-      body: ensureAPCATextColor('#5f5f5f', '#faf8f4', 16, 500),
-      questionText: ensureAPCATextColor('#2c2c2c', '#faf8f4', 18, 500),
-      panelTitleText: ensureAPCATextColor('#2c2c2c', '#faf8f4', 18, 500),
-      panelBg: '#faf8f4',
-      panelBgMuted: '#faf8f4',
-      panelBorder: '#efe7dd',
-      panelBorderStrong: '#d8c7b4',
-      chevron: ensureAPCATextColor('#7b7b7b', '#faf8f4', 14, 600),
+      heading: wineText,
+      body: ensureAPCATextColor(wineBody, wineSurface, 16, 500),
+      questionText: ensureAPCATextColor(wineText, wineSurface, 18, 500),
+      panelTitleText: ensureAPCATextColor(wineText, wineSurface, 18, 500),
+      panelBg: wineSurface,
+      panelBgMuted: wineSurface,
+      panelBorder: wineBorder,
+      panelBorderStrong: wineBorder,
+      chevron: ensureAPCATextColor(primaryPalette.solid, wineSurface, 14, 700),
       badgeBg: '#ffffff',
-      badgeBorder: '#d8c7b4',
-      badgeText: '#9b2c3b',
-      iconBg: '#faf8f4',
-      iconText: '#7b7b7b',
+      badgeBorder: wineBorder,
+      badgeText: wineText,
+      iconBg: wineSurface,
+      iconText: ensureAPCATextColor(primaryPalette.solid, wineSurface, 14, 700),
     };
   }
 

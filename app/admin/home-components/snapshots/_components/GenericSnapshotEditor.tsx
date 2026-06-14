@@ -5,7 +5,9 @@ import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { extractSectionHeaderConfig } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
+import { saveSnapshotComponent } from '../_lib/snapshotComponentSave';
 
 export interface BaseHeaderConfig {
   hideHeader: boolean;
@@ -88,7 +90,7 @@ export function GenericSnapshotEditor<TState>({
   }, [rawConfig]);
 
   const [headerConfig, setHeaderConfig] = useState<BaseHeaderConfig>(initialHeader);
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
 
   // Component Specific State
   const [state, setState] = useState<TState>(() => adapter.normalizeState(rawConfig));
@@ -108,40 +110,18 @@ export function GenericSnapshotEditor<TState>({
 
     setIsSaving(true);
     try {
-      const order = Number(component.order);
       const nextConfig = adapter.toConfig(state, headerConfig);
 
-      const nextComponent = {
+      await saveSnapshotComponent({
         active,
-        componentKey: component.componentKey,
         config: nextConfig,
-        fallbackUsed: component.fallbackUsed,
-        mediaRefs: component.mediaRefs,
-        order: Number.isFinite(order) ? order : 0,
-        title: title.trim() || component.type,
-        type: component.type,
-      };
-
-      const nextComponents = payload.homepage.components.map((item: any) => (
-        item.componentKey === decodedKey ? nextComponent : item
-      )).sort((a: any, b: any) => a.order - b.order);
-
-      await updateSnapshot({
+        component,
+        decodedKey,
         label: snapshotLabel,
-        payload: {
-          ...payload,
-          manifest: {
-            ...payload.manifest,
-            componentCount: nextComponents.length,
-            snapshotLabel: snapshotLabel,
-          },
-          homepage: {
-            ...payload.homepage,
-            componentOrder: nextComponents.map((item: any) => item.componentKey),
-            components: nextComponents,
-          },
-        },
+        payload,
         snapshotId,
+        title,
+        updateSnapshot,
       });
       
       toast.success('Đã lưu component');
@@ -181,8 +161,8 @@ export function GenericSnapshotEditor<TState>({
           onShowBadgeChange={(val) => setHeaderConfig(p => ({ ...p, showBadge: val }))}
           onBadgeTextChange={(val) => setHeaderConfig(p => ({ ...p, badgeText: val }))}
           
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
           titlePlaceholder="Nhập tiêu đề component..."

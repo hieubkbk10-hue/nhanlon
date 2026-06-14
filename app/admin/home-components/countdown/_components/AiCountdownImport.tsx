@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { AiDirectGeneratePanel } from '@/app/admin/components/AiDirectGenerateButton';
 import { Bot, Check, Copy, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Label, cn } from '../../../components/ui';
 import type { CountdownConfigState } from '../_types';
+import { useTypeAiImportEnabled } from '../../_shared/hooks/useTypeAiImportEnabled';
+import { HomeComponentFooterActionPortal } from '../../_shared/components/HomeComponentFooterActions';
 
 const AI_COUNTDOWN_PROMPT = `Hãy tạo nội dung countdown/khuyến mãi cho website doanh nghiệp tiếng Việt.
 
@@ -110,17 +113,21 @@ const parseAiCountdown = (raw: string): ParseResult => {
 };
 
 export function AiCountdownImport({
-  buttonClassName,
   onApply,
 }: {
   buttonClassName?: string;
   onApply: (item: Partial<CountdownConfigState>) => void;
 }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
   const result = useMemo(() => parseAiCountdown(rawInput), [rawInput]);
   const canApply = rawInput.trim().length > 0 && result.item !== null && result.errors.length === 0;
+
+  if (!isAiImportEnabled) {
+    return null;
+  }
 
   const copyText = async (value: string, type: 'prompt' | 'sample') => {
     await navigator.clipboard.writeText(value);
@@ -139,9 +146,11 @@ export function AiCountdownImport({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={cn('h-7 gap-1 text-xs', buttonClassName)} onClick={() => setOpen(true)}>
-        <Bot size={11} /> Import AI
-      </Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> Import AI
+        </Button>
+      </HomeComponentFooterActionPortal>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -172,6 +181,12 @@ export function AiCountdownImport({
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={AI_COUNTDOWN_PROMPT}
+                  sessionId="admin-countdown-import"
+                  onGenerated={setRawInput}
+                  placeholder="Ví dụ: Tạo countdown ưu đãi khai giảng khóa học 3D, hết hạn cuối tháng, CTA Đăng ký ngay."
+                />
                 <textarea className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder={SAMPLE_COUNTDOWN_JSON} value={rawInput} onChange={(event) => setRawInput(event.target.value)} />
               </div>
               {rawInput.trim().length > 0 && (

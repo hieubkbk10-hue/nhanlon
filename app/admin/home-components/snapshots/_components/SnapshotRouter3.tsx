@@ -3,8 +3,10 @@
 import React, { useState, useMemo } from 'react';
 import { extractSectionHeaderConfig } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { toast } from 'sonner';
+import { saveSnapshotComponent } from '../_lib/snapshotComponentSave';
 
 // Imports
 import { ServicesForm } from '../../services/_components/ServicesForm';
@@ -54,7 +56,7 @@ export function SnapshotRouter3({
       badgeText: extracted.badgeText ?? '',
     };
   });
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
 
   // States for Services
   const [servicesItems, setServicesItems] = useState(() => normalizeServicesItemsForEditor(rawConfig.items));
@@ -91,30 +93,16 @@ export function SnapshotRouter3({
 
     setIsSaving(true);
     try {
-      const order = Number(component.order);
-      const nextComponent = {
+      await saveSnapshotComponent({
         active,
-        componentKey: component.componentKey,
+        component,
         config: getConfig(),
-        fallbackUsed: component.fallbackUsed,
-        mediaRefs: component.mediaRefs,
-        order: Number.isFinite(order) ? order : 0,
-        title: title.trim() || component.type,
-        type: component.type,
-      };
-
-      const nextComponents = payload.homepage.components.map((item: any) => (
-        item.componentKey === decodedKey ? nextComponent : item
-      )).sort((a: any, b: any) => a.order - b.order);
-
-      await updateSnapshot({
+        decodedKey,
         label: snapshotLabel,
-        payload: {
-          ...payload,
-          manifest: { ...payload.manifest, componentCount: nextComponents.length, snapshotLabel },
-          homepage: { ...payload.homepage, componentOrder: nextComponents.map((item: any) => item.componentKey), components: nextComponents },
-        },
+        payload,
         snapshotId,
+        title,
+        updateSnapshot,
       });
       toast.success('Đã lưu component');
       onCancel();
@@ -142,8 +130,8 @@ export function SnapshotRouter3({
           onUppercaseTextChange={(val) => setHeaderConfig(p => ({ ...p, uppercaseText: val }))}
           onShowBadgeChange={(val) => setHeaderConfig(p => ({ ...p, showBadge: val }))}
           onBadgeTextChange={(val) => setHeaderConfig(p => ({ ...p, badgeText: val }))}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
         />
@@ -152,7 +140,7 @@ export function SnapshotRouter3({
           <div>
             {component.type === 'Services' && <ServicesForm items={servicesItems} onChange={setServicesItems} mediaPlacement={servicesConfig.mediaPlacement} mediaAlign={servicesConfig.mediaAlign} onMediaPlacementChange={(v) => setServicesConfig((p:any) => ({...p, mediaPlacement: v}))} onMediaAlignChange={(v) => setServicesConfig((p:any) => ({...p, mediaAlign: v}))} maxItems={12} brandColor={effectiveColors.primary} defaultExpanded={true} />}
             {component.type === 'Countdown' && <CountdownForm value={countdownConfig} onChange={setCountdownConfig} brandColor={effectiveColors.primary} secondary={effectiveColors.secondary} mode={effectiveColors.mode} />}
-            {component.type === 'VoucherPromotions' && <VoucherPromotionsForm {...voucherConfig} onSelectionModeChange={(v) => setVoucherConfig((p:any) => ({...p, selectionMode: v}))} onLimitChange={(v) => setVoucherConfig((p:any) => ({...p, limit: v}))} onCtaLabelChange={(v) => setVoucherConfig((p:any) => ({...p, ctaLabel: v}))} onCtaUrlChange={(v) => setVoucherConfig((p:any) => ({...p, ctaUrl: v}))} onShowCtaChange={(v) => setVoucherConfig((p:any) => ({...p, showCta: v}))} onCtaVariantChange={(v) => setVoucherConfig((p:any) => ({...p, ctaVariant: v}))} demoVouchers={voucherConfig.demoVouchers ?? []} setDemoVouchers={(v) => setVoucherConfig((p:any) => ({...p, demoVouchers: typeof v === 'function' ? v(p.demoVouchers) : v}))} canUseRealData={false} moduleLoaded={true} desktopColumns={voucherConfig.desktopColumns ?? 3} onDesktopColumnsChange={(v) => setVoucherConfig((p:any) => ({...p, desktopColumns: v}))} iconName={voucherConfig.iconName ?? 'BadgePercent'} onIconNameChange={(v) => setVoucherConfig((p:any) => ({...p, iconName: v}))} brandColor={effectiveColors.primary} defaultExpanded={true} />}
+            {component.type === 'VoucherPromotions' && <VoucherPromotionsForm {...voucherConfig} onSelectionModeChange={(v) => setVoucherConfig((p:any) => ({...p, selectionMode: v}))} onLimitChange={(v) => setVoucherConfig((p:any) => ({...p, limit: v}))} onCtaLabelChange={(v) => setVoucherConfig((p:any) => ({...p, ctaLabel: v}))} onCtaUrlChange={(v) => setVoucherConfig((p:any) => ({...p, ctaUrl: v}))} onShowCtaChange={(v) => setVoucherConfig((p:any) => ({...p, showCta: v}))} onCtaVariantChange={(v) => setVoucherConfig((p:any) => ({...p, ctaVariant: v}))} spacing={voucherConfig.spacing ?? 'normal'} onSpacingChange={(v) => setVoucherConfig((p:any) => ({...p, spacing: v}))} demoVouchers={voucherConfig.demoVouchers ?? []} setDemoVouchers={(v) => setVoucherConfig((p:any) => ({...p, demoVouchers: typeof v === 'function' ? v(p.demoVouchers) : v}))} canUseRealData={false} moduleLoaded={true} desktopColumns={voucherConfig.desktopColumns ?? 3} onDesktopColumnsChange={(v) => setVoucherConfig((p:any) => ({...p, desktopColumns: v}))} cornerRadius={voucherConfig.cornerRadius ?? 'lg'} onCornerRadiusChange={(v) => setVoucherConfig((p:any) => ({...p, cornerRadius: v}))} iconName={voucherConfig.iconName ?? 'BadgePercent'} onIconNameChange={(v) => setVoucherConfig((p:any) => ({...p, iconName: v}))} brandColor={effectiveColors.primary} defaultExpanded={true} />}
             {component.type === 'Process' && <ProcessForm steps={processSteps} onChange={setProcessSteps} secondary={effectiveColors.secondary} defaultExpanded={true} />}
           </div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">

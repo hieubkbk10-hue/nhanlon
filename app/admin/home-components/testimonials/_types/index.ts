@@ -1,6 +1,14 @@
+import {
+  DEFAULT_SECTION_SPACING,
+  getSectionSpacingClassName,
+  normalizeSectionSpacing,
+  type SectionSpacing,
+} from '../../_shared/types/sectionSpacing';
+import type { HomeComponentCornerRadius } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 export type TestimonialsAvatarType = 'initials' | 'image' | 'icon' | 'upload';
-export type TestimonialsStyle = 'cards' | 'slider' | 'marquee' | 'showcase' | 'quote' | 'minimal' | 'split-carousel' | 'overlap-carousel';
+export type TestimonialsStyle = 'cards' | 'slider' | 'marquee' | 'showcase' | 'quote' | 'minimal' | 'split-carousel' | 'overlap-carousel' | 'builder-cards' | 'builder-carousel';
 export type TestimonialsDesktopColumns = 3 | 4;
+export type TestimonialsCornerRadius = HomeComponentCornerRadius;
 
 export type TestimonialsBrandMode = 'single' | 'dual';
 export type TestimonialsHarmony = 'analogous' | 'complementary' | 'triadic';
@@ -41,10 +49,21 @@ export interface TestimonialsConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  cornerRadius?: TestimonialsCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
 }
 
-const VALID_TESTIMONIAL_STYLES: TestimonialsStyle[] = ['cards', 'slider', 'marquee', 'showcase', 'quote', 'minimal', 'split-carousel', 'overlap-carousel'];
+const VALID_TESTIMONIAL_STYLES: TestimonialsStyle[] = ['cards', 'slider', 'marquee', 'showcase', 'quote', 'minimal', 'split-carousel', 'overlap-carousel', 'builder-cards', 'builder-carousel'];
 const VALID_AVATAR_TYPES: TestimonialsAvatarType[] = ['initials', 'image', 'icon', 'upload'];
+const VALID_CORNER_RADIUS: TestimonialsCornerRadius[] = ['none', 'sm', 'lg'];
+
+export const DEFAULT_TESTIMONIALS_SPACING: SectionSpacing = DEFAULT_SECTION_SPACING;
+export const normalizeTestimonialsSpacing = (value: unknown, noVerticalMargin?: unknown): SectionSpacing => (
+  noVerticalMargin === true ? 'none' : normalizeSectionSpacing(value)
+);
+export const getTestimonialsSectionSpacingClassName = getSectionSpacingClassName;
 
 const toText = (value: unknown) => {
   if (typeof value === 'string') {return value;}
@@ -93,6 +112,17 @@ export const normalizeTestimonialsDesktopColumns = (value: unknown): Testimonial
   value === 4 ? 4 : 3
 );
 
+export const normalizeTestimonialsCornerRadius = (value: unknown, noBorderRadius?: unknown): TestimonialsCornerRadius => {
+  if (noBorderRadius === true) {return 'none';}
+  if (value === 'small') {return 'sm';}
+  if (value === 'large') {return 'lg';}
+  if (VALID_CORNER_RADIUS.includes(value as TestimonialsCornerRadius)) {
+    return value as TestimonialsCornerRadius;
+  }
+
+  return 'lg';
+};
+
 export const normalizeTestimonialsPersistItem = (raw: unknown): TestimonialsPersistItem => {
   const item = typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {};
   const avatar = toText(item.avatar);
@@ -139,7 +169,103 @@ export const toTestimonialsPersistItem = (item: TestimonialsItem): TestimonialsP
 };
 
 export const TESTIMONIALS_ICON_CHOICES = [
-  'User', 'Smile', 'Briefcase', 'Heart', 'Star',
-  'Sparkles', 'Building', 'Coffee', 'Globe', 'Zap',
-  'ThumbsUp', 'Award', 'BadgeCheck', 'Camera', 'Headphones',
+  'User',
+  'UserCheck',
+  'UserCog',
+  'UserPlus',
+  'UserRoundCheck',
+  'Users',
+  'UsersRound',
+  'Smile',
+  'Heart',
+  'HeartHandshake',
+  'Handshake',
+  'HandCoins',
+  'ThumbsUp',
+  'Star',
+  'Sparkles',
+  'Sparkle',
+  'WandSparkles',
+  'Award',
+  'BadgeCheck',
+  'BadgeInfo',
+  'BadgePercent',
+  'Medal',
+  'Trophy',
+  'Crown',
+  'Gem',
+  'Diamond',
+  'Briefcase',
+  'Building',
+  'Building2',
+  'Factory',
+  'Store',
+  'Landmark',
+  'Globe',
+  'MapPin',
+  'MapPinned',
+  'Navigation',
+  'Navigation2',
+  'Route',
+  'Waypoints',
+  'Target',
+  'Goal',
+  'Rocket',
+  'Zap',
+  'Flame',
+  'Lightbulb',
+  'Brain',
+  'Bot',
+  'Shield',
+  'ShieldCheck',
+  'ShieldUser',
+  'LockKeyhole',
+  'KeyRound',
+  'Fingerprint',
+  'CheckCircle',
+  'CircleCheckBig',
+  'ClipboardCheck',
+  'ListChecks',
+  'MessageCircle',
+  'MessageCircleMore',
+  'MessageSquareText',
+  'MessagesSquare',
+  'Mail',
+  'MailCheck',
+  'Phone',
+  'PhoneCall',
+  'Headphones',
+  'Headset',
+  'Camera',
+  'Image',
+  'Video',
+  'Monitor',
+  'MonitorCheck',
+  'Laptop',
+  'Smartphone',
+  'TabletSmartphone',
+  'Coffee',
+  'Gift',
+  'Package',
+  'PackageCheck',
+  'ShoppingBag',
+  'ShoppingCart',
+  'CreditCard',
+  'Wallet',
+  'Banknote',
+  'Coins',
+  'DollarSign',
+  'TrendingUp',
+  'ChartColumnBig',
+  'ChartPie',
+  'Activity',
+  'Gauge',
+  'Timer',
+  'Clock',
+  'CalendarCheck',
+  'Leaf',
+  'Sprout',
+  'Flower2',
+  'Trees',
+  'Recycle',
 ] as const;

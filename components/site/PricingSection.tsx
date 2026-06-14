@@ -3,12 +3,14 @@
 import React from 'react';
 import { SectionHeader } from '@/app/admin/home-components/_shared/components/SectionHeader';
 import { extractSectionHeaderConfig } from '@/app/admin/home-components/_shared/hooks/useSectionHeaderState';
+import { getSectionSpacingClassName, normalizeSectionSpacing } from '@/app/admin/home-components/_shared/types/sectionSpacing';
 import {
   normalizePricingConfig,
 } from '@/app/admin/home-components/pricing/_lib/constants';
 import {
   getPricingColorTokens,
 } from '@/app/admin/home-components/pricing/_lib/colors';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 import { PricingSectionShared } from '@/app/admin/home-components/pricing/_components/PricingSectionShared';
 import type {
   PricingBrandMode,
@@ -22,6 +24,7 @@ interface PricingSectionProps {
   secondary: string;
   mode: PricingBrandMode;
   title: string;
+  isDark?: boolean;
 }
 
 export function PricingSection({
@@ -30,25 +33,30 @@ export function PricingSection({
   secondary,
   mode,
   title,
+  isDark,
 }: PricingSectionProps) {
   const safeConfig = normalizePricingConfig(config as Partial<PricingConfig>);
 
   const style = safeConfig.style as PricingStyle;
   const subtitle = String(safeConfig.subtitle ?? 'Chọn gói phù hợp với nhu cầu của bạn');
 
-  const tokens = getPricingColorTokens({
-    primary: brandColor,
-    secondary,
-    mode,
-  });
+  const tokens = adaptTokensForDarkMode(
+    getPricingColorTokens({
+      primary: brandColor,
+      secondary,
+      mode,
+    }),
+    isDark ?? false
+  );
 
   const [isYearly, setIsYearly] = React.useState(false);
   
   // Extract header config
   const headerConfig = extractSectionHeaderConfig(config);
+  const sectionSpacingClassName = getSectionSpacingClassName(normalizeSectionSpacing(safeConfig.spacing));
 
   return (
-    <section className="py-8 px-3">
+    <section className={`${sectionSpacingClassName} px-3`}>
       <div className="@container max-w-7xl mx-auto">
         <SectionHeader
           title={title}
@@ -82,6 +90,7 @@ export function PricingSection({
           onBillingToggle={setIsYearly}
           skipHeader={true}
           gridCols={safeConfig.gridCols === 4 ? 4 : 3}
+          cornerRadius={safeConfig.cornerRadius}
         />
       </div>
     </section>

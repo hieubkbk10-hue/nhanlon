@@ -3,8 +3,10 @@
 import React, { useState, useMemo } from 'react';
 import { extractSectionHeaderConfig } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { toast } from 'sonner';
+import { saveSnapshotComponent } from '../_lib/snapshotComponentSave';
 
 // Imports
 import { FaqForm } from '../../faq/_components/FaqForm';
@@ -83,7 +85,7 @@ export function SnapshotRouter2({
       badgeText: extracted.badgeText ?? '',
     };
   });
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
 
   // States for Faq
   const [faqItems, setFaqItems] = useState(() => rawConfig.items?.length > 0 ? rawConfig.items : DEFAULT_FAQ_ITEMS);
@@ -142,30 +144,16 @@ export function SnapshotRouter2({
 
     setIsSaving(true);
     try {
-      const order = Number(component.order);
-      const nextComponent = {
+      await saveSnapshotComponent({
         active,
-        componentKey: component.componentKey,
+        component,
         config: getConfig(),
-        fallbackUsed: component.fallbackUsed,
-        mediaRefs: component.mediaRefs,
-        order: Number.isFinite(order) ? order : 0,
-        title: title.trim() || component.type,
-        type: component.type,
-      };
-
-      const nextComponents = payload.homepage.components.map((item: any) => (
-        item.componentKey === decodedKey ? nextComponent : item
-      )).sort((a: any, b: any) => a.order - b.order);
-
-      await updateSnapshot({
+        decodedKey,
         label: snapshotLabel,
-        payload: {
-          ...payload,
-          manifest: { ...payload.manifest, componentCount: nextComponents.length, snapshotLabel },
-          homepage: { ...payload.homepage, componentOrder: nextComponents.map((item: any) => item.componentKey), components: nextComponents },
-        },
+        payload,
         snapshotId,
+        title,
+        updateSnapshot,
       });
       toast.success('Đã lưu component');
       onCancel();
@@ -193,8 +181,8 @@ export function SnapshotRouter2({
           onUppercaseTextChange={(val) => setHeaderConfig(p => ({ ...p, uppercaseText: val }))}
           onShowBadgeChange={(val) => setHeaderConfig(p => ({ ...p, showBadge: val }))}
           onBadgeTextChange={(val) => setHeaderConfig(p => ({ ...p, badgeText: val }))}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
         />

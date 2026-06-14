@@ -3,13 +3,15 @@
 import React, { useState, useMemo } from 'react';
 import { extractSectionHeaderConfig } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { toast } from 'sonner';
+import { saveSnapshotComponent } from '../_lib/snapshotComponentSave';
 
 // Imports
 import { AboutForm } from '../../about/_components/AboutForm';
 import { AboutPreview } from '../../about/_components/AboutPreview';
-import { normalizeAboutImages, normalizeAboutEditorFeatures, normalizeAboutEditorStats, toAboutPersistFeatures, toAboutPersistStats, createAboutEditorFeature, DEFAULT_ABOUT_EDITOR_STATE, normalizeAboutStyle } from '../../about/_lib/constants';
+import { normalizeAboutCornerRadius, normalizeAboutImages, normalizeAboutEditorFeatures, normalizeAboutEditorStats, toAboutPersistFeatures, toAboutPersistStats, createAboutEditorFeature, DEFAULT_ABOUT_EDITOR_STATE, normalizeAboutStyle } from '../../about/_lib/constants';
 
 import { CTAForm } from '../../cta/_components/CTAForm';
 import { CTAPreview } from '../../cta/_components/CTAPreview';
@@ -62,9 +64,10 @@ export function SnapshotRouter({
       uppercaseText: extracted.uppercaseText ?? false,
       showBadge: extracted.showBadge ?? true,
       badgeText: extracted.badgeText ?? '',
+      spacing: extracted.spacing,
     };
   });
-  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], false);
 
   // States for About
   const [aboutState, setAboutState] = useState(() => {
@@ -86,6 +89,7 @@ export function SnapshotRouter({
       features: normalizedFeatures.length > 0 ? normalizedFeatures : DEFAULT_ABOUT_EDITOR_STATE.features.map(createAboutEditorFeature),
       style: normalizeAboutStyle(rawConfig.style),
       stats: normalizedStats.length > 0 ? normalizedStats : DEFAULT_ABOUT_EDITOR_STATE.stats,
+      cornerRadius: normalizeAboutCornerRadius(rawConfig.cornerRadius),
     };
   });
 
@@ -150,7 +154,7 @@ export function SnapshotRouter({
   };
 
   const currentSnapshot = JSON.stringify(getConfig());
-  const initialSnapshot = useMemo(() => JSON.stringify(rawConfig), [rawConfig]);
+  const [initialSnapshot] = useState(() => JSON.stringify(getConfig()));
   const hasChanges = title !== component.title || active !== component.active || currentSnapshot !== initialSnapshot;
 
   const handleSave = async (e: any) => {
@@ -159,30 +163,16 @@ export function SnapshotRouter({
 
     setIsSaving(true);
     try {
-      const order = Number(component.order);
-      const nextComponent = {
+      await saveSnapshotComponent({
         active,
-        componentKey: component.componentKey,
+        component,
         config: getConfig(),
-        fallbackUsed: component.fallbackUsed,
-        mediaRefs: component.mediaRefs,
-        order: Number.isFinite(order) ? order : 0,
-        title: title.trim() || component.type,
-        type: component.type,
-      };
-
-      const nextComponents = payload.homepage.components.map((item: any) => (
-        item.componentKey === decodedKey ? nextComponent : item
-      )).sort((a: any, b: any) => a.order - b.order);
-
-      await updateSnapshot({
+        decodedKey,
         label: snapshotLabel,
-        payload: {
-          ...payload,
-          manifest: { ...payload.manifest, componentCount: nextComponents.length, snapshotLabel },
-          homepage: { ...payload.homepage, componentOrder: nextComponents.map((item: any) => item.componentKey), components: nextComponents },
-        },
+        payload,
         snapshotId,
+        title,
+        updateSnapshot,
       });
       toast.success('Đã lưu component');
       onCancel();
@@ -210,23 +200,42 @@ export function SnapshotRouter({
           onUppercaseTextChange={(val) => setHeaderConfig(p => ({ ...p, uppercaseText: val }))}
           onShowBadgeChange={(val) => setHeaderConfig(p => ({ ...p, showBadge: val }))}
           onBadgeTextChange={(val) => setHeaderConfig(p => ({ ...p, badgeText: val }))}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
+          expanded={headerOpenSections.header}
+          onExpandedChange={(open) => toggleHeaderSection('header', open)}
           titleRequired={true}
           titleLabel="Tiêu đề hiển thị"
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6 mt-6">
           <div>
-            {component.type === 'About' && <AboutForm state={aboutState as any} previewStyle={aboutState.style} onChange={setAboutState as any} defaultExpanded={false} />}
+            {component.type === 'About' && (
+              <AboutForm
+                state={aboutState as any}
+                previewStyle={aboutState.style}
+                onChange={setAboutState as any}
+                spacing={headerConfig.spacing ?? 'normal'}
+                onSpacingChange={(spacing) => setHeaderConfig((current) => ({ ...current, spacing }))}
+                cornerRadius={aboutState.cornerRadius}
+                onCornerRadiusChange={(cornerRadius) => setAboutState((current) => ({ ...current, cornerRadius }))}
+                defaultExpanded={false}
+              />
+            )}
             {component.type === 'CTA' && <CTAForm config={ctaConfig as any} onChange={setCtaConfig as any} />}
             {component.type === 'Features' && <FeaturesForm items={featuresItems} onChange={setFeaturesItems} brandColor={effectiveColors.primary} style={featuresStyle} showIcons={featuresShowIcons} onShowIconsChange={setFeaturesShowIcons} />}
             {component.type === 'Career' && <CareerForm jobs={careerJobs} onJobsChange={setCareerJobs} texts={careerTexts as any} onTextsChange={setCareerTexts} />}
-            {component.type === 'Benefits' && <BenefitsForm state={benefitsState} onChange={setBenefitsState} mode={effectiveColors.mode} />}
+            {component.type === 'Benefits' && (
+              <BenefitsForm
+                state={benefitsState as any}
+                onChange={setBenefitsState as any}
+                mode={effectiveColors.mode}
+                spacing={headerConfig.spacing ?? 'normal'}
+                onSpacingChange={(spacing) => setHeaderConfig((current) => ({ ...current, spacing }))}
+              />
+            )}
             {component.type === 'Clients' && <ClientsForm items={clientsItems as any} setItems={setClientsItems as any} />}
           </div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {component.type === 'About' && <AboutPreview config={{...aboutState, features: toAboutPersistFeatures(aboutState.features), stats: toAboutPersistStats(aboutState.stats)}} brandColor={effectiveColors.primary} secondary={effectiveColors.secondary} mode={effectiveColors.mode} selectedStyle={aboutState.style} onStyleChange={(s) => setAboutState(p => ({ ...p, style: s }))} fontStyle={fontStyle} fontClassName="font-active" title={title} {...headerConfig} />}
+            {component.type === 'About' && <AboutPreview config={{...aboutState, features: toAboutPersistFeatures(aboutState.features), stats: toAboutPersistStats(aboutState.stats)}} brandColor={effectiveColors.primary} secondary={effectiveColors.secondary} mode={effectiveColors.mode} selectedStyle={aboutState.style} onStyleChange={(s) => setAboutState(p => ({ ...p, style: s }))} fontStyle={fontStyle} fontClassName="font-active" title={title} cornerRadius={aboutState.cornerRadius} {...headerConfig} />}
             {component.type === 'CTA' && <CTAPreview config={ctaConfig} brandColor={effectiveColors.primary} secondary={effectiveColors.secondary} mode={effectiveColors.mode} selectedStyle={ctaStyle} onStyleChange={setCtaStyle} fontStyle={fontStyle} fontClassName="font-active" />}
             {component.type === 'Features' && <FeaturesPreview items={featuresItems} sectionTitle={title} brandColor={effectiveColors.primary} secondary={effectiveColors.secondary} mode={effectiveColors.mode} selectedStyle={featuresStyle} onStyleChange={setFeaturesStyle} showIcons={featuresShowIcons} fontStyle={fontStyle} fontClassName="font-active" {...headerConfig} />}
             {component.type === 'Career' && <CareerPreview jobs={careerJobs} brandColor={effectiveColors.primary} secondary={effectiveColors.secondary} mode={effectiveColors.mode} selectedStyle={careerStyle} onStyleChange={setCareerStyle} title={title} texts={careerTexts} fontStyle={fontStyle} fontClassName="font-active" />}

@@ -5,14 +5,23 @@ import type {
   TeamMember,
   TeamStyle,
 } from '../_types';
+import {
+  DEFAULT_TEAM_CORNER_RADIUS,
+  DEFAULT_TEAM_DESKTOP_COLUMNS,
+  normalizeTeamCornerRadius,
+  normalizeTeamDesktopColumns,
+} from '../_types';
+import { DEFAULT_SECTION_SPACING, normalizeSectionSpacing } from '../../_shared/types/sectionSpacing';
 
 export const TEAM_STYLES: Array<{ id: TeamStyle; label: string }> = [
-  { id: 'grid', label: 'Layout 1' },
-  { id: 'cards', label: 'Layout 2' },
-  { id: 'carousel', label: 'Layout 3' },
-  { id: 'bento', label: 'Layout 4' },
-  { id: 'timeline', label: 'Layout 5' },
-  { id: 'spotlight', label: 'Layout 6' },
+  { id: 'grid', label: '(1) Dạng lưới' },
+  { id: 'cards', label: '(2) Dạng thẻ' },
+  { id: 'carousel', label: '(3) Trượt ngang' },
+  { id: 'bento', label: '(4) Ô ghép' },
+  { id: 'timeline', label: '(5) Tiến trình' },
+  { id: 'spotlight', label: '(6) Tiêu điểm' },
+  { id: 'construction', label: '(7) Góc cạnh' },
+  { id: 'layout8', label: '(8) Tối giản' },
 ];
 
 const TEAM_STYLE_SET = new Set<TeamStyle>(TEAM_STYLES.map((item) => item.id));
@@ -44,6 +53,7 @@ const normalizeTeamMember = (raw: unknown): TeamMember => {
   const avatarType = (['upload', 'url', 'icon'].includes(member.avatarType as string)
     ? member.avatarType as TeamAvatarType
     : 'upload');
+  const avatarStorageId = member.avatarStorageId === null ? null : (member.avatarStorageId ? toText(member.avatarStorageId) : undefined);
 
   return {
     name: toText(member.name),
@@ -51,10 +61,15 @@ const normalizeTeamMember = (raw: unknown): TeamMember => {
     avatar: toText(member.avatar),
     avatarType,
     avatarIcon: toText(member.avatarIcon) || undefined,
+    avatarStorageId,
     bio: toText(member.bio),
     facebook: toText(member.facebook),
     linkedin: toText(member.linkedin),
     twitter: toText(member.twitter),
+    phone: toText(member.phone),
+    zalo: toText(member.zalo),
+    tiktok: toText(member.tiktok),
+    youtube: toText(member.youtube),
     email: toText(member.email),
   };
 };
@@ -104,10 +119,15 @@ export const toTeamPersistMembers = (members: TeamEditorMember[]): TeamMember[] 
     avatar: member.avatar,
     avatarType: member.avatarType,
     avatarIcon: member.avatarIcon,
+    avatarStorageId: member.avatarStorageId,
     bio: member.bio,
     facebook: member.facebook,
     linkedin: member.linkedin,
     twitter: member.twitter,
+    phone: member.phone ?? '',
+    zalo: member.zalo ?? '',
+    tiktok: member.tiktok ?? '',
+    youtube: member.youtube ?? '',
     email: member.email,
   }))
 );
@@ -154,6 +174,9 @@ export const normalizeTeamConfig = (rawConfig: unknown): TeamConfig => {
     uppercaseText: typeof config.uppercaseText === 'boolean' ? config.uppercaseText : DEFAULT_TEAM_CONFIG.uppercaseText,
     showBadge: typeof config.showBadge === 'boolean' ? config.showBadge : DEFAULT_TEAM_CONFIG.showBadge,
     badgeText: typeof config.badgeText === 'string' ? config.badgeText : DEFAULT_TEAM_CONFIG.badgeText,
+    spacing: normalizeSectionSpacing(config.noVerticalMargin === true && config.spacing === undefined ? 'none' : (config.spacing ?? DEFAULT_TEAM_CONFIG.spacing)),
+    desktopColumns: normalizeTeamDesktopColumns(config.desktopColumns ?? DEFAULT_TEAM_CONFIG.desktopColumns),
+    cornerRadius: normalizeTeamCornerRadius(config.cornerRadius, config.noBorderRadius),
   };
 };
 
@@ -171,7 +194,11 @@ export const DEFAULT_TEAM_CONFIG: TeamConfig = {
       facebook: '',
       linkedin: '',
       name: '',
+      phone: '',
       role: '',
+      zalo: '',
+      tiktok: '',
+      youtube: '',
       twitter: '',
     },
   ],
@@ -188,4 +215,7 @@ export const DEFAULT_TEAM_CONFIG: TeamConfig = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  spacing: DEFAULT_SECTION_SPACING,
+  desktopColumns: DEFAULT_TEAM_DESKTOP_COLUMNS,
+  cornerRadius: DEFAULT_TEAM_CORNER_RADIUS,
 };

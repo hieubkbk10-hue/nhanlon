@@ -21,6 +21,12 @@ export type RemoveBgHandle = {
   cancel: () => void;
 };
 
+export type RemoveBgMode = 'fast' | 'advanced';
+
+export type RemoveBgOptions = {
+  mode?: RemoveBgMode;
+};
+
 /**
  * Chạy remove background qua main thread (fallback hoặc duy nhất).
  * Vẫn non-blocking ở level await, nhưng nếu inference chạy synchronous phase
@@ -29,18 +35,24 @@ export type RemoveBgHandle = {
 async function runOnMainThread(
   imageBlob: Blob,
   callbacks: RemoveBgCallbacks,
+  _options: RemoveBgOptions = {},
 ): Promise<void> {
   try {
-    callbacks.onProgress?.('Đang tải thư viện...', 0);
+    callbacks.onProgress?.('Đang tải model tách nền AI...', 0);
     const { removeBackground } = await import('@imgly/background-removal');
 
     const resultBlob = await removeBackground(imageBlob, {
-      model: 'isnet_fp16',
+      device: 'gpu',
+      model: 'isnet',
+      output: {
+        format: 'image/png',
+        quality: 1,
+      },
       progress: (key: string, current: number, total: number) => {
         const stageLabels: Record<string, string> = {
-          'compute:inference': 'Đang xử lý AI...',
-          'fetch:model': 'Đang tải model...',
-          'fetch:wasm': 'Đang tải WASM...',
+          'compute:inference': 'Đang tách nền bằng AI...',
+          'fetch:model': 'Đang tải mô hình AI (~44MB, lần đầu có thể mất vài giây)...',
+          'fetch:wasm': 'Đang tải thư viện xử lý WASM...',
         };
         const stage = stageLabels[key] ?? 'Đang xử lý...';
         const percent = total > 0 ? Math.round((current / total) * 100) : 0;
@@ -61,6 +73,7 @@ async function runOnMainThread(
 export function startRemoveBg(
   imageBlob: Blob,
   callbacks: RemoveBgCallbacks,
+  options: RemoveBgOptions = {},
 ): RemoveBgHandle {
   let cancelled = false;
 
@@ -77,7 +90,7 @@ export function startRemoveBg(
   };
 
   // Chạy trên main thread (dynamic import vẫn lazy load, WASM chạy off-thread internally)
-  void runOnMainThread(imageBlob, wrappedCallbacks);
+  void runOnMainThread(imageBlob, wrappedCallbacks, options);
 
   return {
     cancel: () => {

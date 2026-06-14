@@ -3,6 +3,7 @@
 import React from 'react';
 import { AlertCircle, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '@/app/admin/components/ui';
+import { CopyTextButton } from '@/app/admin/components/CopyTextButton';
 import { ToggleSwitch } from '@/components/modules/shared';
 import { InputWithClear } from '../../stats/_components/InputWithClear';
 
@@ -38,6 +39,8 @@ interface HeaderConfigSectionProps {
   onExpandedChange: (value: boolean) => void;
   
   // Optional
+  className?: string;
+  sectionTitle?: string;
   titleRequired?: boolean;
   titleLabel?: string;
   titlePlaceholder?: string;
@@ -68,12 +71,14 @@ export function HeaderConfigSection({
   onBadgeTextChange,
   expanded,
   onExpandedChange,
+  className,
+  sectionTitle = 'Tiêu đề và mô tả',
   titleRequired = true,
   titleLabel = 'Tiêu đề hiển thị',
   titlePlaceholder = 'Nhập tiêu đề component...',
 }: HeaderConfigSectionProps) {
   return (
-    <Card className="mb-6">
+    <Card className={cn('mb-6', className)}>
       <CardHeader>
         <div className="space-y-3">
           <div 
@@ -82,7 +87,7 @@ export function HeaderConfigSection({
           >
             <CardTitle className="text-base flex items-center gap-2">
               <AlertCircle size={20} />
-              Tiêu đề & Mô tả
+              {sectionTitle}
             </CardTitle>
             <ChevronDown 
               size={16} 
@@ -120,12 +125,17 @@ export function HeaderConfigSection({
             <Label>
               {titleLabel} {titleRequired && <span className="text-red-500">*</span>}
             </Label>
-            <InputWithClear
-              value={title}
-              onChange={onTitleChange}
-              required={titleRequired}
-              placeholder={titlePlaceholder}
-            />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <InputWithClear
+                  value={title}
+                  onChange={onTitleChange}
+                  required={titleRequired}
+                  placeholder={titlePlaceholder}
+                />
+              </div>
+              <CopyTextButton value={title} label="tiêu đề hiển thị" className="shrink-0" />
+            </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">

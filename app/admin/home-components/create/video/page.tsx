@@ -6,10 +6,15 @@ import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverr
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 import { VideoPreview } from '../../video/_components/VideoPreview';
 import {
   DEFAULT_VIDEO_STYLE,
   normalizeVideoConfig,
+  normalizeVideoCornerRadius,
+  normalizeVideoPlayButtonSize,
   normalizeVideoStyle,
 } from '../../video/_lib/constants';
 import { VideoForm } from '../../video/_components/VideoForm';
@@ -36,7 +41,7 @@ export default function VideoCreatePage() {
     badgeText: '',
   });
 
-  const [headerExpanded, setHeaderExpanded] = React.useState(true);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header', 'display'], true);
 
   const [config, setConfig] = React.useState<VideoConfig>(() => normalizeVideoConfig({
     autoplay: false,
@@ -53,6 +58,8 @@ export default function VideoCreatePage() {
   }));
 
   const selectedStyle = normalizeVideoStyle(config.style);
+  const cornerRadius = normalizeVideoCornerRadius(config.cornerRadius);
+  const playButtonSize = normalizeVideoPlayButtonSize(config.playButtonSize);
 
   const onSubmit = (e: React.FormEvent) => {
     const normalized = normalizeVideoConfig({ 
@@ -68,6 +75,9 @@ export default function VideoCreatePage() {
       uppercaseText: headerState.uppercaseText,
       showBadge: headerState.showBadge,
       badgeText: headerState.badgeText,
+      spacing: headerState.spacing,
+      noVerticalMargin: headerState.spacing === 'none',
+      noBorderRadius: cornerRadius === 'none',
     });
     void handleSubmit(e, normalized);
   };
@@ -90,6 +100,8 @@ export default function VideoCreatePage() {
       setCustomFontState={setCustomFontState}
       skipTitleInput={true}
     >
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+
       <HeaderConfigSection
         hideHeader={headerState.hideHeader}
         title={title}
@@ -113,12 +125,36 @@ export default function VideoCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={openSections.header}
+        onExpandedChange={(value) => toggleSection('header', value)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
+
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.display}
+          onOpenChange={(value) => toggleSection('display', value)}
+          spacing={headerState.spacing}
+          onSpacingChange={headerState.setSpacing}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={(value) => setConfig((prev) => ({ ...prev, cornerRadius: value }))}
+        >
+          <label className="space-y-1.5">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Kích thước logo play</span>
+            <select
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              value={playButtonSize}
+              onChange={(event) => setConfig((prev) => ({ ...prev, playButtonSize: normalizeVideoPlayButtonSize(event.target.value) }))}
+            >
+              <option value="small">Nhỏ</option>
+              <option value="medium">Vừa</option>
+              <option value="large">Lớn</option>
+            </select>
+          </label>
+        </HomeComponentDisplaySettingsSection>
+      </div>
 
       <VideoForm
         config={config}
@@ -147,6 +183,7 @@ export default function VideoCreatePage() {
         uppercaseText={headerState.uppercaseText}
         showBadge={headerState.showBadge}
         badgeText={headerState.badgeText}
+        spacing={headerState.spacing}
       />
     </ComponentFormWrapper>
   );

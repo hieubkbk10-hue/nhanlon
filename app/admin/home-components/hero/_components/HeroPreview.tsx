@@ -1,19 +1,23 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import useEmblaCarousel from 'embla-carousel-react';
+import Fade from 'embla-carousel-fade';
 import { ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { getBrandColors } from '@/lib/utils/colors';
 import { cn } from '../../../components/ui';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { PreviewImage } from '../../_shared/components/PreviewImage';
-import { isVideoUrl } from '@/lib/utils/media';
+import { getVideoEmbedUrl, getVideoThumbnail, isVideoUrl } from '@/lib/utils/media';
 import { parseHighlightedHeading } from '@/lib/utils/heroText';
 import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 import {
   getBentoColors,
   getAPCATextColor,
+  getConquestColors,
   getFadeColors,
   getFullscreenColors,
   getHeroColors,
@@ -22,7 +26,59 @@ import {
   getSplitColors,
 } from '../_lib/colors';
 import { HERO_STYLES } from '../_lib/constants';
-import type { HeroContent, HeroStyle } from '../_types';
+import type { HeroContent, HeroCornerRadius, HeroSpacing, HeroStyle } from '../_types';
+import { DEFAULT_HERO_CORNER_RADIUS, DEFAULT_HERO_SPACING, getHeroCornerRadiusClassName } from '../_types';
+import { getSectionSpacingClassName } from '../../_shared/types/sectionSpacing';
+
+const HeroPreviewVideo = ({ src, className }: { src: string; className: string }) => {
+  const embedUrl = getVideoEmbedUrl(src, { autoplay: true, muted: true, loop: true });
+  const thumbnailUrl = getVideoThumbnail(src);
+  const [showCleanCover, setShowCleanCover] = React.useState(Boolean(embedUrl && thumbnailUrl));
+
+  React.useEffect(() => {
+    setShowCleanCover(Boolean(embedUrl && thumbnailUrl));
+    if (!embedUrl || !thumbnailUrl) {
+      return;
+    }
+    const timer = window.setTimeout(() => setShowCleanCover(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [embedUrl, thumbnailUrl]);
+
+  if (embedUrl) {
+    return (
+      <div className="relative h-full w-full overflow-hidden bg-black">
+        <iframe
+          src={embedUrl}
+          title="Hero video preview"
+          className={cn(className, 'pointer-events-none border-0')}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+        {thumbnailUrl && (
+          <PreviewImage
+            src={thumbnailUrl}
+            alt=""
+            className={cn(
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
+              showCleanCover ? 'opacity-100' : 'pointer-events-none opacity-0'
+            )}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <video
+      src={src}
+      className={className}
+      muted
+      loop
+      autoPlay
+      playsInline
+    />
+  );
+};
 
 export const HeroPreview = ({ 
   slides, 
@@ -32,8 +88,11 @@ export const HeroPreview = ({
   selectedStyle = 'slider',
   onStyleChange,
   content,
+  cornerRadius = DEFAULT_HERO_CORNER_RADIUS,
+  spacing = DEFAULT_HERO_SPACING,
   fontStyle,
   fontClassName,
+  isDark: propIsDark,
 }: { 
   slides: { id: number; image: string; link: string; mediaType?: 'image' | 'video' }[]; 
   brandColor: string;
@@ -42,13 +101,50 @@ export const HeroPreview = ({
   selectedStyle?: HeroStyle;
   onStyleChange?: (style: HeroStyle) => void;
   content?: HeroContent;
+  cornerRadius?: HeroCornerRadius;
+  spacing?: HeroSpacing;
   fontStyle?: React.CSSProperties;
   fontClassName?: string;
+  isDark?: boolean;
 }) => {
+  const [isDarkState, setIsDarkState] = useState(propIsDark ?? false);
+
+  useEffect(() => {
+    setIsDarkState(propIsDark ?? document.documentElement.classList.contains('dark'));
+  }, [propIsDark]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || propIsDark !== undefined) {
+      return;
+    }
+    
+    setIsDarkState(document.documentElement.classList.contains('dark'));
+
+    const observer = new MutationObserver(() => {
+      setIsDarkState(document.documentElement.classList.contains('dark'));
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
+  }, [propIsDark]);
   const { device, setDevice } = usePreviewDevice();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const touchStartX = useRef<number | null>(null);
   const previewStyle = selectedStyle ?? 'slider';
+  const activeSlideCount = previewStyle === 'bento'
+    ? Math.min(slides.length, 4)
+    : (previewStyle === 'triple' || previewStyle === 'triple2' ? Math.min(slides.length, 3) : slides.length);
+  const isFadeStyle = previewStyle === 'fade' || previewStyle === 'builderCoffee' || (previewStyle === 'split' && device !== 'mobile');
+  const plugins = React.useMemo(() => {
+    return isFadeStyle ? [Fade()] : [];
+  }, [isFadeStyle]);
+  const [heroEmblaRef, heroEmblaApi] = useEmblaCarousel({ align: 'start', loop: activeSlideCount > 1 }, plugins);
+  const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+  const [canScrollNext, setCanScrollNext] = React.useState(false);
+  const emblaCurrentSlide = activeSlideCount > 0 ? currentSlide % activeSlideCount : 0;
   const setPreviewStyle = (style: string) => onStyleChange?.(style as HeroStyle);
   const modeLabel = mode === 'dual' ? '2 màu' : '1 màu';
   const info = (previewStyle !== 'bento' && previewStyle !== 'triple' && previewStyle !== 'triple2')
@@ -60,54 +156,65 @@ export const HeroPreview = ({
     secondary,
   });
   const placeholderColors = brandColors.getPlaceholder();
-  const colors = getHeroColors(brandColors.primary, brandColors.secondary, brandColors.useDualBrand);
-  const sliderColors = getSliderColors(brandColors.primary, brandColors.secondary, mode);
-  const fadeColors = getFadeColors(brandColors.primary, brandColors.secondary, mode);
-  const bentoColors = getBentoColors(brandColors.primary, brandColors.secondary, mode);
-  const fullscreenColors = getFullscreenColors(brandColors.primary, brandColors.secondary, mode);
-  const splitColors = getSplitColors(brandColors.primary, brandColors.secondary, mode);
-  const parallaxColors = getParallaxColors(brandColors.primary, brandColors.secondary, mode);
+  const colors = adaptTokensForDarkMode(getHeroColors(brandColors.primary, brandColors.secondary, brandColors.useDualBrand), isDarkState);
+  const sliderColors = adaptTokensForDarkMode(getSliderColors(brandColors.primary, brandColors.secondary, mode), isDarkState);
+  const fadeColors = adaptTokensForDarkMode(getFadeColors(brandColors.primary, brandColors.secondary, mode), isDarkState);
+  const bentoColors = adaptTokensForDarkMode(getBentoColors(brandColors.primary, brandColors.secondary, mode), isDarkState);
+  const conquestColors = adaptTokensForDarkMode(getConquestColors(brandColors.primary, brandColors.secondary, mode), isDarkState);
+  const fullscreenColors = adaptTokensForDarkMode(getFullscreenColors(brandColors.primary, brandColors.secondary, mode), isDarkState);
+  const splitColors = adaptTokensForDarkMode(getSplitColors(brandColors.primary, brandColors.secondary, mode), isDarkState);
+  const parallaxColors = adaptTokensForDarkMode(getParallaxColors(brandColors.primary, brandColors.secondary, mode), isDarkState);
+  const isEmblaPreviewStyle = previewStyle === 'slider' || previewStyle === 'bento' || previewStyle === 'fullscreen' || previewStyle === 'conquest' || previewStyle === 'split' || previewStyle === 'parallax' || previewStyle === 'fade' || previewStyle === 'builderCoffee';
+  const cornerRadiusClassName = getHeroCornerRadiusClassName(cornerRadius);
+  const sectionSpacingClassName = getSectionSpacingClassName(spacing);
 
-  const nextSlide = () =>{  setCurrentSlide((prev) => (prev + 1) % slides.length); };
-  const prevSlide = () =>{  setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length); };
+  const updateEmblaState = React.useCallback(() => {
+    if (!heroEmblaApi) {return;}
+    setCurrentSlide(heroEmblaApi.selectedScrollSnap());
+    setCanScrollPrev(heroEmblaApi.canScrollPrev());
+    setCanScrollNext(heroEmblaApi.canScrollNext());
+  }, [heroEmblaApi]);
+
+  React.useEffect(() => {
+    if (!heroEmblaApi) {return;}
+    updateEmblaState();
+    heroEmblaApi.on('select', updateEmblaState);
+    heroEmblaApi.on('reInit', updateEmblaState);
+    return () => {
+      heroEmblaApi.off('select', updateEmblaState);
+      heroEmblaApi.off('reInit', updateEmblaState);
+    };
+  }, [heroEmblaApi, updateEmblaState]);
+
+  const nextSlide = () => {
+    if (heroEmblaApi && isEmblaPreviewStyle) {
+      heroEmblaApi.scrollNext();
+      return;
+    }
+    setCurrentSlide((prev) => (prev + 1) % slides.length);
+  };
+  const prevSlide = () => {
+    if (heroEmblaApi && isEmblaPreviewStyle) {
+      heroEmblaApi.scrollPrev();
+      return;
+    }
+    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+  const scrollHeroTo = (index: number) => {
+    if (heroEmblaApi && isEmblaPreviewStyle) {
+      heroEmblaApi.scrollTo(index);
+      return;
+    }
+    setCurrentSlide(index);
+  };
   const getSlideKey = (slide: { id?: number | string; image?: string }, index: number) => `${slide.id ?? 'slide'}-${index}-${slide.image ?? ''}`;
-  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    touchStartX.current = event.touches[0]?.clientX ?? null;
-  };
-  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    const startX = touchStartX.current;
-    const endX = event.changedTouches[0]?.clientX;
-    touchStartX.current = null;
 
-    if (device !== 'mobile' || slides.length <= 1 || startX == null || endX == null) {
-      return;
-    }
-
-    const deltaX = endX - startX;
-    if (Math.abs(deltaX) < 40) {
-      return;
-    }
-
-    if (deltaX < 0) {
-      nextSlide();
-      return;
-    }
-
-    prevSlide();
-  };
 
   const renderSlideWithBlur = (slide: { image: string; mediaType?: 'image' | 'video' }, idx: number) => {
     if (slide.mediaType === 'video') {
       return (
         <div className="block w-full h-full relative bg-black">
-          <video
-            src={slide.image}
-            className="w-full h-full object-cover"
-            muted
-            loop
-            autoPlay
-            playsInline
-          />
+          <HeroPreviewVideo src={slide.image} className="w-full h-full object-cover" />
         </div>
       );
     }
@@ -143,16 +250,12 @@ export const HeroPreview = ({
     if (slide.mediaType === 'video') {
       return (
         <div className="w-full h-full relative bg-black">
-          <video
+          <HeroPreviewVideo
             src={slide.image}
             className={cn(
               "w-full h-full z-10",
               options?.fit === 'cover' ? 'object-cover' : 'object-contain'
             )}
-            muted
-            loop
-            autoPlay
-            playsInline
           />
           {options?.overlay}
         </div>
@@ -206,26 +309,27 @@ export const HeroPreview = ({
   };
 
   const renderSliderStyle = () => (
-    <section className="relative w-full bg-slate-900 overflow-hidden">
+    <section className={cn("relative w-full overflow-hidden", isDarkState ? "bg-slate-950" : "bg-transparent")}>
       <div
         className={cn(
-          "relative w-full",
-          device === 'mobile' ? 'aspect-[16/9] max-h-[200px]' : (device === 'tablet' ? 'aspect-[16/9] max-h-[250px]' : 'aspect-[21/9] max-h-[280px]')
+          "relative w-full overflow-hidden",
+          device === 'mobile' ? 'aspect-[21/9] max-h-[200px]' : (device === 'tablet' ? 'aspect-[21/9] max-h-[250px]' : 'aspect-[21/9] max-h-[280px]')
         )}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        ref={heroEmblaRef}
       >
         {slides.length > 0 ? (
           <>
-            {slides.map((slide, idx) => (
-              <div
-                key={getSlideKey(slide, idx)}
-                className={cn("absolute inset-0 transition-opacity duration-700 hover:ring-2 hover:ring-offset-2 hover:ring-offset-slate-900", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}
-                style={{ '--tw-ring-color': sliderColors.hoverRingColor } as React.CSSProperties}
-              >
-                {slide.image ? renderSlideWithBlur(slide, idx) : renderPlaceholder(idx, { useSliderColors: true })}
-              </div>
-            ))}
+            <div className="flex h-full">
+              {slides.map((slide, idx) => (
+                <div
+                  key={getSlideKey(slide, idx)}
+                  className="relative h-full min-w-0 flex-[0_0_100%] hover:ring-2 hover:ring-offset-2 hover:ring-offset-slate-900"
+                  style={{ '--tw-ring-color': sliderColors.hoverRingColor } as React.CSSProperties}
+                >
+                  {slide.image ? renderSlideWithBlur(slide, idx) : renderPlaceholder(idx, { useSliderColors: true })}
+                </div>
+              ))}
+            </div>
             {slides.length > 1 && (
               <>
                 {device !== 'mobile' && (
@@ -233,7 +337,8 @@ export const HeroPreview = ({
                     <button
                       type="button"
                       onClick={prevSlide}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center transition-all z-20 border-2 hover:scale-105"
+                      disabled={!canScrollPrev}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center transition-all z-20 border-2 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
                       style={{
                         backgroundColor: sliderColors.navButtonBg,
                         borderColor: sliderColors.navButtonBorderColor,
@@ -245,7 +350,8 @@ export const HeroPreview = ({
                     <button
                       type="button"
                       onClick={nextSlide}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center transition-all z-20 border-2 hover:scale-105"
+                      disabled={!canScrollNext}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center transition-all z-20 border-2 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
                       style={{
                         backgroundColor: sliderColors.navButtonBgHover,
                         borderColor: sliderColors.navButtonBorderColor,
@@ -261,10 +367,10 @@ export const HeroPreview = ({
                     <button
                       key={idx}
                       type="button"
-                      onClick={() =>{  setCurrentSlide(idx); }}
-                      className={cn("w-2 h-2 rounded-full transition-all", idx === currentSlide ? "w-6" : "")}
+                      onClick={() =>{  scrollHeroTo(idx); }}
+                      className={cn("w-2 h-2 rounded-full transition-all", idx === emblaCurrentSlide ? "w-6" : "")}
                       style={{
-                        backgroundColor: idx === currentSlide ? sliderColors.dotActive : sliderColors.dotInactive,
+                        backgroundColor: idx === emblaCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive,
                       }}
                     />
                   ))}
@@ -274,7 +380,7 @@ export const HeroPreview = ({
                     className="h-full transition-all duration-700"
                     style={{
                       backgroundColor: sliderColors.progressBarActive,
-                      width: `${((currentSlide + 1) / slides.length) * 100}%`,
+                      width: `${((emblaCurrentSlide + 1) / slides.length) * 100}%`,
                     }}
                   />
                 </div>
@@ -289,18 +395,20 @@ export const HeroPreview = ({
   );
 
   const renderFadeStyle = () => (
-    <section className="relative w-full bg-slate-900 overflow-hidden">
+    <section className={cn("relative w-full overflow-hidden", isDarkState ? "bg-slate-950" : "bg-transparent")}>
       <div className={cn(
         "relative w-full",
-        device === 'mobile' ? 'aspect-[16/9] max-h-[220px]' : (device === 'tablet' ? 'aspect-[16/9] max-h-[270px]' : 'aspect-[21/9] max-h-[300px]')
+        device === 'mobile' ? 'aspect-[21/9] max-h-[220px]' : (device === 'tablet' ? 'aspect-[21/9] max-h-[270px]' : 'aspect-[21/9] max-h-[300px]')
       )}>
         {slides.length > 0 ? (
           <>
-            {slides.map((slide, idx) => (
-              <div key={getSlideKey(slide, idx)} className={cn("absolute inset-0 transition-opacity duration-700", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
-                {slide.image ? renderSlideWithBlur(slide, idx) : renderPlaceholder(idx, { backgroundColor: fadeColors.placeholderBg, iconColor: fadeColors.placeholderIconColor })}
-              </div>
-            ))}
+            <div className="flex h-full">
+              {slides.map((slide, idx) => (
+                <div key={getSlideKey(slide, idx)} className="relative h-full min-w-0 flex-[0_0_100%]">
+                  {slide.image ? renderSlideWithBlur(slide, idx) : renderPlaceholder(idx, { backgroundColor: fadeColors.placeholderBg, iconColor: fadeColors.placeholderIconColor })}
+                </div>
+              ))}
+            </div>
             {slides.length > 1 && (
               <div className="absolute bottom-0 left-0 right-0 p-2 flex justify-center gap-2 bg-gradient-to-t from-black/60 to-transparent z-20">
                 {slides.map((slide, idx) => (
@@ -320,48 +428,167 @@ export const HeroPreview = ({
     </section>
   );
 
-  const renderBentoStyle = () => {
-    const bentoSlides = slides.slice(0, 4);
-    const placeholderTints = ['#f1f5f9', '#e2e8f0', '#f1f5f9', '#e2e8f0'];
-    return (
-      <section className="relative w-full bg-slate-900 overflow-hidden p-2">
-        <div className={cn(
-          "relative w-full",
-          device === 'mobile' ? 'max-h-[240px]' : (device === 'tablet' ? 'max-h-[280px]' : 'max-h-[300px]')
-        )}>
-          {device === 'mobile' ? (
-            <div className="grid grid-cols-2 gap-2 h-full">
-              {bentoSlides.slice(0, 4).map((slide, idx) => (
-                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden aspect-video">
-                  {slide.image ? (
-                    isVideoUrl(slide.image) ? (
-                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
-                    ) : (
-                    <div className="w-full h-full relative">
-                      <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
-                      <div className="absolute inset-0 bg-black/20" />
-                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
-                    </div>
-                    )
+  const renderBuilderCoffeeStyle = () => (
+    <section className="relative w-full overflow-hidden bg-white dark:bg-slate-950 pb-[50px]">
+      <div className="mx-auto w-full max-w-7xl px-3">
+        <div className="mt-5 flex flex-wrap -mx-3">
+          <div className="grid w-full max-w-full grid-cols-3 gap-[10px] px-3">
+            <div className="col-span-3 overflow-hidden">
+              <div className="relative">
+                <div
+                  className={cn("relative flex w-full select-none items-center overflow-hidden", cornerRadiusClassName)}
+                  role="toolbar"
+                  ref={heroEmblaRef}
+                >
+                  {slides.length > 0 ? (
+                    <>
+                      <div className="flex h-full w-full">
+                        {slides.map((slide, idx) => (
+                          <div
+                            key={getSlideKey(slide, idx)}
+                            className="relative h-full min-w-0 flex-[0_0_100%]"
+                          >
+                            <a href={slide.link || '#'} className="inline-block h-full w-full cursor-pointer text-center">
+                              {slide.image ? (
+                                slide.mediaType === 'video' ? (
+                                  <HeroPreviewVideo src={slide.image} className="h-full w-full object-contain" />
+                                ) : (
+                                  <div className="relative h-[250px] md:h-[400px] lg:h-[500px] w-full overflow-hidden">
+                                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(30px)' }} />
+                                    <div className="absolute inset-0 bg-black/10" />
+                                    <PreviewImage src={slide.image} alt="Sản phẩm nổi bật" className="relative z-10 mx-auto h-full w-full max-w-full object-contain align-middle" />
+                                  </div>
+                                )
+                              ) : (
+                                <div className="h-[250px] md:h-[400px] lg:h-[500px]">
+                                  {renderPlaceholder(idx, { backgroundColor: '#f8fafc', iconColor: sliderColors.placeholderIconColor })}
+                                </div>
+                              )}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                      {slides.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Previous"
+                            onClick={prevSlide}
+                            className="absolute -left-0.5 top-1/2 z-20 h-[52px] w-[13px] -translate-y-1/2 overflow-hidden bg-transparent text-transparent md:h-[118px] md:w-[30px]"
+                            style={{
+                              backgroundImage: 'url("https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/arow-left.png?1778581786863")',
+                              backgroundPosition: 'center',
+                              backgroundRepeat: 'no-repeat',
+                              backgroundSize: 'contain',
+                            }}
+                          >
+                            <span className="absolute inset-0 z-30 flex items-center justify-start pl-0.5 text-black md:pl-1">
+                              <ChevronLeft className="h-2.5 w-2.5 md:h-4 md:w-4" strokeWidth={2.1} />
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Next"
+                            onClick={nextSlide}
+                            className="absolute -right-0.5 top-1/2 z-20 h-[52px] w-[13px] -translate-y-1/2 overflow-hidden bg-transparent text-transparent md:h-[118px] md:w-[30px]"
+                            style={{
+                              backgroundImage: 'url("https://bizweb.dktcdn.net/100/485/374/themes/945619/assets/arow-right.png?1778581786863")',
+                              backgroundPosition: 'center',
+                              backgroundRepeat: 'no-repeat',
+                              backgroundSize: 'contain',
+                            }}
+                          >
+                            <span className="absolute inset-0 z-30 flex items-center justify-end pr-0.5 text-black md:pr-1">
+                              <ChevronRight className="h-2.5 w-2.5 md:h-4 md:w-4" strokeWidth={2.1} />
+                            </span>
+                          </button>
+                          <div className="absolute bottom-0 left-1/2 z-20 mb-4 flex h-6 w-[100px] -translate-x-1/2 items-center justify-center rounded-[15px]">
+                            {slides.map((_, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                aria-label={`Đi tới slide ${idx + 1}`}
+                                onClick={() =>{  setCurrentSlide(idx); }}
+                                className="mx-[3px] h-0.5 w-4 border transition-opacity"
+                                style={{
+                                  backgroundColor: idx === emblaCurrentSlide ? '#8b7046' : '#cccccc',
+                                  borderColor: idx === emblaCurrentSlide ? '#8b7046' : '#cccccc',
+                                  opacity: idx === emblaCurrentSlide ? 1 : 0.7,
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </>
                   ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
-                    <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
-                  </div>
+                    <div className="flex aspect-[16/9] w-full items-center justify-center bg-slate-50 dark:bg-slate-900"><span className="text-sm text-slate-400">Chưa có banner</span></div>
                   )}
                 </div>
-              ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderBentoStyle = () => {
+    const bentoSlides = slides.slice(0, 4);
+    const bentoCurrentSlide = bentoSlides.length > 0 ? currentSlide % bentoSlides.length : 0;
+    const placeholderTints = ['#f1f5f9', '#e2e8f0', '#f1f5f9', '#e2e8f0'];
+    return (
+      <section className={cn("relative w-full overflow-hidden p-2", isDarkState ? "bg-slate-950" : "bg-transparent")}>
+        <div className="relative w-full">
+          {device === 'mobile' ? (
+            <div className="relative aspect-[16/9] overflow-hidden" ref={heroEmblaRef}>
+              <div className="flex h-full">
+                {bentoSlides.map((slide, idx) => (
+                  <div key={getSlideKey(slide, idx)} className={cn("relative h-full min-w-0 flex-[0_0_100%] overflow-hidden", cornerRadiusClassName)}>
+                    {slide.image ? (
+                      isVideoUrl(slide.image) ? (
+                        <HeroPreviewVideo src={slide.image} className="w-full h-full object-cover" />
+                      ) : (
+                        <PreviewImage src={slide.image} alt="" className="w-full h-full object-cover" />
+                      )
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
+                        <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {bentoSlides.length > 1 && (
+                <>
+                  <button type="button" aria-label="Ảnh trước" onClick={prevSlide} disabled={!canScrollPrev} className="absolute left-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button type="button" aria-label="Ảnh tiếp" onClick={nextSlide} disabled={!canScrollNext} className="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                    <ChevronRight size={14} />
+                  </button>
+                  <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                    {bentoSlides.map((_, idx) => (
+                      <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={cn("h-2 rounded-full transition-all", idx === bentoCurrentSlide ? "w-6" : "w-2")} style={{ backgroundColor: idx === bentoCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
+                    ))}
+                  </div>
+                  <div className="absolute bottom-1.5 left-0 right-0 z-20 h-0.5" style={{ backgroundColor: sliderColors.progressBarInactive }}>
+                    <div className="h-full transition-all duration-700" style={{ backgroundColor: sliderColors.progressBarActive, width: `${((bentoCurrentSlide + 1) / bentoSlides.length) * 100}%` }} />
+                  </div>
+                </>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-4 grid-rows-2 gap-2 h-full" style={{ height: device === 'desktop' ? '280px' : '260px' }}>
-              <div className="col-span-2 row-span-2 relative rounded-xl overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900" style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
+            <div className="grid grid-cols-4 grid-rows-2 gap-2 aspect-[5/2]">
+              <div className={cn("col-span-2 row-span-2 relative overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900", cornerRadiusClassName)} style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
                 {bentoSlides[0]?.image ? (
                   isVideoUrl(bentoSlides[0].image) ? (
-                    <video src={bentoSlides[0].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    <HeroPreviewVideo src={bentoSlides[0].image} className="w-full h-full object-cover" />
                   ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <PreviewImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" />
+                    <PreviewImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-cover z-10" />
                   </div>
                   )
                 ) : (
@@ -370,15 +597,15 @@ export const HeroPreview = ({
                   </div>
                 )}
               </div>
-              <div className="col-span-2 relative rounded-xl overflow-hidden">
+              <div className={cn("col-span-2 relative overflow-hidden", cornerRadiusClassName)}>
                 {bentoSlides[1]?.image ? (
                   isVideoUrl(bentoSlides[1].image) ? (
-                    <video src={bentoSlides[1].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    <HeroPreviewVideo src={bentoSlides[1].image} className="w-full h-full object-cover" />
                   ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[1].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <PreviewImage src={bentoSlides[1].image} alt="" className="relative w-full h-full object-contain z-10" />
+                    <PreviewImage src={bentoSlides[1].image} alt="" className="relative w-full h-full object-cover z-10" />
                   </div>
                   )
                 ) : (
@@ -387,15 +614,15 @@ export const HeroPreview = ({
                   </div>
                 )}
               </div>
-              <div className="relative rounded-xl overflow-hidden">
+              <div className={cn("relative overflow-hidden", cornerRadiusClassName)}>
                 {bentoSlides[2]?.image ? (
                   isVideoUrl(bentoSlides[2].image) ? (
-                    <video src={bentoSlides[2].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    <HeroPreviewVideo src={bentoSlides[2].image} className="w-full h-full object-cover" />
                   ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[2].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <PreviewImage src={bentoSlides[2].image} alt="" className="relative w-full h-full object-contain z-10" />
+                    <PreviewImage src={bentoSlides[2].image} alt="" className="relative w-full h-full object-cover z-10" />
                   </div>
                   )
                 ) : (
@@ -404,15 +631,15 @@ export const HeroPreview = ({
                   </div>
                 )}
               </div>
-              <div className="relative rounded-xl overflow-hidden">
+              <div className={cn("relative overflow-hidden", cornerRadiusClassName)}>
                 {bentoSlides[3]?.image ? (
                   isVideoUrl(bentoSlides[3].image) ? (
-                    <video src={bentoSlides[3].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    <HeroPreviewVideo src={bentoSlides[3].image} className="w-full h-full object-cover" />
                   ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[3].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <PreviewImage src={bentoSlides[3].image} alt="" className="relative w-full h-full object-contain z-10" />
+                    <PreviewImage src={bentoSlides[3].image} alt="" className="relative w-full h-full object-cover z-10" />
                   </div>
                   )
                 ) : (
@@ -432,45 +659,58 @@ export const HeroPreview = ({
     const tripleSlides = slides.slice(0, 3);
     const placeholderTints = ['#f1f5f9', '#e2e8f0', '#f1f5f9'];
     return (
-      <section className="relative w-full bg-slate-900 overflow-hidden p-2">
-        <div className={cn(
-          "relative w-full",
-          device === 'mobile' ? 'max-h-[360px]' : (device === 'tablet' ? 'max-h-[280px]' : 'max-h-[300px]')
-        )}>
+      <section className={cn("relative w-full overflow-hidden p-2", isDarkState ? "bg-slate-950" : "bg-transparent")}>
+        <div className="relative w-full">
           {device === 'mobile' ? (
-            <div className="flex flex-col gap-2 h-full">
-              {tripleSlides.slice(0, 3).map((slide, idx) => (
-                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden aspect-video">
-                  {slide.image ? (
-                    isVideoUrl(slide.image) ? (
-                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+            <div className="relative aspect-[16/9] overflow-hidden" ref={heroEmblaRef}>
+              <div className="flex h-full">
+                {tripleSlides.map((slide, idx) => (
+                  <div key={getSlideKey(slide, idx)} className={cn("relative h-full min-w-0 flex-[0_0_100%] overflow-hidden", cornerRadiusClassName)}>
+                    {slide.image ? (
+                      isVideoUrl(slide.image) ? (
+                        <HeroPreviewVideo src={slide.image} className="w-full h-full object-cover" />
+                      ) : (
+                        <PreviewImage src={slide.image} alt="" className="w-full h-full object-cover" />
+                      )
                     ) : (
-                    <div className="w-full h-full relative">
-                      <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
-                      <div className="absolute inset-0 bg-black/20" />
-                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
-                    </div>
-                    )
-                  ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
-                    <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
+                      <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
+                        <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
+                      </div>
+                    )}
                   </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
+              {tripleSlides.length > 1 && (
+                <>
+                  <button type="button" aria-label="Ảnh trước" onClick={prevSlide} disabled={!canScrollPrev} className="absolute left-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button type="button" aria-label="Ảnh tiếp" onClick={nextSlide} disabled={!canScrollNext} className="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                    <ChevronRight size={14} />
+                  </button>
+                  <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                    {tripleSlides.map((_, idx) => (
+                      <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={cn("h-2 rounded-full transition-all", idx === emblaCurrentSlide ? "w-6" : "w-2")} style={{ backgroundColor: idx === emblaCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
+                    ))}
+                  </div>
+                  <div className="absolute bottom-1.5 left-0 right-0 z-20 h-0.5" style={{ backgroundColor: sliderColors.progressBarInactive }}>
+                    <div className="h-full transition-all duration-700" style={{ backgroundColor: sliderColors.progressBarActive, width: `${((emblaCurrentSlide + 1) / tripleSlides.length) * 100}%` }} />
+                  </div>
+                </>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 h-full" style={{ height: device === 'desktop' ? '280px' : '260px' }}>
+            <div className="grid grid-cols-3 gap-2 aspect-[16/3]">
               {tripleSlides.map((slide, idx) => (
-                <div key={getSlideKey(slide, idx)} className={cn("relative rounded-xl overflow-hidden", idx === 0 && 'ring-2 ring-offset-1 ring-offset-slate-900')} style={idx === 0 ? { '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties : undefined}>
+                <div key={getSlideKey(slide, idx)} className={cn("relative overflow-hidden", cornerRadiusClassName, idx === 0 && 'ring-2 ring-offset-1 ring-offset-slate-900')} style={idx === 0 ? { '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties : undefined}>
                   {slide.image ? (
                     isVideoUrl(slide.image) ? (
-                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                      <HeroPreviewVideo src={slide.image} className="w-full h-full object-cover" />
                     ) : (
                     <div className="w-full h-full relative">
                       <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${20 - idx * 5}px)` }} />
                       <div className="absolute inset-0 bg-black/20" />
-                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-cover z-10" />
                     </div>
                     )
                   ) : (
@@ -492,45 +732,58 @@ export const HeroPreview = ({
     const tripleSlides = slides.slice(0, 3);
     const placeholderTints = ['#f1f5f9', '#e2e8f0', '#f1f5f9'];
     return (
-      <section className="relative w-full bg-slate-900 overflow-hidden p-2">
-        <div className={cn(
-          "relative w-full",
-          device === 'mobile' ? 'max-h-[360px]' : (device === 'tablet' ? 'max-h-[280px]' : 'max-h-[300px]')
-        )}>
+      <section className={cn("relative w-full overflow-hidden p-2", isDarkState ? "bg-slate-950" : "bg-transparent")}>
+        <div className="relative w-full">
           {device === 'mobile' ? (
-            <div className="flex flex-col gap-2 h-full">
-              {tripleSlides.slice(0, 3).map((slide, idx) => (
-                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden aspect-video">
-                  {slide.image ? (
-                    isVideoUrl(slide.image) ? (
-                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+            <div className="relative aspect-[16/9] overflow-hidden" ref={heroEmblaRef}>
+              <div className="flex h-full">
+                {tripleSlides.map((slide, idx) => (
+                  <div key={getSlideKey(slide, idx)} className={cn("relative h-full min-w-0 flex-[0_0_100%] overflow-hidden", cornerRadiusClassName)}>
+                    {slide.image ? (
+                      isVideoUrl(slide.image) ? (
+                        <HeroPreviewVideo src={slide.image} className="w-full h-full object-cover" />
+                      ) : (
+                        <PreviewImage src={slide.image} alt="" className="w-full h-full object-cover" />
+                      )
                     ) : (
-                    <div className="w-full h-full relative">
-                      <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
-                      <div className="absolute inset-0 bg-black/20" />
-                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
-                    </div>
-                    )
-                  ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
-                    <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
+                      <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: placeholderTints[idx] ?? '#f1f5f9' }}>
+                        <ImageIcon size={20} style={{ color: bentoColors.placeholderIcon }} />
+                      </div>
+                    )}
                   </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
+              {tripleSlides.length > 1 && (
+                <>
+                  <button type="button" aria-label="Ảnh trước" onClick={prevSlide} disabled={!canScrollPrev} className="absolute left-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button type="button" aria-label="Ảnh tiếp" onClick={nextSlide} disabled={!canScrollNext} className="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                    <ChevronRight size={14} />
+                  </button>
+                  <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                    {tripleSlides.map((_, idx) => (
+                      <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={cn("h-2 rounded-full transition-all", idx === emblaCurrentSlide ? "w-6" : "w-2")} style={{ backgroundColor: idx === emblaCurrentSlide ? sliderColors.dotActive : sliderColors.dotInactive }} />
+                    ))}
+                  </div>
+                  <div className="absolute bottom-1.5 left-0 right-0 z-20 h-0.5" style={{ backgroundColor: sliderColors.progressBarInactive }}>
+                    <div className="h-full transition-all duration-700" style={{ backgroundColor: sliderColors.progressBarActive, width: `${((emblaCurrentSlide + 1) / tripleSlides.length) * 100}%` }} />
+                  </div>
+                </>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-3 grid-rows-2 gap-2 h-full" style={{ height: device === 'desktop' ? '280px' : '260px' }}>
+            <div className="grid grid-cols-3 grid-rows-2 gap-2 aspect-[8/3]">
               {/* Ảnh chính: chiếm 2/3 */}
-              <div className={cn("col-span-2 row-span-2 relative rounded-xl overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900")} style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
+              <div className={cn("col-span-2 row-span-2 relative overflow-hidden ring-2 ring-offset-1 ring-offset-slate-900", cornerRadiusClassName)} style={{ '--tw-ring-color': bentoColors.mainImageRing } as React.CSSProperties}>
                 {tripleSlides[0]?.image ? (
                   isVideoUrl(tripleSlides[0].image) ? (
-                    <video src={tripleSlides[0].image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    <HeroPreviewVideo src={tripleSlides[0].image} className="w-full h-full object-cover" />
                   ) : (
                   <div className="w-full h-full relative">
                     <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${tripleSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                     <div className="absolute inset-0 bg-black/20" />
-                    <PreviewImage src={tripleSlides[0].image} alt="" className="relative w-full h-full object-contain z-10" />
+                    <PreviewImage src={tripleSlides[0].image} alt="" className="relative w-full h-full object-cover z-10" />
                   </div>
                   )
                 ) : (
@@ -542,15 +795,15 @@ export const HeroPreview = ({
               </div>
               {/* 2 ảnh phụ xếp dọc bên phải */}
               {tripleSlides.slice(1, 3).map((slide, idx) => (
-                <div key={getSlideKey(slide, idx)} className="relative rounded-xl overflow-hidden">
+                <div key={getSlideKey(slide, idx)} className={cn("relative overflow-hidden", cornerRadiusClassName)}>
                   {slide.image ? (
                     isVideoUrl(slide.image) ? (
-                      <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                      <HeroPreviewVideo src={slide.image} className="w-full h-full object-cover" />
                     ) : (
                     <div className="w-full h-full relative">
                       <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${15 - idx * 5}px)` }} />
                       <div className="absolute inset-0 bg-black/20" />
-                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" />
+                      <PreviewImage src={slide.image} alt="" className="relative w-full h-full object-cover z-10" />
                     </div>
                     )
                   ) : (
@@ -583,18 +836,40 @@ export const HeroPreview = ({
       }
       : { borderColor: 'rgba(255,255,255,0.3)', color: '#ffffff' };
     return (
-      <section className="relative w-full bg-slate-900 overflow-hidden">
-        <div className={cn(
-          "relative w-full",
-          device === 'mobile' ? 'h-[280px]' : (device === 'tablet' ? 'h-[350px]' : 'h-[400px]')
-        )}>
+      <section className={cn("relative w-full overflow-hidden", isDarkState ? "bg-slate-950" : "bg-transparent")}>
+        <div className="relative w-full aspect-[16/9] overflow-hidden">
           {slides.length > 0 && mainSlide ? (
             <>
-              {slides.map((slide, idx) => (
+              {device === 'mobile' && !showFullscreenContent ? (
+                <div className="absolute inset-0 overflow-hidden" ref={heroEmblaRef}>
+                  <div className="flex h-full">
+                    {slides.map((slide, idx) => (
+                      <div key={getSlideKey(slide, idx)} className="relative h-full min-w-0 flex-[0_0_100%]">
+                        {slide.image ? renderSlideWithContain(slide, { fit: 'contain' }) : renderPlaceholder(idx, { backgroundColor: fullscreenColors.placeholderBg, iconColor: fullscreenColors.placeholderIcon })}
+                      </div>
+                    ))}
+                  </div>
+                  {slides.length > 1 && (
+                    <>
+                      <button type="button" aria-label="Ảnh trước" onClick={prevSlide} disabled={!canScrollPrev} className="absolute left-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBg, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                        <ChevronLeft size={14} />
+                      </button>
+                      <button type="button" aria-label="Ảnh tiếp" onClick={nextSlide} disabled={!canScrollNext} className="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: sliderColors.navButtonBgHover, borderColor: sliderColors.navButtonBorderColor, boxShadow: `0 0 0 2px ${sliderColors.navButtonOuterRing}`, color: sliderColors.navButtonIconColor }}>
+                        <ChevronRight size={14} />
+                      </button>
+                      <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                        {slides.map((_, idx) => (
+                          <button key={idx} type="button" onClick={() =>{  scrollHeroTo(idx); }} className={cn("h-2 rounded-full transition-all", idx === emblaCurrentSlide ? "w-6" : "w-2")} style={{ backgroundColor: idx === emblaCurrentSlide ? fullscreenColors.dotActive : fullscreenColors.dotInactive }} />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : slides.map((slide, idx) => (
                 <div key={getSlideKey(slide, idx)} className={cn("absolute inset-0 transition-opacity duration-1000", idx === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none")}>
                   {slide.image ? (
                     renderSlideWithContain(slide, {
-                      fit: 'cover',
+                      fit: 'contain',
                       overlay: showFullscreenContent ? (
                         <div className="absolute inset-0 z-20" style={{ background: `linear-gradient(to right, rgba(0,0,0,${(c.overlayOpacity ?? 50) / 100}), rgba(0,0,0,${(c.overlayOpacity ?? 50) / 250}), transparent)` }} />
                       ) : null,
@@ -642,7 +917,7 @@ export const HeroPreview = ({
                   </div>
                 </div>
               )}
-              {slides.length > 1 && (
+              {showFullscreenContent && slides.length > 1 && (
                 <div className="absolute bottom-4 right-4 flex gap-2 z-40">
                   {slides.map((_, idx) => (
                     <button key={idx} type="button" onClick={() =>{  setCurrentSlide(idx); }} 
@@ -655,6 +930,120 @@ export const HeroPreview = ({
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-slate-800">
               <span className="text-slate-400 text-sm">Chưa có banner</span>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  };
+
+  const renderConquestStyle = () => {
+    const c = content ?? {};
+    const primaryHref = c.primaryButtonLink || slides[currentSlide]?.link || '#';
+    const secondaryHref = c.secondaryButtonLink || '#';
+    const primaryButtonBg = c.primaryButtonColor || conquestColors.primaryCTA;
+    const primaryButtonText = getAPCATextColor(primaryButtonBg, 16, 600);
+    const secondaryButtonStyle = c.secondaryButtonColor
+      ? {
+        backgroundColor: c.secondaryButtonColor,
+        borderColor: c.secondaryButtonColor,
+        color: getAPCATextColor(c.secondaryButtonColor, 16, 600),
+      }
+      : {
+        backgroundColor: 'transparent',
+        borderColor: conquestColors.sectionText,
+        color: conquestColors.secondaryCTAText,
+      };
+    const contentAlignClass = c.textAlign === 'center'
+      ? 'items-center text-center'
+      : c.textAlign === 'right'
+        ? 'items-end text-right'
+        : device === 'mobile' ? 'items-center text-center' : 'items-start text-left';
+    const buttonAlignClass = c.textAlign === 'center'
+      ? 'justify-center'
+      : c.textAlign === 'right'
+        ? 'justify-end'
+        : device === 'mobile' ? 'justify-center' : 'justify-start';
+
+    return (
+      <section className="relative w-full overflow-hidden" style={{ backgroundColor: conquestColors.sectionBg, color: conquestColors.sectionText }}>
+        <div className={cn(
+          "relative mx-auto flex w-full max-w-6xl overflow-hidden px-4",
+          device === 'mobile' ? 'min-h-[520px] flex-col pt-8' : 'min-h-[430px] items-stretch justify-between px-6'
+        )}>
+          <div className={cn(
+            "relative z-20 flex flex-col justify-center",
+            device === 'mobile' ? 'max-w-full gap-4 pb-4' : 'min-w-[320px] max-w-[470px] gap-5 py-14',
+            contentAlignClass
+          )}>
+            {c.badge && (
+              <span className="inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide" style={{ backgroundColor: conquestColors.badgeBg, color: conquestColors.badgeText }}>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: conquestColors.accentSolid }} />
+                {c.badge}
+              </span>
+            )}
+            <h1 className={cn("font-bold uppercase leading-[1.05]", device === 'mobile' ? 'text-3xl' : 'text-5xl')}>
+              {parseHighlightedHeading(c.heading ?? 'Chinh phục tầm cao mới', c.highlightColor || conquestColors.accentSolid)}
+            </h1>
+            {c.description && (
+              <p className={cn("max-w-xl", device === 'mobile' ? 'text-sm' : 'text-lg')} style={{ color: conquestColors.descriptionText }}>
+                {c.description}
+              </p>
+            )}
+            <div className={cn("flex gap-3", buttonAlignClass)}>
+              {c.primaryButtonText && (
+                <a href={primaryHref} className="rounded-full px-6 py-3 text-sm font-semibold shadow-lg" style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>
+                  {c.primaryButtonText}
+                </a>
+              )}
+              {c.secondaryButtonText && (
+                <a href={secondaryHref} className="rounded-full border px-6 py-3 text-sm font-semibold" style={secondaryButtonStyle}>
+                  {c.secondaryButtonText}
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className={cn("relative flex flex-1 items-end justify-center", device === 'mobile' ? 'min-h-[250px]' : 'min-h-[430px]')}>
+            {device !== 'mobile' && (
+              <div className="absolute inset-y-0 right-0 w-full max-w-[560px]" aria-hidden>
+                {[0, 1, 2].map((idx) => (
+                  <span key={idx} className="absolute top-0 w-12 rounded-b-sm opacity-80" style={{ right: `${70 + idx * 120}px`, height: '62%', backgroundImage: conquestColors.pillarGradient }} />
+                ))}
+                <span className="absolute bottom-0 right-[300px] h-[35%] w-36 skew-x-[-14deg] opacity-80" style={{ backgroundImage: conquestColors.baseGradient }} />
+                <span className="absolute bottom-0 right-[175px] h-[35%] w-28 skew-x-[10deg] opacity-80" style={{ backgroundImage: conquestColors.baseGradient }} />
+                <span className="absolute bottom-0 right-8 h-[35%] w-36 skew-x-[14deg] opacity-80" style={{ backgroundImage: conquestColors.baseGradient }} />
+              </div>
+            )}
+            <div className={cn("relative z-10 w-full overflow-hidden", device === 'mobile' ? 'h-[240px]' : 'h-[390px] max-w-[520px]')} ref={heroEmblaRef}>
+              <div className="flex h-full">
+                {slides.length > 0 ? slides.map((slide, idx) => (
+                  <div key={getSlideKey(slide, idx)} className="relative h-full min-w-0 flex-[0_0_100%]">
+                    {slide.image ? renderSlideWithContain(slide, { fit: 'contain', blur: 18 }) : renderPlaceholder(idx, { backgroundColor: conquestColors.placeholderBg, iconColor: conquestColors.placeholderIcon })}
+                  </div>
+                )) : (
+                  <div className="relative h-full min-w-0 flex-[0_0_100%]">
+                    {renderPlaceholder(0, { backgroundColor: conquestColors.placeholderBg, iconColor: conquestColors.placeholderIcon })}
+                  </div>
+                )}
+              </div>
+              {slides.length > 1 && (
+                <>
+                  <button type="button" aria-label="Ảnh trước" onClick={prevSlide} disabled={!canScrollPrev} className="absolute left-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: conquestColors.primaryCTA, borderColor: conquestColors.sectionText, color: conquestColors.primaryCTAText }}>
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button type="button" aria-label="Ảnh tiếp" onClick={nextSlide} disabled={!canScrollNext} className="absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: conquestColors.primaryCTA, borderColor: conquestColors.sectionText, color: conquestColors.primaryCTAText }}>
+                    <ChevronRight size={16} />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          {slides.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-2">
+              {slides.map((_, idx) => (
+                <button key={idx} type="button" onClick={() => { scrollHeroTo(idx); }} className={cn("h-2 rounded-full transition-all", idx === emblaCurrentSlide ? "w-6" : "w-2")} style={{ backgroundColor: idx === emblaCurrentSlide ? conquestColors.dotActive : conquestColors.dotInactive }} />
+              ))}
             </div>
           )}
         </div>
@@ -719,30 +1108,39 @@ export const HeroPreview = ({
               <div className={cn(
                 "relative overflow-hidden",
                 device === 'mobile' ? 'w-full h-[200px] order-1' : 'w-1/2'
-              )}>
-                {slides.map((slide, idx) => (
-                  <div key={getSlideKey(slide, idx)} className={cn("absolute inset-0 transition-all duration-700", idx === currentSlide ? "opacity-100 scale-100" : "opacity-0 scale-105 pointer-events-none")}>
-                    {slide.image ? (
-                      isVideoUrl(slide.image) ? (
-                        <video src={slide.image} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+              )} ref={heroEmblaRef}>
+                <div className="flex h-full">
+                  {slides.map((slide, idx) => (
+                    <div key={getSlideKey(slide, idx)} className="relative h-full min-w-0 flex-[0_0_100%]">
+                      {slide.image ? (
+                        isVideoUrl(slide.image) ? (
+                          <HeroPreviewVideo src={slide.image} className="w-full h-full object-cover" />
+                        ) : (
+                          <PreviewImage src={slide.image} alt="" className="w-full h-full object-cover" />
+                        )
                       ) : (
-                      <PreviewImage src={slide.image} alt="" className="w-full h-full object-cover" />
-                      )
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-200 dark:bg-slate-700">
-                        <ImageIcon size={40} className="text-slate-400" />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                        <div className="w-full h-full flex items-center justify-center bg-slate-200 dark:bg-slate-700">
+                          <ImageIcon size={40} className="text-slate-400" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 {slides.length > 1 && (
                   <>
-                    <button type="button" onClick={prevSlide} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center z-10" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
+                    <button type="button" onClick={prevSlide} disabled={!canScrollPrev} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center z-10 disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
                       <ChevronLeft size={16} style={{ color: splitColors.navButtonIcon }} />
                     </button>
-                    <button type="button" onClick={nextSlide} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center z-10" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
+                    <button type="button" onClick={nextSlide} disabled={!canScrollNext} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full shadow-lg flex items-center justify-center z-10 disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: splitColors.navButtonBg, boxShadow: `0 0 0 2px ${splitColors.navButtonOuterRing}` }}>
                       <ChevronRight size={16} style={{ color: splitColors.navButtonIcon }} />
                     </button>
+                    {device === 'mobile' && (
+                      <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+                        {slides.map((_, idx) => (
+                          <button key={idx} type="button" onClick={() => { scrollHeroTo(idx); }} className={cn("h-2 rounded-full transition-all", idx === emblaCurrentSlide ? "w-6" : "w-2")} style={{ backgroundColor: idx === emblaCurrentSlide ? splitColors.progressDotActive : splitColors.progressDotInactive }} />
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -763,11 +1161,75 @@ export const HeroPreview = ({
     const primaryHref = c.primaryButtonLink || slides[currentSlide]?.link || '#';
     const primaryButtonBg = c.primaryButtonColor || parallaxColors.primaryCTA;
     const primaryButtonText = getAPCATextColor(primaryButtonBg, 14, 600);
+    if (device === 'mobile') {
+      return (
+        <section className="relative w-full overflow-hidden" style={{ backgroundColor: parallaxColors.cardBg }}>
+          {slides.length > 0 && mainSlide ? (
+            <div className="flex flex-col">
+              <div className="relative h-[200px] w-full overflow-hidden" ref={heroEmblaRef}>
+                <div className="flex h-full">
+                  {slides.map((slide, idx) => (
+                    <div key={getSlideKey(slide, idx)} className="relative h-full min-w-0 flex-[0_0_100%]">
+                      {slide.image ? (
+                        renderSlideWithContain(slide, {
+                          overlay: (
+                            <div className="absolute inset-0 z-20" style={{ background: `linear-gradient(to top, rgba(0,0,0,${(c.overlayOpacity ?? 50) / 160}), rgba(0,0,0,0))` }} />
+                          ),
+                        })
+                      ) : renderPlaceholder(idx, { backgroundColor: parallaxColors.placeholderBg, iconColor: parallaxColors.placeholderIcon })}
+                    </div>
+                  ))}
+                </div>
+                {slides.length > 1 && (
+                  <>
+                    <button type="button" aria-label="Ảnh trước" onClick={prevSlide} disabled={!canScrollPrev} className="absolute left-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
+                      <ChevronLeft size={16} style={{ color: parallaxColors.navButtonIcon }} />
+                    </button>
+                    <button type="button" aria-label="Ảnh tiếp" onClick={nextSlide} disabled={!canScrollNext} className="absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-40" style={{ backgroundColor: parallaxColors.navButtonBg, boxShadow: `0 0 0 2px ${parallaxColors.navButtonOuterRing}` }}>
+                      <ChevronRight size={16} style={{ color: parallaxColors.navButtonIcon }} />
+                    </button>
+                    <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                      {slides.map((_, idx) => (
+                        <button key={idx} type="button" onClick={() => { scrollHeroTo(idx); }} className={cn("h-2 rounded-full transition-all", idx === emblaCurrentSlide ? "w-6" : "w-2")} style={{ backgroundColor: idx === emblaCurrentSlide ? parallaxColors.cardBadgeDot : 'rgba(255,255,255,0.55)' }} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="p-4" style={{ backgroundColor: parallaxColors.cardBg }}>
+                {c.badge && (
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: parallaxColors.cardBadgeDot }} />
+                    <span className="text-xs font-semibold uppercase tracking-wide px-2.5 py-0.5 rounded-full" style={{ backgroundColor: parallaxColors.cardBadgeBg, color: parallaxColors.cardBadgeText }}>{c.badge}</span>
+                  </div>
+                )}
+                <h3 className="text-base font-bold" style={{ color: parallaxColors.headingText }}>
+                  {parseHighlightedHeading(c.heading ?? 'Tiêu đề nổi bật', c.highlightColor)}
+                </h3>
+                {c.description && <p className="mt-1 text-xs" style={{ color: parallaxColors.descriptionText }}>{c.description}</p>}
+                <div className="flex items-center gap-3 mt-3">
+                  {c.primaryButtonText && (
+                    <a href={primaryHref} className="rounded-lg px-3 py-1.5 text-xs font-medium" style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>
+                      {c.primaryButtonText}
+                    </a>
+                  )}
+                  {c.countdownText && <span className="text-xs" style={{ color: parallaxColors.countdownText }}>{c.countdownText}</span>}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full h-[300px] flex items-center justify-center bg-slate-800">
+              <span className="text-slate-400 text-sm">Chưa có banner</span>
+            </div>
+          )}
+        </section>
+      );
+    }
     return (
-      <section className="relative w-full bg-slate-900 overflow-hidden">
+      <section className={cn("relative w-full overflow-hidden", isDarkState ? "bg-slate-950" : "bg-transparent")}>
         <div className={cn(
           "relative w-full",
-          device === 'mobile' ? 'h-[260px]' : (device === 'tablet' ? 'h-[320px]' : 'h-[380px]')
+          device === 'tablet' ? 'h-[320px]' : 'h-[380px]'
         )}>
           {slides.length > 0 && mainSlide ? (
             <>
@@ -784,11 +1246,12 @@ export const HeroPreview = ({
               ))}
               <div className={cn(
                 "absolute z-10 flex items-end",
-                device === 'mobile' ? 'inset-x-3 bottom-3' : 'inset-x-6 bottom-6'
+                'inset-x-6 bottom-6'
               )}>
                 <div className={cn(
-                  "rounded-xl shadow-2xl",
-                  device === 'mobile' ? 'p-3 w-full' : 'p-5 max-w-lg'
+                  'shadow-2xl',
+                  cornerRadiusClassName,
+                  'p-5 max-w-lg'
                 )} style={{ backgroundColor: parallaxColors.cardBg }}>
                   {c.badge && (
                     <div className="flex items-center gap-3 mb-2">
@@ -796,22 +1259,22 @@ export const HeroPreview = ({
                       <span className="text-xs font-semibold uppercase tracking-wide px-2.5 py-0.5 rounded-full" style={{ backgroundColor: parallaxColors.cardBadgeBg, color: parallaxColors.cardBadgeText }}>{c.badge}</span>
                     </div>
                   )}
-                  <h3 className={cn("font-bold", device === 'mobile' ? 'text-base' : 'text-xl')} style={{ color: parallaxColors.headingText }}>
+                  <h3 className="text-xl font-bold" style={{ color: parallaxColors.headingText }}>
                     {parseHighlightedHeading(c.heading ?? 'Tiêu đề nổi bật', c.highlightColor)}
                   </h3>
                   {c.description && (
-                    <p className={cn("mt-1", device === 'mobile' ? 'text-xs' : 'text-sm')} style={{ color: parallaxColors.descriptionText }}>
+                    <p className="mt-1 text-sm" style={{ color: parallaxColors.descriptionText }}>
                       {c.description}
                     </p>
                   )}
                   <div className="flex items-center gap-3 mt-3">
                     {c.primaryButtonText && (
-                      <a href={primaryHref} className={cn("font-medium rounded-lg", device === 'mobile' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2 text-sm')} style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>
+                      <a href={primaryHref} className="rounded-lg px-5 py-2 text-sm font-medium" style={{ backgroundColor: primaryButtonBg, color: primaryButtonText }}>
                         {c.primaryButtonText}
                       </a>
                     )}
                     {c.countdownText && (
-                      <span className={cn(device === 'mobile' ? 'text-xs' : 'text-sm')} style={{ color: parallaxColors.countdownText }}>{c.countdownText}</span>
+                      <span className="text-sm" style={{ color: parallaxColors.countdownText }}>{c.countdownText}</span>
                     )}
                   </div>
                 </div>
@@ -861,14 +1324,18 @@ export const HeroPreview = ({
             </div>
             {device !== 'mobile' && <div className="flex gap-4">{[1,2,3,4].map(i => (<div key={i} className="w-12 h-2 bg-slate-100 dark:bg-slate-800 rounded"></div>))}</div>}
           </div>
-          {previewStyle === 'slider' && renderSliderStyle()}
-          {previewStyle === 'fade' && renderFadeStyle()}
-          {previewStyle === 'bento' && renderBentoStyle()}
-          {previewStyle === 'triple' && renderTripleStyle()}
-          {previewStyle === 'triple2' && renderTriple2Style()}
-          {previewStyle === 'fullscreen' && renderFullscreenStyle()}
-          {previewStyle === 'split' && renderSplitStyle()}
-          {previewStyle === 'parallax' && renderParallaxStyle()}
+          <div className={sectionSpacingClassName}>
+            {previewStyle === 'slider' && renderSliderStyle()}
+            {previewStyle === 'fade' && renderFadeStyle()}
+            {previewStyle === 'builderCoffee' && renderBuilderCoffeeStyle()}
+            {previewStyle === 'bento' && renderBentoStyle()}
+            {previewStyle === 'triple' && renderTripleStyle()}
+            {previewStyle === 'triple2' && renderTriple2Style()}
+            {previewStyle === 'fullscreen' && renderFullscreenStyle()}
+            {previewStyle === 'conquest' && renderConquestStyle()}
+            {previewStyle === 'split' && renderSplitStyle()}
+            {previewStyle === 'parallax' && renderParallaxStyle()}
+          </div>
           <div className="p-4 space-y-3">
             <div className="flex gap-3">{[1,2,3,4].slice(0, device === 'mobile' ? 2 : 4).map(i => (<div key={i} className="flex-1 h-16 bg-slate-100 dark:bg-slate-800 rounded-lg"></div>))}</div>
           </div>
@@ -926,6 +1393,9 @@ export const HeroPreview = ({
             )}
             {previewStyle === 'fade' && (
               <p><strong>1920×600px</strong> (16:5) • Nhiều ảnh, thumbnail navigation</p>
+            )}
+            {previewStyle === 'builderCoffee' && (
+              <p><strong>1500×560px</strong> • Layout Builder Coffee: ảnh contain, bo góc 10px, mũi tên mảnh và dot dạng thanh</p>
             )}
             {previewStyle === 'bento' && (
               <p><strong>Slot 1:</strong> 800×500 • <strong>Slot 2:</strong> 800×250 • <strong>Slot 3-4:</strong> 400×250 • Tối đa 4 ảnh</p>

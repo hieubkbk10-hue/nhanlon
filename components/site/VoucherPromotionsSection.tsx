@@ -8,6 +8,7 @@ import { normalizeVoucherLimit, normalizeVoucherStyle } from '@/lib/home-compone
 import {
   DEFAULT_DEMO_VOUCHERS,
   normalizeDemoVouchers,
+  normalizeVoucherPromotionsCornerRadius,
   normalizeVoucherPromotionsTexts,
 } from '@/app/admin/home-components/voucher-promotions/_lib/constants';
 import { extractSectionHeaderConfig } from '@/app/admin/home-components/_shared/hooks/useSectionHeaderState';
@@ -19,6 +20,7 @@ import type {
   VoucherPromotionsSelectionMode,
   VoucherPromotionsTexts,
 } from '@/app/admin/home-components/voucher-promotions/_types';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 interface VoucherPromotionsSectionProps {
   config: Record<string, unknown>;
@@ -26,6 +28,7 @@ interface VoucherPromotionsSectionProps {
   secondary: string;
   mode: VoucherPromotionsBrandMode;
   title: string;
+  isDark?: boolean;
 }
 
 export function VoucherPromotionsSection({
@@ -34,6 +37,7 @@ export function VoucherPromotionsSection({
   secondary,
   mode,
   title,
+  isDark,
 }: VoucherPromotionsSectionProps) {
   const texts = normalizeVoucherPromotionsTexts({
     heading: (config.texts as VoucherPromotionsTexts | undefined)?.heading ?? (config.heading as string | undefined),
@@ -41,7 +45,7 @@ export function VoucherPromotionsSection({
     ctaLabel: (config.texts as VoucherPromotionsTexts | undefined)?.ctaLabel ?? (config.ctaLabel as string | undefined),
   });
 
-  const heading = texts.heading || title || 'Voucher khuyến mãi';
+  const heading = title || texts.heading || 'Voucher khuyến mãi';
   const headerConfig = extractSectionHeaderConfig(config);
   const description = headerConfig.subtitle || texts.description;
   const ctaLabel = texts.ctaLabel;
@@ -51,6 +55,8 @@ export function VoucherPromotionsSection({
   const limit = normalizeVoucherLimit(config.limit as number | undefined);
   const style = normalizeVoucherStyle(config.style as string | undefined);
   const desktopColumns = config.desktopColumns === 3 ? 3 : 4;
+  const cornerRadius = normalizeVoucherPromotionsCornerRadius(config.cornerRadius, config.noBorderRadius);
+  const spacing = config.noVerticalMargin === true && config.spacing === undefined ? 'none' : headerConfig.spacing;
   const iconName = typeof config.iconName === 'string' ? config.iconName : 'BadgePercent';
   const selectionMode: VoucherPromotionsSelectionMode = config.selectionMode === 'demo' ? 'demo' : 'auto';
   const demoVouchers = normalizeDemoVouchers(config.demoVouchers as Partial<VoucherPromotionItem>[] | undefined);
@@ -64,11 +70,14 @@ export function VoucherPromotionsSection({
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = React.useState(0);
 
-  const tokens = React.useMemo(() => getVoucherPromotionsColorTokens({
-    primary: brandColor,
-    secondary,
-    mode,
-  }), [brandColor, secondary, mode]);
+  const tokens = React.useMemo(() => {
+    const rawTokens = getVoucherPromotionsColorTokens({
+      primary: brandColor,
+      secondary,
+      mode,
+    });
+    return adaptTokensForDarkMode(rawTokens, isDark ?? false);
+  }, [brandColor, secondary, mode, isDark]);
 
   const displayVouchers = React.useMemo(() => {
     if (selectionMode === 'demo') {
@@ -162,6 +171,8 @@ export function VoucherPromotionsSection({
       uppercaseText={headerConfig.uppercaseText}
       brandColor={brandColor}
       desktopColumns={desktopColumns}
+      cornerRadius={cornerRadius}
+      spacing={spacing}
       iconName={iconName}
     />
   );

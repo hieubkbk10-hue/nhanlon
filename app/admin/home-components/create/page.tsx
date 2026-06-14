@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from 'convex/react';
+import { toast } from 'sonner';
 import { api } from '@/convex/_generated/api';
 import { Check, ChevronsUpDown, Search, Star } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, Input, cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui';
@@ -114,7 +115,13 @@ export default function HomeComponentCreatePage() {
                     <button
                       key={type.value}
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        const exists = (typeCounts[type.value] ?? 0) > 0;
+                        if (type.singleton && exists) {
+                          e.preventDefault();
+                          toast.error(`Chỉ được phép tạo 1 ${type.label.toLowerCase()} trên trang.`);
+                          return;
+                        }
                         setSearchOpen(false);
                         setQuery('');
                         router.push(`/admin/home-components/create/${type.route}`);
@@ -195,11 +202,19 @@ function ComponentCard({ type, count }: { type: ComponentType; count: number }) 
       <TooltipTrigger asChild>
         <Link
           href={`/admin/home-components/create/${type.route}`}
+          onClick={(e) => {
+            if (shouldWarn) {
+              e.preventDefault();
+              void import('sonner').then(({ toast }) => {
+                toast.error(`Chỉ được phép tạo 1 ${type.label.toLowerCase()} trên trang.`);
+              });
+            }
+          }}
           className={cn(
             "relative cursor-pointer border-2 rounded-xl p-4 transition-all",
             "hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10",
             "border-slate-200 dark:border-slate-700",
-            shouldWarn && "opacity-60 hover:opacity-70"
+            shouldWarn && "opacity-60 hover:opacity-70 cursor-not-allowed"
           )}
         >
           {type.recommended && (

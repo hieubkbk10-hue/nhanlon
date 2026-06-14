@@ -2,14 +2,17 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, icons, Tag } from 'lucide-react';
+import { ArrowRight, icons, Tag } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { PreviewImage } from '../../_shared/components/PreviewImage';
 import { SectionHeader } from '../../_shared/components/SectionHeader';
 import type { PreviewDevice } from '../../_shared/hooks/usePreviewDevice';
-import type { VoucherPromotionItem, VoucherPromotionsCtaVariant, VoucherPromotionsDesktopColumns, VoucherPromotionsStyle } from '../_types';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
+import { getSectionSpacingClassName, normalizeSectionSpacing } from '../../_shared/types/sectionSpacing';
+import type { VoucherPromotionItem, VoucherPromotionsCornerRadius, VoucherPromotionsCtaVariant, VoucherPromotionsDesktopColumns, VoucherPromotionsStyle } from '../_types';
 import type { VoucherPromotionsColorTokens } from '../_lib/colors';
+import { getVoucherPromotionsCornerRadiusClassName, normalizeVoucherPromotionsCornerRadius } from '../_lib/constants';
 import { formatVoucherExpiry } from '@/lib/home-components/voucher-promotions';
 
 interface VoucherPromotionsSectionSharedProps {
@@ -39,6 +42,8 @@ interface VoucherPromotionsSectionSharedProps {
   uppercaseText?: boolean;
   brandColor?: string;
   desktopColumns?: VoucherPromotionsDesktopColumns;
+  cornerRadius?: VoucherPromotionsCornerRadius;
+  spacing?: SectionSpacing;
   iconName?: string;
 }
 
@@ -162,7 +167,7 @@ export function VoucherPromotionsSectionShared({
   tokens,
   copiedCode,
   onCopy,
-  currentIndex = 0,
+  currentIndex: _currentIndex = 0,
   onCurrentIndexChange,
   device,
   hideHeader,
@@ -176,11 +181,12 @@ export function VoucherPromotionsSectionShared({
   uppercaseText,
   brandColor,
   desktopColumns = 4,
+  cornerRadius = 'lg',
+  spacing = 'normal',
   iconName = 'BadgePercent',
 }: VoucherPromotionsSectionSharedProps) {
   const [selectedVoucher, setSelectedVoucher] = React.useState<VoucherPromotionItem | null>(null);
 
-  const normalizedIndex = vouchers.length > 0 ? ((currentIndex % vouchers.length) + vouchers.length) % vouchers.length : 0;
   const enterpriseGridClass = (() => {
     if (device === 'mobile') {
       return desktopColumns === 3 ? 'grid-cols-1' : 'grid-cols-2';
@@ -204,27 +210,20 @@ export function VoucherPromotionsSectionShared({
       ? 'basis-full md:basis-1/3'
       : 'basis-1/2 lg:basis-1/4';
   })();
-  const visibleCarouselItems = device === 'mobile'
-    ? (desktopColumns === 3 ? 1 : 2)
-    : device === 'tablet'
-      ? (desktopColumns === 3 ? 3 : 2)
-      : desktopColumns;
-  const shouldShowCarouselControls = vouchers.length > visibleCarouselItems;
+  const hasCarouselItems = vouchers.length > 1;
   const VoucherIcon = getVoucherIconComponent(iconName);
+  const sectionClassName = `px-4 ${getSectionSpacingClassName(normalizeSectionSpacing(spacing))}`;
+  const cardRadiusClassName = getVoucherPromotionsCornerRadiusClassName(normalizeVoucherPromotionsCornerRadius(cornerRadius));
   const [carouselRef, carouselApi] = useEmblaCarousel({
-    align: 'center',
+    align: 'start',
     containScroll: 'trimSnaps',
     dragFree: false,
     duration: 26,
-    watchDrag: shouldShowCarouselControls,
+    watchDrag: hasCarouselItems,
   });
-  const [canCarouselPrev, setCanCarouselPrev] = React.useState(false);
-  const [canCarouselNext, setCanCarouselNext] = React.useState(false);
 
   const updateCarouselState = React.useCallback(() => {
     if (!carouselApi) {return;}
-    setCanCarouselPrev(carouselApi.canScrollPrev());
-    setCanCarouselNext(carouselApi.canScrollNext());
     onCurrentIndexChange?.(carouselApi.selectedScrollSnap());
   }, [carouselApi, onCurrentIndexChange]);
 
@@ -240,14 +239,15 @@ export function VoucherPromotionsSectionShared({
     };
   }, [carouselApi, updateCarouselState]);
 
-  if (vouchers.length === 0) {
-    return null;
-  }
+  React.useEffect(() => {
+    if (!carouselApi) {return;}
+    const timeout = window.setTimeout(() => {
+      carouselApi.reInit();
+      updateCarouselState();
+    }, 50);
 
-  const nextIndex = (index: number) => {
-    if (!onCurrentIndexChange) {return;}
-    onCurrentIndexChange(((index % vouchers.length) + vouchers.length) % vouchers.length);
-  };
+    return () => window.clearTimeout(timeout);
+  }, [carouselApi, desktopColumns, device, style, updateCarouselState, vouchers.length]);
 
   const renderHeader = (align: 'left' | 'center', showCtaInHeader = true) => {
     const canShowCta = Boolean(showCta && showCtaInHeader && ctaLabel && ctaUrl);
@@ -384,9 +384,20 @@ export function VoucherPromotionsSectionShared({
     return content;
   };
 
+  if (vouchers.length === 0) {
+    return wrapper(
+      <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
+        <div className="mx-auto max-w-6xl rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Chưa có voucher để hiển thị</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Hãy dùng dữ liệu demo hoặc thêm voucher đang hoạt động.</div>
+        </div>
+      </section>,
+    );
+  }
+
   if (style === 'ticketHorizontal') {
     return wrapper(
-      <section className="px-4 py-6 md:py-8" style={{ backgroundColor: tokens.sectionBg }}>
+      <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
         <div className="mx-auto max-w-6xl space-y-5">
           {renderHeader('center', false)}
           {renderTopRightCta()}
@@ -397,8 +408,8 @@ export function VoucherPromotionsSectionShared({
               return (
                 <div
                   key={voucher.code}
-                  className="relative flex overflow-hidden rounded-lg border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)]"
-                  style={{ borderColor: `${tokens.primary}30` }}
+                  className={`relative flex overflow-hidden border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] ${cardRadiusClassName}`}
+                  style={{ borderColor: tokens.cardBorder }}
                 >
                   {/* Left: branded square block */}
                   <div className="relative flex w-[86px] shrink-0 items-center justify-center px-1.5 py-3">
@@ -429,7 +440,7 @@ export function VoucherPromotionsSectionShared({
                     </div>
 
                     {/* Dashed separator */}
-                    <div className="absolute right-0 top-[14px] bottom-[14px] border-r border-dashed" style={{ borderColor: `${tokens.primary}25` }} />
+                    <div className="absolute right-0 top-[14px] bottom-[14px] border-r border-dashed" style={{ borderColor: tokens.neutralBorder }} />
                     {/* Top notch */}
                     <div className="absolute -top-[7px] right-[-7px] z-10 h-3.5 w-3.5 rounded-full" style={{ backgroundColor: tokens.sectionBg }} />
                     {/* Bottom notch */}
@@ -442,7 +453,7 @@ export function VoucherPromotionsSectionShared({
                     <button
                       type="button"
                       className="absolute right-2 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold leading-none"
-                      style={{ borderColor: tokens.primary, color: tokens.primary }}
+                      style={{ borderColor: tokens.neutralBorder, color: tokens.primary }}
                       onClick={() => setSelectedVoucher(voucher)}
                       aria-label={`Thông tin voucher ${voucher.code}`}
                     >
@@ -488,9 +499,102 @@ export function VoucherPromotionsSectionShared({
     );
   }
 
+  if (style === 'imageTicket') {
+    return wrapper(
+      <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
+        <div className="mx-auto max-w-6xl space-y-5">
+          {renderHeader('center', false)}
+          {renderTopRightCta()}
+          <div className={`grid gap-4 ${enterpriseGridClass}`}>
+            {vouchers.map((voucher) => {
+              const ticketFace = getTicketFace(voucher);
+
+              return (
+                <div
+                  key={voucher.code}
+                  className={`group relative overflow-hidden border bg-white shadow-sm transition-shadow duration-300 hover:shadow-md ${cardRadiusClassName}`}
+                  style={{ borderColor: tokens.cardBorder }}
+                >
+                  <div className="flex h-full min-h-[140px] max-md:min-h-[220px] max-md:flex-col">
+                    <div className="relative isolate flex w-[42%] min-w-0 shrink-0 items-center justify-center border-r border-dashed bg-white p-3 max-md:h-24 max-md:w-full max-md:border-b max-md:border-r-0 max-md:p-2" style={{ borderColor: tokens.neutralBorder }}>
+                      <div className="absolute -right-3 -top-3 z-10 h-6 w-6 rounded-full ring-1 ring-black/5 max-md:-bottom-3 max-md:left-4 max-md:right-auto max-md:top-auto" style={{ backgroundColor: tokens.sectionBg }} />
+                      <div className="absolute -bottom-3 -right-3 z-10 h-6 w-6 rounded-full ring-1 ring-black/5 max-md:left-auto max-md:right-4" style={{ backgroundColor: tokens.sectionBg }} />
+
+                      <div className="flex aspect-square w-full max-w-24 items-center justify-center overflow-hidden rounded-lg max-md:h-full max-md:w-20" style={{ backgroundColor: `${tokens.primary}10` }}>
+                        {voucher.thumbnail ? (
+                          <PreviewImage
+                            src={voucher.thumbnail}
+                            alt={voucher.name}
+                            width={96}
+                            height={96}
+                            className="h-full w-full object-contain mix-blend-multiply"
+                          />
+                        ) : ticketFace.value ? (
+                          <div className="text-center">
+                            <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: tokens.mutedText }}>{ticketFace.label}</div>
+                            <div className="text-2xl font-extrabold leading-none" style={{ color: tokens.primary }}>{ticketFace.value}</div>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <VoucherIcon size={34} style={{ color: tokens.primary }} />
+                            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: tokens.mutedText }}>{ticketFace.label}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="relative flex min-w-0 flex-1 flex-col justify-between bg-white p-4 max-md:p-3">
+                      <button
+                        type="button"
+                        className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold transition-opacity hover:opacity-80 max-md:right-2 max-md:top-2 max-md:h-6 max-md:w-6"
+                        style={{ borderColor: tokens.neutralBorder, color: tokens.primary }}
+                        onClick={() => setSelectedVoucher(voucher)}
+                        aria-label={`Thông tin voucher ${voucher.code}`}
+                      >
+                        i
+                      </button>
+
+                      <div className="space-y-1 pr-8 max-md:pr-7">
+                        <h3 className="break-words text-[12px] font-bold uppercase leading-tight tracking-tight sm:text-[13px] lg:text-[15px]" style={{ color: tokens.bodyText }}>
+                          {voucher.name || formatDiscount(voucher)}
+                        </h3>
+                        <p className="break-words text-[10px] font-medium leading-snug sm:text-[11px] lg:text-xs" style={{ color: tokens.mutedText }}>
+                          {voucher.description || formatDiscount(voucher)}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-end justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-medium uppercase tracking-wide" style={{ color: tokens.mutedText }}>Nhập mã</div>
+                          <div className="break-words text-[12px] font-bold uppercase tracking-wider sm:text-sm" style={{ color: tokens.primary }}>
+                            {voucher.code}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onCopy?.(voucher.code)}
+                          className="min-h-8 shrink-0 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-white transition-transform active:scale-95 sm:px-3 sm:py-2 sm:text-xs"
+                          style={{ backgroundColor: tokens.primary }}
+                        >
+                          {copiedCode === voucher.code ? 'Đã copy' : 'Sao chép'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {renderBottomCta()}
+          {renderVoucherInfoPopup()}
+        </div>
+      </section>
+    );
+  }
+
   if (style === 'couponGrid') {
     return wrapper(
-      <section className="px-4 py-6 md:py-8" style={{ backgroundColor: tokens.sectionBg }}>
+      <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
         <div className="mx-auto max-w-6xl space-y-5">
           {renderHeader('center', false)}
           {renderTopRightCta()}
@@ -498,7 +602,7 @@ export function VoucherPromotionsSectionShared({
             {vouchers.map((voucher) => (
               <div
                 key={voucher.code}
-                className="relative overflow-hidden rounded-lg border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)]"
+                className={`relative overflow-hidden border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] ${cardRadiusClassName}`}
                 style={{ borderColor: tokens.cardBorder }}
               >
                 {/* Accent top line */}
@@ -517,7 +621,7 @@ export function VoucherPromotionsSectionShared({
                     <button
                       type="button"
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold leading-none"
-                      style={{ borderColor: tokens.primary, color: tokens.primary }}
+                      style={{ borderColor: tokens.neutralBorder, color: tokens.primary }}
                       onClick={() => setSelectedVoucher(voucher)}
                       aria-label={`Thông tin voucher ${voucher.code}`}
                     >
@@ -555,7 +659,7 @@ export function VoucherPromotionsSectionShared({
 
   if (style === 'stackedBanner') {
     return wrapper(
-      <section className="px-4 py-6 md:py-8" style={{ backgroundColor: tokens.sectionBg }}>
+      <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
         <div className="mx-auto max-w-6xl space-y-5">
           {renderHeader('center', false)}
           {renderTopRightCta()}
@@ -563,8 +667,8 @@ export function VoucherPromotionsSectionShared({
             {vouchers.map((voucher) => (
               <div
                 key={voucher.code}
-                className="overflow-hidden rounded-lg border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)]"
-                style={{ borderColor: tokens.primary }}
+                className={`overflow-hidden border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] ${cardRadiusClassName}`}
+                style={{ borderColor: tokens.cardBorder }}
               >
                 <div className="flex flex-col">
                   <div
@@ -618,23 +722,23 @@ export function VoucherPromotionsSectionShared({
 
   if (style === 'carousel') {
     return wrapper(
-      <section className="px-4 py-6 md:py-8" style={{ backgroundColor: tokens.sectionBg }}>
+      <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
         <div className="mx-auto max-w-6xl space-y-5">
           {renderHeader('center', false)}
           {renderTopRightCta()}
           <div className="relative">
-            <div ref={carouselRef} className="overflow-hidden">
-              <div className="-ml-4 flex">
+            <div ref={carouselRef} className="overflow-hidden touch-pan-y">
+              <div className="-ml-4 flex items-stretch">
                 {vouchers.map((voucher) => {
                   const isExpired = voucher.endDate ? new Date(voucher.endDate).getTime() < Date.now() : false;
 
                   return (
                     <div
                       key={voucher.code}
-                      className={`min-w-0 shrink-0 grow-0 pl-4 ${carouselSlideClass}`}
+                      className={`min-w-0 shrink-0 grow-0 self-stretch pl-4 ${carouselSlideClass}`}
                     >
                       <div
-                        className="flex min-h-[106px] flex-col justify-between rounded-lg border bg-white px-3 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.06)]"
+                        className={`flex h-full min-h-[118px] flex-col justify-between border bg-white px-3 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ${cardRadiusClassName}`}
                         style={{ borderColor: tokens.cardBorder }}
                       >
                         <div>
@@ -655,7 +759,7 @@ export function VoucherPromotionsSectionShared({
                             type="button"
                             onClick={() => setSelectedVoucher(voucher)}
                             className="rounded-full border px-3 py-1.5 text-[11px] font-medium transition-opacity hover:opacity-90"
-                            style={{ borderColor: tokens.primary, color: tokens.primary }}
+                            style={{ borderColor: tokens.neutralBorder, color: tokens.primary }}
                           >
                             Điều kiện
                           </button>
@@ -682,44 +786,6 @@ export function VoucherPromotionsSectionShared({
                 })}
               </div>
             </div>
-            {shouldShowCarouselControls && (
-              <div className="mt-3 flex items-center justify-between">
-                <div className="flex gap-2">
-                  {vouchers.map((_, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => {
-                        carouselApi?.scrollTo(index);
-                        nextIndex(index);
-                      }}
-                      className={`h-2 rounded-full transition-all ${index === normalizedIndex ? 'w-6' : 'w-2'}`}
-                      style={{ backgroundColor: index === normalizedIndex ? tokens.carouselDotActive : tokens.carouselDotInactive }}
-                    />
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => carouselApi?.scrollPrev()}
-                    disabled={!canCarouselPrev}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-                    style={{ borderColor: tokens.neutralBorder, color: tokens.ctaOutlineText }}
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => carouselApi?.scrollNext()}
-                    disabled={!canCarouselNext}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-                    style={{ borderColor: tokens.neutralBorder, color: tokens.ctaOutlineText }}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
           {renderBottomCta()}
         </div>
@@ -728,7 +794,7 @@ export function VoucherPromotionsSectionShared({
   }
   if (style === 'minimal') {
     return wrapper(
-      <section className="px-4 py-6 md:py-8" style={{ backgroundColor: tokens.sectionBg }}>
+      <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
         <div className="mx-auto max-w-6xl space-y-5">
           {renderHeader('center', false)}
           {renderTopRightCta()}
@@ -739,7 +805,7 @@ export function VoucherPromotionsSectionShared({
               return (
                 <div
                   key={voucher.code}
-                  className="relative min-h-[92px] overflow-hidden rounded-lg border bg-white shadow-[0_2px_10px_rgba(15,23,42,0.08)]"
+                  className={`relative min-h-[92px] overflow-hidden border bg-white shadow-[0_2px_10px_rgba(15,23,42,0.08)] ${cardRadiusClassName}`}
                   style={{ borderColor: tokens.cardBorder }}
                 >
                   <div
@@ -774,17 +840,17 @@ export function VoucherPromotionsSectionShared({
                       <button
                         type="button"
                         className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold leading-none"
-                        style={{ borderColor: tokens.bodyText, color: tokens.bodyText }}
+                        style={{ borderColor: tokens.neutralBorder, color: tokens.bodyText }}
                         onClick={() => setSelectedVoucher(voucher)}
                         aria-label={`Thông tin voucher ${voucher.code}`}
                       >
                         i
                       </button>
                       <div className="min-w-0">
-                        <div className="truncate text-[12px] font-extrabold uppercase leading-tight tracking-wide" style={{ color: tokens.bodyText }}>
+                        <div className="break-words text-[12px] font-extrabold uppercase leading-tight tracking-wide" style={{ color: tokens.bodyText }}>
                           {voucher.name || formatDiscount(voucher)}
                         </div>
-                        <div className="mt-1 truncate text-[10px] leading-snug" style={{ color: tokens.mutedText }}>
+                        <div className="mt-1 break-words text-[10px] leading-snug" style={{ color: tokens.mutedText }}>
                           {voucher.description || formatDiscount(voucher)}
                         </div>
                         <div className="mt-2 text-[10px] leading-none" style={{ color: tokens.mutedText }}>
@@ -816,7 +882,7 @@ export function VoucherPromotionsSectionShared({
   }
 
   return wrapper(
-    <section className="px-4 py-6 md:py-8" style={{ backgroundColor: tokens.sectionBg }}>
+    <section className={sectionClassName} style={{ backgroundColor: tokens.sectionBg }}>
       <div className="mx-auto max-w-6xl space-y-5">
         {renderHeader('center', false)}
         {renderTopRightCta()}
@@ -824,7 +890,7 @@ export function VoucherPromotionsSectionShared({
           {vouchers.map((voucher) => (
             <div
               key={voucher.code}
-              className="relative overflow-hidden rounded border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.08)]"
+              className={`relative overflow-hidden border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.08)] ${cardRadiusClassName}`}
               style={{ borderColor: tokens.cardBorder }}
             >
               <div className={enterpriseCompact ? 'hidden' : desktopColumns === 4 ? 'hidden lg:absolute lg:left-[86px] lg:top-0 lg:block lg:h-full lg:border-l lg:border-dashed' : 'absolute left-[86px] top-0 h-full border-l border-dashed'} style={{ borderColor: tokens.neutralBorder }} />
@@ -862,7 +928,7 @@ export function VoucherPromotionsSectionShared({
                     <button
                       type="button"
                       className={enterpriseCompact ? 'absolute right-2 top-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold' : desktopColumns === 4 ? 'absolute right-2 top-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold lg:static' : 'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold'}
-                      style={{ borderColor: tokens.primary, color: tokens.primary }}
+                      style={{ borderColor: tokens.neutralBorder, color: tokens.primary }}
                       onClick={() => setSelectedVoucher(voucher)}
                       aria-label={`Thông tin voucher ${voucher.code}`}
                     >

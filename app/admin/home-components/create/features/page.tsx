@@ -1,21 +1,32 @@
 'use client';
 
 import React, { useState } from 'react';
-import { GripVertical, Plus, Trash2, ChevronDown } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { GripVertical, Plus, Trash2, ListChecks } from 'lucide-react';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { ImageFieldWithUpload } from '../../../components/ImageFieldWithUpload';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 import { FeaturesPreview } from '../../features/_components/FeaturesPreview';
 import { IconPopoverPicker } from '../../_shared/components/IconPopoverPicker';
 import {
   createFeatureItem,
   FEATURE_ICON_PICKER_OPTIONS,
 } from '../../features/_lib/constants';
-import type { FeatureItem, FeaturesStyle } from '../../features/_types';
+import {
+  DEFAULT_FEATURES_CORNER_RADIUS,
+  DEFAULT_FEATURES_DESKTOP_COLUMNS,
+  type FeatureItem,
+  type FeaturesCornerRadius,
+  type FeaturesDesktopColumns,
+  type FeaturesStyle,
+} from '../../features/_types';
 import { AiDemoFeaturesImport } from '../../product-list/_components/AiDemoProductsImport';
 
 const defaultItems: FeatureItem[] = [
@@ -25,6 +36,13 @@ const defaultItems: FeatureItem[] = [
   createFeatureItem({ description: 'Hoạt động trên mọi thiết bị: Web, iOS, Android.', icon: 'Globe', id: 4, title: 'Đa nền tảng' }),
   createFeatureItem({ description: 'Cài đặt nhanh chóng, hướng dẫn chi tiết.', icon: 'Rocket', id: 5, title: 'Dễ triển khai' }),
   createFeatureItem({ description: 'Dashboard trực quan, theo dõi KPIs real-time.', icon: 'Target', id: 6, title: 'Phân tích sâu' }),
+];
+
+const DEMO_FEATURE_IMAGES = [
+  '/demo/brand-banners/banner-1.webp',
+  '/demo/brand-banners/banner-2.webp',
+  '/demo/brand-banners/banner-3.webp',
+  '/demo/brand-banners/banner-4.webp',
 ];
 
 export default function FeaturesCreatePage() {
@@ -48,15 +66,28 @@ export default function FeaturesCreatePage() {
     badgeText: '',
   });
 
-  const [headerExpanded, setHeaderExpanded] = useState(true);
-  const [featuresExpanded, setFeaturesExpanded] = useState(true);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header', 'display', 'features'], true);
 
   const [featuresItems, setFeaturesItems] = useState<FeatureItem[]>(defaultItems);
-  const [style, setStyle] = useState<FeaturesStyle>('iconGrid');
+  const [style, setStyle] = useState<FeaturesStyle>('carousel6');
   const [showIcons, setShowIcons] = useState(true);
+  const [desktopColumns, setDesktopColumns] = useState<FeaturesDesktopColumns>(DEFAULT_FEATURES_DESKTOP_COLUMNS);
+  const [cornerRadius, setCornerRadius] = useState<FeaturesCornerRadius>(DEFAULT_FEATURES_CORNER_RADIUS);
 
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
+
+  const handleUseDemoImages = () => {
+    setStyle('carousel6');
+    setFeaturesItems((currentItems) => {
+      const sourceItems = currentItems.length > 0 ? currentItems : defaultItems;
+
+      return sourceItems.map((item, index) => ({
+        ...item,
+        image: DEMO_FEATURE_IMAGES[index % DEMO_FEATURE_IMAGES.length],
+      }));
+    });
+  };
 
   const dragProps = (id: number) => ({
     draggable: true,
@@ -105,6 +136,11 @@ export default function FeaturesCreatePage() {
       uppercaseText: headerState.uppercaseText,
       showBadge: headerState.showBadge,
       badgeText: headerState.badgeText,
+      spacing: headerState.spacing,
+      desktopColumns,
+      cornerRadius,
+      noBorderRadius: cornerRadius === 'none',
+      noVerticalMargin: headerState.spacing === 'none',
     });
   };
 
@@ -126,6 +162,8 @@ export default function FeaturesCreatePage() {
       setCustomFontState={setCustomFontState}
       skipTitleInput={true}
     >
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+
       <HeaderConfigSection
         hideHeader={headerState.hideHeader}
         title={title}
@@ -149,60 +187,88 @@ export default function FeaturesCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={openSections.header}
+        onExpandedChange={(open) => toggleSection('header', open)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <Card className="mb-6">
-        <CardHeader
-          className="cursor-pointer select-none"
-          onClick={(e) => {
-            // Không toggle nếu click vào button Thêm
-            if ((e.target as HTMLElement).closest('button')) {return;}
-            setFeaturesExpanded((prev) => !prev);
-          }}
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.display}
+          onOpenChange={(open) => toggleSection('display', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={setCornerRadius}
+          spacing={headerState.spacing}
+          onSpacingChange={headerState.setSpacing}
         >
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Danh sách tính năng</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFeaturesItems((prev) => [...prev, createFeatureItem({ icon: 'Zap' })]);
-                }}
-              >
-                <Plus size={14} />
-                Thêm
-              </Button>
-              <div onClick={(e) => e.stopPropagation()}>
-                <AiDemoFeaturesImport onApply={(items) => setFeaturesItems(items as FeatureItem[])} />
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+              <div className="space-y-0.5">
+                <Label htmlFor="features-show-icons" className="cursor-pointer text-sm">Hiển thị icon trong layout</Label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Bật để hiện icon trong card và carousel.</p>
               </div>
-              <ChevronDown
-                size={18}
-                className={cn('transition-transform text-slate-400', featuresExpanded && 'rotate-180')}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        {featuresExpanded && (
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
               <input
                 type="checkbox"
                 id="features-show-icons"
                 checked={showIcons}
                 onChange={(event) => { setShowIcons(event.target.checked); }}
-                className="w-4 h-4 rounded border-slate-300"
+                className="h-4 w-4 rounded border-slate-300"
               />
-              <Label htmlFor="features-show-icons" className="cursor-pointer">Hiển thị icon trong layout</Label>
             </div>
+
+              <div className="space-y-2">
+                <Label>Số cột desktop</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[3, 4].map((option) => {
+                    const selected = desktopColumns === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setDesktopColumns(option as FeaturesDesktopColumns)}
+                        className={cn(
+                          'h-9 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                        )}
+                      >
+                        {option} cột
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+        </HomeComponentDisplaySettingsSection>
+      </div>
+
+      <div className="mb-6">
+        <SubSection
+          icon={ListChecks}
+          title="Danh sách tính năng"
+          open={openSections.features}
+          onOpenChange={(open) => toggleSection('features', open)}
+          actions={(
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setFeaturesItems((prev) => [...prev, createFeatureItem({ icon: 'Zap' })])}
+              >
+                <Plus size={14} />
+                Thêm
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={handleUseDemoImages}>
+                Dùng ảnh demo
+              </Button>
+              <AiDemoFeaturesImport onApply={(items) => setFeaturesItems(items as FeatureItem[])} />
+            </>
+          )}
+        >
+          <div className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {featuresItems.map((item, idx) => (
             <div
@@ -264,25 +330,25 @@ export default function FeaturesCreatePage() {
                 }}
               />
 
-              {style === 'carousel6' && (
+              {(style === 'carousel6' || style === 'timeline') && (
                 <div className="pt-2 border-t border-slate-200 dark:border-slate-700 mt-2">
                   <ImageFieldWithUpload
-                    label="Ảnh đại diện (Carousel 6)"
+                    label="Ảnh đại diện (Upload / URL / Dán / Cắt 1:1)"
                     value={item.image ?? ''}
                     onChange={(url) => {
                       setFeaturesItems((prev) => prev.map((feature) => feature.id === item.id ? { ...feature, image: url } : feature));
                     }}
                     folder="home-components"
-                    aspectRatio="video"
+                    aspectRatio="square"
                   />
                 </div>
               )}
             </div>
           ))}
             </div>
-          </CardContent>
-        )}
-      </Card>
+          </div>
+        </SubSection>
+      </div>
 
       <FeaturesPreview
         items={featuresItems}
@@ -305,6 +371,9 @@ export default function FeaturesCreatePage() {
         uppercaseText={headerState.uppercaseText}
         showBadge={headerState.showBadge}
         badgeText={headerState.badgeText}
+        spacing={headerState.spacing}
+        desktopColumns={desktopColumns}
+        cornerRadius={cornerRadius}
       />
     </ComponentFormWrapper>
   );

@@ -1,15 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Image as ImageIcon } from 'lucide-react';
 import { Button } from '../../../components/ui';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { PartnersPreview } from '../../partners/_components/PartnersPreview';
-import { DEFAULT_PARTNERS_CONFIG, DEFAULT_PARTNERS_DISPLAY_MODE, type PartnersDisplayMode, type PartnersStyle } from '../../partners/_types';
+import { DEFAULT_PARTNERS_CONFIG, DEFAULT_PARTNERS_CORNER_RADIUS, DEFAULT_PARTNERS_DISPLAY_MODE, DEFAULT_PARTNERS_LOGO_COLOR_INTENSITY, DEFAULT_PARTNERS_LOGO_SIZE, DEFAULT_PARTNERS_SHOW_BORDER, DEFAULT_PARTNERS_SPACING, type PartnersCornerRadius, type PartnersDisplayMode, type PartnersLogoColorIntensity, type PartnersLogoSize, type PartnersSpacing, type PartnersStyle, type PartnersLogoColorMode } from '../../partners/_types';
 import type { ImageItem } from '../../../components/MultiImageUploader';
 import { PartnersForm } from '../../partners/_components/PartnersForm';
 import { AiDemoPartnersImport } from '../../product-list/_components/AiDemoProductsImport';
@@ -25,7 +25,7 @@ export default function PartnersCreatePage() {
   const fontStyle = { '--font-active': `var(${effectiveFont.fontVariable})` } as React.CSSProperties;
 
   const headerState = useSectionHeaderState(DEFAULT_PARTNERS_CONFIG);
-  const [headerExpanded, setHeaderExpanded] = useState(true);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], true);
 
   const [partnersItems, setPartnersItems] = useState<PartnerItem[]>([
     { id: 'item-1', link: '', name: '', url: '' },
@@ -33,6 +33,12 @@ export default function PartnersCreatePage() {
   ]);
   const [partnersStyle, setPartnersStyle] = useState<PartnersStyle>('grid');
   const [displayMode, setDisplayMode] = useState<PartnersDisplayMode>(DEFAULT_PARTNERS_DISPLAY_MODE);
+  const [cornerRadius, setCornerRadius] = useState<PartnersCornerRadius>(DEFAULT_PARTNERS_CORNER_RADIUS);
+  const [logoSize, setLogoSize] = useState<PartnersLogoSize>(DEFAULT_PARTNERS_LOGO_SIZE);
+  const [showBorder, setShowBorder] = useState(DEFAULT_PARTNERS_SHOW_BORDER);
+  const [spacing, setSpacing] = useState<PartnersSpacing>(DEFAULT_PARTNERS_SPACING);
+  const [logoColorMode, setLogoColorMode] = useState<PartnersLogoColorMode>('grayscale');
+  const [logoColorIntensity, setLogoColorIntensity] = useState<PartnersLogoColorIntensity>(DEFAULT_PARTNERS_LOGO_COLOR_INTENSITY);
 
   const DEMO_PARTNERS_ITEMS: PartnerItem[] = [
     { id: 'demo-1', link: '', name: 'Apex Digital', url: '/demo/partners/partner-1.png' },
@@ -50,7 +56,13 @@ export default function PartnersCreatePage() {
   const onSubmit = (e: React.FormEvent) => {
     void handleSubmit(e, {
       displayMode,
-      items: partnersItems.map((item) => ({ link: item.link, name: item.name, url: item.url })),
+      cornerRadius,
+      logoSize,
+      showBorder,
+      spacing,
+      logoColorMode,
+      logoColorIntensity,
+      items: partnersItems.map((item) => ({ link: item.link, name: item.name, url: item.url, storageId: item.storageId })),
       style: partnersStyle,
       // Header fields
       hideHeader: headerState.hideHeader,
@@ -107,8 +119,9 @@ export default function PartnersCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={headerOpenSections.header}
+        onExpandedChange={(open) => toggleHeaderSection('header', open)}
+        className="mb-3"
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
@@ -117,78 +130,30 @@ export default function PartnersCreatePage() {
       <PartnersForm
         items={partnersItems}
         setItems={setPartnersItems}
-        displayMode={displayMode}
-        setDisplayMode={setDisplayMode}
+        cornerRadius={cornerRadius}
+        setCornerRadius={setCornerRadius}
+        logoSize={logoSize}
+        setLogoSize={setLogoSize}
+        showBorder={showBorder}
+        setShowBorder={setShowBorder}
+        showBorderControl={false}
+        spacing={spacing}
+        setSpacing={setSpacing}
+        selectedStyle={partnersStyle}
+        logoColorMode={logoColorMode}
+        setLogoColorMode={setLogoColorMode}
+        logoColorIntensity={logoColorIntensity}
+        setLogoColorIntensity={setLogoColorIntensity}
+        className="mb-3"
+        actions={(
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={handleUseDemoImages}>
+              Dùng ảnh demo
+            </Button>
+            <AiDemoPartnersImport buttonClassName="h-8" onApply={setPartnersItems} />
+          </>
+        )}
       />
-
-      <div className="mb-6 flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={handleUseDemoImages}>
-          Dùng ảnh demo
-        </Button>
-        <AiDemoPartnersImport buttonClassName="h-10" onApply={setPartnersItems} />
-      </div>
-
-      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-800/50 flex items-center justify-center flex-shrink-0">
-            <ImageIcon size={16} className="text-blue-600 dark:text-blue-400" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">Kích thước logo tối ưu</p>
-            <div className="text-xs text-blue-700 dark:text-blue-300">
-              {partnersStyle === 'grid' && (
-                <div className="space-y-1">
-                  <p><strong className="text-blue-900 dark:text-blue-100">Grid</strong></p>
-                  <p>• Logo: <strong>120×120px</strong> hoặc SVG vuông • PNG nền trong suốt</p>
-                  <p className="text-blue-500 dark:text-blue-400 italic">Layout: card grid gọn, hover đổi nền theo secondary token.</p>
-                </div>
-              )}
-              {partnersStyle === 'marquee' && (
-                <div className="space-y-1">
-                  <p><strong className="text-blue-900 dark:text-blue-100">Marquee</strong></p>
-                  <p>• Logo: <strong>160×60px</strong> (tỷ lệ ngang) • PNG/SVG nền trong suốt</p>
-                  <p className="text-blue-500 dark:text-blue-400 italic">Layout: auto scroll dạng chip có tên đối tác, hover để dừng.</p>
-                </div>
-              )}
-              {partnersStyle === 'badge' && (
-                <div className="space-y-1">
-                  <p><strong className="text-blue-900 dark:text-blue-100">Badge</strong></p>
-                  <p>• Logo: <strong>80×80px</strong> hoặc SVG nhỏ gọn; ưu tiên mark/icon rõ ở kích thước nhỏ</p>
-                  <p className="text-blue-500 dark:text-blue-400 italic">Layout: badge pill bo tròn với logo + tên.</p>
-                </div>
-              )}
-              {partnersStyle === 'carousel' && (
-                <div className="space-y-1">
-                  <p><strong className="text-blue-900 dark:text-blue-100">Carousel</strong></p>
-                  <p>• Logo: <strong>160×60px</strong> hoặc SVG ngang; card rộng nên wordmark hiển thị đẹp hơn</p>
-                  <p className="text-blue-500 dark:text-blue-400 italic">Layout: swipe-track ngang theo source mới, card có icon block + label.</p>
-                </div>
-              )}
-              {partnersStyle === 'logoCloud' && (
-                <div className="space-y-1">
-                  <p><strong className="text-blue-900 dark:text-blue-100">Logo Cloud</strong></p>
-                  <p>• Logo: <strong>180×80px</strong> hoặc SVG ngang • PNG nền trong suốt</p>
-                  <p className="text-blue-500 dark:text-blue-400 italic">Layout: carousel logo tối giản, 3/4/5 logo theo breakpoint, hover viền màu thương hiệu.</p>
-                </div>
-              )}
-              {partnersStyle === 'clean' && (
-                <div className="space-y-1">
-                  <p><strong className="text-blue-900 dark:text-blue-100">Clean</strong></p>
-                  <p>• Logo: <strong>160×60px</strong> hoặc SVG ngang • cần tên thương hiệu rõ</p>
-                  <p className="text-blue-500 dark:text-blue-400 italic">Layout: tối giản, inline logo + tên, ưu tiên brand recognition.</p>
-                </div>
-              )}
-              {partnersStyle === 'divider' && (
-                <div className="space-y-1">
-                  <p><strong className="text-blue-900 dark:text-blue-100">Divider</strong></p>
-                  <p>• Logo: <strong>120×120px</strong> hoặc SVG • PNG nền trong suốt</p>
-                  <p className="text-blue-500 dark:text-blue-400 italic">Layout: grid có đường chia ô rõ ràng, phù hợp nhiều logo.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
       <PartnersPreview
         items={partnersItems.map((item, idx) => ({ id: idx + 1, link: item.link, name: item.name, url: item.url }))}
@@ -201,6 +166,12 @@ export default function PartnersCreatePage() {
         subheading={headerState.subtitle}
         align={headerState.headerAlign}
         displayMode={displayMode}
+        cornerRadius={cornerRadius}
+        logoSize={logoSize}
+        showBorder={showBorder}
+        spacing={spacing}
+        logoColorMode={logoColorMode}
+        logoColorIntensity={logoColorIntensity}
         onDisplayModeChange={setDisplayMode}
         fontStyle={fontStyle}
         fontClassName="font-active"

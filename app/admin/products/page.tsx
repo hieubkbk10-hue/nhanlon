@@ -1,36 +1,22 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AdminEntityImage } from '../components/AdminEntityImage';
 import Link from 'next/link';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ChevronDown, Copy, Download, Edit, ExternalLink, Layers, Loader2, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { ChevronDown, Copy, Edit, ExternalLink, Layers, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge, Button, Card, Input, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui';
-import { BulkActionBar, ColumnToggle, generatePaginationItems, SelectCheckbox, SortableHeader, useSortableData } from '../components/TableUtilities';
+import { Badge, Button, Card, Input, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Popover, PopoverTrigger, PopoverContent, ScrollArea, cn } from '../components/ui';
+import { AdminDragHandle, buildOrderUpdates, BulkActionBar, ColumnToggle, ExactSearchToggle, generatePaginationItems, getReorderedItems, SelectCheckbox, SortableHeader, SortableTableRow, useAdminDndSensors, useSortableData } from '../components/TableUtilities';
 import { ModuleGuard } from '../components/ModuleGuard';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { usePersistedPageSize } from '../components/usePersistedPageSize';
-import {
-  buildHeaderMap,
-  getProductExcelColumns,
-  isRowEmpty,
-  normalizeExcelText,
-  parseExcelImageUrls,
-  parseExcelNumber,
-  parseExcelStatus,
-} from '@/lib/products/excel-contract';
-import {
-  buildErrorSampleSheet,
-  buildGuideSheet,
-  buildProductExportSheet,
-  buildProductTemplateSheet,
-  fillProductExportRows,
-  getStatusLabel,
-  type ProductExcelRow,
-} from '@/lib/products/excel-styles';
+import { ImportExportModal } from './components/import-modal';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 const MODULE_KEY = 'products';
 const PAGE_SIZE_OPTIONS = [12, 20, 30, 50, 100];
@@ -47,17 +33,40 @@ function ProductsContent() {
   const categoriesData = useQuery(api.productCategories.listActive);
   const fieldsData = useQuery(api.admin.modules.listEnabledModuleFields, { moduleKey: MODULE_KEY });
   const settingsData = useQuery(api.admin.modules.listModuleSettings, { moduleKey: MODULE_KEY });
-  const productStats = useQuery(api.products.getStats);
   
   const deleteProduct = useMutation(api.products.remove);
   const duplicateProduct = useMutation(api.products.duplicate);
   const bulkRemove = useMutation(api.products.bulkRemove);
   const bulkUpdateStatus = useMutation(api.products.bulkUpdateStatus);
-  const importProducts = useMutation(api.products.importFromExcelRows);
+  const bulkClearBrokenMedia = useMutation(api.products.bulkClearBrokenMedia);
+  const reorderProducts = useMutation(api.products.reorder);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [exactMode, setExactMode] = useState(false);
   const [filterCategory, setFilterCategory] = useState<Id<"productCategories"> | ''>('');
+  const [categorySearch, setCategorySearch] = useState('');
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const filteredCategories = useMemo(() => {
+    if (!categoriesData) return [];
+    return categoriesData.filter(c => 
+      c.name.toLowerCase().includes(categorySearch.toLowerCase())
+    );
+  }, [categoriesData, categorySearch]);
   const [filterStatus, setFilterStatus] = useState<'' | 'Active' | 'Archived' | 'Draft'>('');
   const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' }>({ direction: 'asc', key: null });
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
@@ -80,22 +89,12 @@ function ProductsContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [cloningProductId, setCloningProductId] = useState<Id<"products"> | null>(null);
   const [bulkStatusLoading, setBulkStatusLoading] = useState<'publish' | 'unpublish' | null>(null);
+  const [isClearingBrokenMedia, setIsClearingBrokenMedia] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<Id<"products"> | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
-  const [excelActionState, setExcelActionState] = useState<'idle' | 'template' | 'import' | 'export-filter' | 'export-all' | 'export-selected'>('idle');
-  const [isExcelMenuOpen, setIsExcelMenuOpen] = useState(false);
-  const [excelImportSummary, setExcelImportSummary] = useState<{
-    created: number;
-    skipped: number;
-    errorCount: number;
-    messages: string[];
-  } | null>(null);
-  const [exportRequested, setExportRequested] = useState(false);
-  const [exportMode, setExportMode] = useState<'filter' | 'all' | 'selected' | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const excelMenuRef = useRef<HTMLDivElement>(null);
+  const dndSensors = useAdminDndSensors();
 
   const isSelectAllActive = selectionMode === 'all';
 
@@ -112,23 +111,6 @@ function ProductsContent() {
     }
   }, [visibleColumns]);
 
-  useEffect(() => {
-    if (!isExcelMenuOpen) {
-      return;
-    }
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!excelMenuRef.current) {
-        return;
-      }
-      if (!excelMenuRef.current.contains(event.target as Node)) {
-        setIsExcelMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isExcelMenuOpen]);
 
   // Get productsPerPage from module settings
   const productsPerPage = useMemo(() => {
@@ -148,8 +130,6 @@ function ProductsContent() {
     const setting = settingsData?.find(s => s.settingKey === 'variantPricing');
     return (setting?.value as string) || 'variant';
   }, [settingsData]);
-  const hideBasePricing = variantEnabled && variantPricing === 'variant';
-
   const saleMode = useMemo(() => {
     const setting = settingsData?.find(s => s.settingKey === 'saleMode');
     const value = setting?.value;
@@ -161,17 +141,8 @@ function ProductsContent() {
 
   const isContactLikeMode = saleMode === 'contact' || saleMode === 'affiliate';
 
-  const excelActionsEnabled = useMemo(() => {
-    const setting = settingsData?.find(s => s.settingKey === 'enableExcelActions');
-    return setting?.value === undefined ? true : Boolean(setting?.value);
-  }, [settingsData]);
-
   const offset = (currentPage - 1) * resolvedProductsPerPage;
   const resolvedSearch = debouncedSearchTerm.trim() ? debouncedSearchTerm.trim() : undefined;
-  const hasFilters = Boolean(resolvedSearch || filterCategory || filterStatus);
-  const isImporting = excelActionState === 'import';
-  const isTemplateDownloading = excelActionState === 'template';
-  const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
   const productsData = useQuery(api.products.listAdminWithOffset, {
     limit: resolvedProductsPerPage,
@@ -179,6 +150,7 @@ function ProductsContent() {
     search: resolvedSearch,
     categoryId: filterCategory || undefined,
     status: filterStatus || undefined,
+    exactMode,
   });
 
   const deleteInfo = useQuery(
@@ -190,6 +162,7 @@ function ProductsContent() {
     search: resolvedSearch,
     categoryId: filterCategory || undefined,
     status: filterStatus || undefined,
+    exactMode,
   });
 
   const selectAllData = useQuery(
@@ -199,6 +172,7 @@ function ProductsContent() {
           search: resolvedSearch,
           categoryId: filterCategory || undefined,
           status: filterStatus || undefined,
+          exactMode,
         }
       : 'skip'
   );
@@ -206,24 +180,7 @@ function ProductsContent() {
   const selectedIds = isSelectAllActive && selectAllData ? selectAllData.ids : manualSelectedIds;
   const isSelectingAll = isSelectAllActive && selectAllData === undefined;
 
-  const exportData = useQuery(
-    api.products.listAdminExport,
-    exportRequested
-      ? exportMode === 'selected'
-        ? {
-            limit: 5000,
-            ids: selectedIds.slice(0, 5000),
-          }
-        : {
-            limit: 5000,
-            categoryId: exportMode === 'filter' ? (filterCategory || undefined) : undefined,
-            search: exportMode === 'filter' ? resolvedSearch : undefined,
-            status: exportMode === 'filter' ? (filterStatus || undefined) : undefined,
-          }
-      : 'skip'
-  );
-
-  const isLoading = productsData === undefined || totalCountData === undefined || categoriesData === undefined || fieldsData === undefined;
+  const isTableLoading = productsData === undefined || totalCountData === undefined || categoriesData === undefined || fieldsData === undefined;
 
   useEffect(() => {
     if (selectAllData?.hasMore) {
@@ -238,12 +195,11 @@ function ProductsContent() {
     return fields;
   }, [fieldsData]);
 
-  const excelColumns = useMemo(() => getProductExcelColumns(enabledFields), [enabledFields]);
-
   // Build columns based on enabled fields
   const columns = useMemo(() => {
     const cols = [
       { key: 'select', label: 'Chọn' },
+      { key: 'drag', label: 'Kéo', required: true },
       { key: 'name', label: 'Tên sản phẩm', required: true },
     ];
 
@@ -270,7 +226,8 @@ function ProductsContent() {
     if (fieldsData !== undefined) {
       setVisibleColumns(prev => {
         const validKeys = new Set(columns.map(c => c.key));
-        return prev.filter(key => validKeys.has(key));
+        const requiredKeys = columns.filter(c => c.required).map(c => c.key);
+        return Array.from(new Set([...requiredKeys, ...prev.filter(key => validKeys.has(key))]));
       });
     }
   }, [fieldsData, columns]);
@@ -294,281 +251,8 @@ function ProductsContent() {
       category: categoryMap[p.categoryId] || 'Không có',
     })) || [], [productsData, categoryMap]);
 
-  useEffect(() => {
-    if (!exportRequested || exportData === undefined) {
-      return;
-    }
-    if (!exportData.length) {
-      toast.error('Không có dữ liệu để xuất Excel');
-      setExportRequested(false);
-      setExportMode(null);
-      setExcelActionState('idle');
-      return;
-    }
-
-    const runExport = async () => {
-      try {
-        const { Workbook } = await import('exceljs');
-        const workbook = new Workbook();
-        const sheet = buildProductExportSheet(workbook, excelColumns);
-        const rows: ProductExcelRow[] = exportData.map((product) => ({
-          categorySlug: categorySlugMap[product.categoryId] ?? '',
-          description: product.description ?? '',
-          image: product.image ?? '',
-          name: product.name,
-          price: product.price,
-          salePrice: product.salePrice ?? null,
-          sku: product.sku,
-          slug: product.slug,
-          status: getStatusLabel(product.status),
-          stock: product.stock,
-        }));
-        fillProductExportRows(sheet, excelColumns, rows);
-        await downloadWorkbook(workbook, `products-${new Date().toISOString().slice(0, 10)}.xlsx`);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Xuất Excel thất bại');
-      } finally {
-        setExportRequested(false);
-        setExportMode(null);
-        setExcelActionState('idle');
-      }
-    };
-
-    void runExport();
-  }, [categorySlugMap, excelColumns, exportData, exportRequested]);
-
   const handleSort = (key: string) => {
     setSortConfig(prev => ({ direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc', key }));
-  };
-
-  const downloadWorkbook = async (workbook: { xlsx: { writeBuffer: () => Promise<ArrayBuffer> } }, fileName: string) => {
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownloadTemplate = async () => {
-    if (!excelActionsEnabled) {
-      return;
-    }
-    if (excelActionState !== 'idle') {
-      return;
-    }
-    setExcelActionState('template');
-    setIsExcelMenuOpen(false);
-    try {
-      const { Workbook } = await import('exceljs');
-      const workbook = new Workbook();
-      buildProductTemplateSheet(workbook, excelColumns);
-      buildGuideSheet(workbook, excelColumns);
-      buildErrorSampleSheet(workbook, excelColumns);
-      await downloadWorkbook(workbook, 'products-template.xlsx');
-      toast.success('Đã tải file mẫu');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Không thể tạo file mẫu');
-    } finally {
-      setExcelActionState('idle');
-    }
-  };
-
-  const handleExport = (mode: 'filter' | 'all' | 'selected') => {
-    if (!excelActionsEnabled) {
-      return;
-    }
-    if (excelActionState !== 'idle') {
-      return;
-    }
-    if (mode === 'selected' && selectedIds.length > 5000) {
-      toast.error('Tối đa 5.000 mục mỗi lần export.');
-      return;
-    }
-    const nextState = mode === 'filter' ? 'export-filter' : mode === 'selected' ? 'export-selected' : 'export-all';
-    setExcelActionState(nextState);
-    setExportMode(mode);
-    setExportRequested(true);
-    setIsExcelMenuOpen(false);
-  };
-
-  const handleImportClick = () => {
-    if (!excelActionsEnabled) {
-      return;
-    }
-    if (excelActionState !== 'idle') {
-      return;
-    }
-    setExcelImportSummary(null);
-    setIsExcelMenuOpen(false);
-    fileInputRef.current?.click();
-  };
-
-  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-    setExcelActionState('import');
-    try {
-      const { Workbook } = await import('exceljs');
-      const buffer = await file.arrayBuffer();
-      const workbook = new Workbook();
-      await workbook.xlsx.load(buffer);
-
-      const sheet = workbook.getWorksheet('Products') ?? workbook.worksheets[0];
-      if (!sheet) {
-        toast.error('Không tìm thấy sheet Products');
-        return;
-      }
-
-      const headers = Array.from({ length: sheet.columnCount }, (_, index) =>
-        normalizeExcelText(sheet.getRow(1).getCell(index + 1).value)
-      );
-      const headerMap = buildHeaderMap(headers);
-      const missingHeaders = excelColumns.filter((column) => column.required && !headerMap.has(column.key));
-      if (missingHeaders.length > 0) {
-        toast.error(`Thiếu cột bắt buộc: ${missingHeaders.map((column) => column.label).join(', ')}`);
-        return;
-      }
-      const clientErrors: { row: number; message: string }[] = [];
-      const payloadRows: {
-        categorySlug: string;
-        description?: string;
-        image?: string;
-        images?: string[];
-        name: string;
-        price: number;
-        rowNumber: number;
-        salePrice?: number;
-        sku: string;
-        slug: string;
-        status?: 'Active' | 'Draft' | 'Archived';
-        stock?: number;
-      }[] = [];
-
-      for (let rowIndex = 2; rowIndex <= sheet.rowCount; rowIndex += 1) {
-        const row = sheet.getRow(rowIndex);
-        const rowValues = excelColumns.map((column) => {
-          const columnIndex = headerMap.get(column.key);
-          if (columnIndex === undefined) {
-            return '';
-          }
-          return normalizeExcelText(row.getCell(columnIndex + 1).value);
-        });
-
-        if (isRowEmpty(rowValues)) {
-          continue;
-        }
-
-        const values: Record<string, string> = {};
-        excelColumns.forEach((column, columnIndex) => {
-          values[column.key] = rowValues[columnIndex] ?? '';
-        });
-
-        const requiredMissing = excelColumns
-          .filter((column) => column.required)
-          .some((column) => !values[column.key]);
-        if (requiredMissing) {
-          clientErrors.push({ message: 'Thiếu dữ liệu bắt buộc', row: rowIndex });
-          continue;
-        }
-
-        const normalizedSlug = values.slug.trim().toLowerCase();
-        const normalizedSku = values.sku.trim().toLowerCase();
-        const normalizedCategory = values.categorySlug.trim().toLowerCase();
-
-        const price = parseExcelNumber(values.price);
-        if (price === null || price < 0) {
-          clientErrors.push({ message: 'Giá bán không hợp lệ', row: rowIndex });
-          continue;
-        }
-        if (saleMode === 'cart' && !hideBasePricing && price <= 0) {
-          clientErrors.push({ message: 'Giá bán phải lớn hơn 0', row: rowIndex });
-          continue;
-        }
-
-        const statusValue = values.status;
-        const parsedStatus = statusValue ? parseExcelStatus(statusValue) : null;
-        if (statusValue && !parsedStatus) {
-          clientErrors.push({ message: 'Trạng thái không hợp lệ', row: rowIndex });
-          continue;
-        }
-
-        const salePrice = values.salePrice ? parseExcelNumber(values.salePrice) : null;
-        if (salePrice !== null && salePrice < 0) {
-          clientErrors.push({ message: 'Giá so sánh không hợp lệ', row: rowIndex });
-          continue;
-        }
-        if (salePrice !== null && salePrice > 0 && salePrice <= price) {
-          clientErrors.push({ message: 'Giá so sánh phải lớn hơn giá bán', row: rowIndex });
-          continue;
-        }
-        const stock = values.stock ? parseExcelNumber(values.stock) : null;
-        if (stock !== null && stock < 0) {
-          clientErrors.push({ message: 'Tồn kho không hợp lệ', row: rowIndex });
-          continue;
-        }
-        if (normalizedSlug && !slugPattern.test(normalizedSlug)) {
-          clientErrors.push({ message: 'Slug không đúng định dạng', row: rowIndex });
-          continue;
-        }
-        const imageUrls = parseExcelImageUrls(values.image);
-        const primaryImage = imageUrls[0];
-
-        payloadRows.push({
-          categorySlug: normalizedCategory,
-          description: values.description || undefined,
-          image: primaryImage,
-          images: imageUrls.length ? imageUrls : undefined,
-          name: values.name,
-          price,
-          rowNumber: rowIndex,
-          salePrice: salePrice ?? undefined,
-          sku: normalizedSku,
-          slug: normalizedSlug,
-          status: parsedStatus ?? undefined,
-          stock: stock ?? undefined,
-        });
-      }
-
-      if (!payloadRows.length) {
-        toast.error('Không có dữ liệu hợp lệ để import');
-        return;
-      }
-
-      const result = await importProducts({ rows: payloadRows });
-      const totalErrors = clientErrors.length + result.errors.length;
-      const summaryMessages = [] as string[];
-      if (result.errors.length > 0) {
-        summaryMessages.push(`Lỗi server: ${result.errors.length} dòng`);
-      }
-      if (clientErrors.length > 0) {
-        summaryMessages.push(`Lỗi client: ${clientErrors.length} dòng`);
-      }
-      if (result.skipped > 0) {
-        summaryMessages.push(`Bỏ qua: ${result.skipped} dòng`);
-      }
-      toast.success(`Đã tạo ${result.created} sản phẩm`);
-      if (totalErrors > 0 || result.skipped > 0) {
-        toast.error(`Có ${totalErrors + result.skipped} dòng cần kiểm tra`);
-      }
-      setExcelImportSummary({
-        created: result.created,
-        skipped: result.skipped,
-        errorCount: totalErrors,
-        messages: summaryMessages,
-      });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Import Excel thất bại');
-    } finally {
-      setExcelActionState('idle');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
   };
 
   const toggleColumn = (key: string) => {
@@ -576,14 +260,12 @@ function ProductsContent() {
   };
 
   const sortedData = useSortableData(products, sortConfig);
+  const isReorderEnabled = !resolvedSearch && !filterCategory && !filterStatus && !exactMode && (sortConfig.key === null || sortConfig.key === 'order');
 
   const totalCount = totalCountData?.count ?? 0;
   const totalPages = totalCount ? Math.ceil(totalCount / resolvedProductsPerPage) : 1;
   const paginatedData = sortedData;
   const tableColumnCount = visibleColumns.length;
-  const hasManualSelection = selectedIds.length > 0;
-  const isFilteredExportDisabled = !hasFilters || hasManualSelection || excelActionState !== 'idle';
-  const isSelectedExportDisabled = !hasManualSelection || selectedIds.length > 5000 || excelActionState !== 'idle';
 
   const applyManualSelection = (nextIds: Id<"products">[]) => {
     setSelectionMode('manual');
@@ -595,6 +277,7 @@ function ProductsContent() {
     setDebouncedSearchTerm('');
     setFilterCategory('');
     setFilterStatus('');
+    setExactMode(false);
     setCurrentPage(1);
     setPageSizeOverride(null);
     applyManualSelection([]);
@@ -632,8 +315,9 @@ function ProductsContent() {
     applyManualSelection(next);
   };
 
-  const openFrontend = (slug: string) => {
-    window.open(`/products/${slug}`, '_blank');
+  const openFrontend = (slug: string, categoryId: string) => {
+    const categorySlug = categorySlugMap[categoryId];
+    window.open(categorySlug ? `/${categorySlug}/${slug}` : `/products/${slug}`, '_blank');
   };
 
   const handleDelete = async (id: Id<"products">) => {
@@ -702,6 +386,44 @@ function ProductsContent() {
     }
   };
 
+  const handleBulkClearBrokenMedia = async () => {
+    setIsClearingBrokenMedia(true);
+    try {
+      const result = await bulkClearBrokenMedia({ ids: selectedIds });
+      applyManualSelection([]);
+      const cleared = result.clearedPrimary + result.clearedGallery;
+      if (cleared > 0) {
+        toast.success(`Đã xóa ${cleared} ảnh lỗi trong ${result.updated} sản phẩm`);
+      } else {
+        toast.info('Không tìm thấy ảnh lỗi trong sản phẩm đã chọn');
+      }
+    } catch {
+      toast.error('Có lỗi khi xóa ảnh lỗi');
+    } finally {
+      setIsClearingBrokenMedia(false);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    if (!isReorderEnabled) {return;}
+    const reordered = getReorderedItems(paginatedData, event.active.id, event.over?.id, product => product._id);
+    if (!reordered) {return;}
+
+    try {
+      await reorderProducts({
+        items: buildOrderUpdates(
+          reordered,
+          paginatedData.map(product => product.order),
+          product => product._id,
+          (product) => product.order
+        ),
+      });
+      toast.success('Đã cập nhật thứ tự sản phẩm');
+    } catch {
+      toast.error('Không thể cập nhật thứ tự sản phẩm');
+    }
+  };
+
   const formatPrice = (price: number) => new Intl.NumberFormat('vi-VN', { currency: 'VND', style: 'currency' }).format(price);
   const renderContactPrice = (resolvedPrice: number) => (
     isContactLikeMode && resolvedPrice <= 0
@@ -726,160 +448,21 @@ function ProductsContent() {
     paginatedData.reduce((count, product) => (getInvalidPriceContext(product) ? count + 1 : count), 0),
   [paginatedData, variantEnabled, variantPricing]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 size={32} className="animate-spin text-orange-500" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Sản phẩm</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Quản lý kho hàng và thông tin sản phẩm
-            {productStats && (
-              <span className="ml-2 text-xs">
-                (Tổng: {productStats.total} | Active: {productStats.active} | Draft: {productStats.draft})
-              </span>
-            )}
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative" ref={excelMenuRef}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx"
-              className="hidden"
-              onChange={handleImportFile}
-            />
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() =>{  if (excelActionsEnabled) { setIsExcelMenuOpen((prev) => !prev); } }}
-              aria-expanded={isExcelMenuOpen}
-              disabled={!excelActionsEnabled || excelActionState !== 'idle'}
-            >
-              <Download size={16} /> Excel Actions <ChevronDown size={16} className="text-slate-400" />
+          <ImportExportModal />
+          <Link href="/admin/products/create">
+            <Button className="gap-2">
+              <Plus size={16} /> Thêm sản phẩm
             </Button>
-            {!excelActionsEnabled && (
-              <div className="mt-1 text-xs text-slate-500">Excel actions đang tắt trong module settings</div>
-            )}
-            {excelActionsEnabled && isExcelMenuOpen && (
-              <div className="absolute right-0 z-20 mt-2 w-[320px] max-w-[calc(100vw-2rem)] rounded-md border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900 sm:w-[360px]">
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Template</div>
-                  <button
-                    type="button"
-                    onClick={handleDownloadTemplate}
-                    disabled={excelActionState !== 'idle'}
-                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-800"
-                  >
-                    <Download size={16} className="mt-0.5 text-slate-500" />
-                    <div className="flex-1">
-                      <div className="font-medium">Tải mẫu (Template)</div>
-                      <div className="text-xs text-slate-500">File mẫu có hướng dẫn và lỗi mẫu.</div>
-                    </div>
-                    {isTemplateDownloading && <Loader2 size={14} className="mt-0.5 animate-spin text-slate-500" />}
-                  </button>
-
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Import</div>
-                  <button
-                    type="button"
-                    onClick={handleImportClick}
-                    disabled={excelActionState !== 'idle'}
-                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-800"
-                  >
-                    <Upload size={16} className="mt-0.5 text-slate-500" />
-                    <div className="flex-1">
-                      <div className="font-medium">Nhập Excel (Import)</div>
-                      <div className="text-xs text-slate-500">Chọn file .xlsx để tạo sản phẩm hàng loạt.</div>
-                    </div>
-                    {isImporting && <Loader2 size={14} className="mt-0.5 animate-spin text-slate-500" />}
-                  </button>
-
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Export</div>
-                  <button
-                    type="button"
-                    onClick={() =>{  handleExport('filter'); }}
-                    disabled={isFilteredExportDisabled}
-                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-800"
-                  >
-                    <Download size={16} className="mt-0.5 text-slate-500" />
-                    <div className="flex-1">
-                      <div className="font-medium">Xuất theo lọc (Export Filtered)</div>
-                      <div className="text-xs text-slate-500">Áp dụng bộ lọc hiện tại, tối đa 5.000 dòng.</div>
-                    </div>
-                    {excelActionState === 'export-filter' && <Loader2 size={14} className="mt-0.5 animate-spin text-slate-500" />}
-                  </button>
-                  {!hasFilters && !hasManualSelection && (
-                    <div className="px-3 text-xs text-slate-500">Chưa có bộ lọc, vui lòng chọn lọc trước khi xuất.</div>
-                  )}
-                  {hasManualSelection && (
-                    <div className="px-3 text-xs text-slate-500">Đang chọn thủ công, vui lòng Bỏ chọn tất cả để dùng Xuất theo lọc.</div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>{  handleExport('selected'); }}
-                    disabled={isSelectedExportDisabled}
-                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-800"
-                  >
-                    <Download size={16} className="mt-0.5 text-slate-500" />
-                    <div className="flex-1">
-                      <div className="font-medium">Xuất đã chọn (Export Selected)</div>
-                      <div className="text-xs text-slate-500">Chỉ xuất các sản phẩm đang được tick trong danh sách.</div>
-                    </div>
-                    {excelActionState === 'export-selected' && <Loader2 size={14} className="mt-0.5 animate-spin text-slate-500" />}
-                  </button>
-                  {!hasManualSelection && (
-                    <div className="px-3 text-xs text-slate-500">Chưa có lựa chọn thủ công, vui lòng tick sản phẩm để xuất.</div>
-                  )}
-                  {selectedIds.length > 5000 && (
-                    <div className="px-3 text-xs text-slate-500">Tối đa 5.000 mục mỗi lần export.</div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>{  handleExport('all'); }}
-                    disabled={excelActionState !== 'idle'}
-                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-800"
-                  >
-                    <Download size={16} className="mt-0.5 text-slate-500" />
-                    <div className="flex-1">
-                      <div className="font-medium">Xuất toàn bộ (Export All)</div>
-                      <div className="text-xs text-slate-500">Tối đa 5.000 dòng mỗi lần export.</div>
-                    </div>
-                    {excelActionState === 'export-all' && <Loader2 size={14} className="mt-0.5 animate-spin text-slate-500" />}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          <Link href="/admin/products/create"><Button className="gap-2"><Plus size={16}/> Thêm sản phẩm</Button></Link>
+          </Link>
         </div>
       </div>
-
-      {excelImportSummary && (
-        <Card className="border border-orange-200 bg-orange-50/40 p-4 text-sm text-slate-700">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="font-semibold text-slate-900">Tóm tắt import Excel</div>
-              <div className="mt-1 text-xs text-slate-600">Tạo: {excelImportSummary.created} · Bỏ qua: {excelImportSummary.skipped} · Lỗi: {excelImportSummary.errorCount}</div>
-              {excelImportSummary.messages.length > 0 && (
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-slate-600">
-                  {excelImportSummary.messages.map((message) => (
-                    <li key={message}>{message}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <Button variant="ghost" size="sm" onClick={() =>{  setExcelImportSummary(null); }}>Đóng</Button>
-          </div>
-        </Card>
-      )}
 
       <BulkActionBar 
         selectedCount={selectedIds.length} 
@@ -893,6 +476,8 @@ function ProductsContent() {
         onPublish={() =>{  void handleBulkStatusUpdate('publish'); }}
         onUnpublish={() =>{  void handleBulkStatusUpdate('unpublish'); }}
         isStatusLoading={bulkStatusLoading}
+        onClearBrokenMedia={() =>{  void handleBulkClearBrokenMedia(); }}
+        isClearBrokenMediaLoading={isClearingBrokenMedia}
         onDelete={handleBulkDelete} 
         onClearSelection={() =>{  applyManualSelection([]); }} 
         isLoading={isDeleting}
@@ -901,23 +486,103 @@ function ProductsContent() {
       <Card>
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-4 justify-between">
           <div className="flex flex-wrap gap-3 flex-1">
-            <div className="relative max-w-xs">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input 
-                placeholder={enabledFields.has('sku') ? "Tìm tên, SKU..." : "Tìm tên sản phẩm..."} 
-                className="pl-9 w-48" 
-                value={searchTerm} 
-                onChange={(e) =>{  setSearchTerm(e.target.value); setCurrentPage(1); applyManualSelection([]); }} 
+            <div className="relative flex items-center gap-2">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input 
+                  placeholder={enabledFields.has('sku') ? "Tìm tên, SKU..." : "Tìm tên sản phẩm..."} 
+                  className="pl-9 w-60 text-sm" 
+                  value={searchTerm} 
+                  onChange={(e) =>{  setSearchTerm(e.target.value); setCurrentPage(1); applyManualSelection([]); }} 
+                  title="Gợi ý: Dùng dấu - ở trước từ để loại trừ (ví dụ: -[B])."
+                />
+              </div>
+              <ExactSearchToggle
+                checked={exactMode}
+                onCheckedChange={(checked) => {
+                  setExactMode(checked);
+                  setCurrentPage(1);
+                  applyManualSelection([]);
+                }}
+                title="Khớp chính xác từng ký tự (không dùng fuzzy)"
               />
             </div>
-            <select className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm" value={filterCategory} onChange={(e) =>{  handleFilterChange('category', e.target.value); }}>
-              <option value="">Tất cả danh mục</option>
-              {categoriesData?.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-            </select>
+            <div className="relative" ref={categoryDropdownRef}>
+              <Popover open={isCategoryDropdownOpen} onOpenChange={setIsCategoryDropdownOpen}>
+                <PopoverTrigger>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isCategoryDropdownOpen}
+                    className="h-10 justify-between text-left font-normal bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 w-[220px]"
+                    onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                  >
+                    <span className="truncate">
+                      {filterCategory === ''
+                        ? "Tất cả danh mục"
+                        : categoriesData?.find(c => c._id === filterCategory)?.name ?? "Tất cả danh mục"}
+                    </span>
+                    <span className="text-slate-400 text-xs shrink-0 ml-2">▼</span>
+                  </Button>
+                </PopoverTrigger>
+                {isCategoryDropdownOpen && (
+                  <PopoverContent className="w-[240px] p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-lg z-50" align="start">
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <Search size={14} className="text-slate-400 shrink-0" />
+                    <Input
+                      placeholder="Tìm danh mục..."
+                      value={categorySearch}
+                      onChange={(e) => setCategorySearch(e.target.value)}
+                      className="h-8 text-xs w-full bg-slate-50 dark:bg-slate-800 border-0 focus-visible:ring-1 focus-visible:ring-blue-500"
+                    />
+                  </div>
+                  <ScrollArea className="max-h-[200px] overflow-y-auto pr-1 space-y-0.5" style={{ scrollbarWidth: 'thin' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleFilterChange('category', '');
+                        setIsCategoryDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full px-2.5 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-slate-100 dark:hover:bg-slate-800",
+                        filterCategory === '' ? "bg-blue-500/5 text-blue-600 dark:text-blue-400 font-semibold" : "text-slate-700 dark:text-slate-300"
+                      )}
+                    >
+                      Tất cả danh mục
+                    </button>
+                    {filteredCategories.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4">Không tìm thấy danh mục</p>
+                    ) : (
+                      filteredCategories.map(c => {
+                        const isSelected = filterCategory === c._id;
+                        return (
+                          <button
+                            key={c._id}
+                            type="button"
+                            onClick={() => {
+                              handleFilterChange('category', c._id);
+                              setIsCategoryDropdownOpen(false);
+                            }}
+                            className={cn(
+                              "w-full px-2.5 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-slate-100 dark:hover:bg-slate-800",
+                              isSelected ? "bg-blue-500/5 text-blue-600 dark:text-blue-400 font-semibold" : "text-slate-700 dark:text-slate-300"
+                            )}
+                          >
+                            <span className="truncate block">{c.name}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              )}
+              </Popover>
+            </div>
             <select className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm" value={filterStatus} onChange={(e) =>{  handleFilterChange('status', e.target.value); }}>
               <option value="">Tất cả trạng thái</option>
-              <option value="Active">Đang bán</option>
-              <option value="Draft">Bản nháp</option>
+              <option value="Active">Hiện</option>
+              <option value="Draft">Ẩn</option>
               <option value="Archived">Lưu trữ</option>
             </select>
             <Button variant="outline" size="sm" onClick={handleResetFilters}>Xóa lọc</Button>
@@ -931,10 +596,17 @@ function ProductsContent() {
             <ColumnToggle columns={columns} visibleColumns={visibleColumns} onToggle={toggleColumn} />
           </div>
         </div>
+        {!isReorderEnabled && (
+          <div className="px-4 py-3 text-xs text-slate-500 border-b border-slate-100 dark:border-slate-800">
+            Tắt tìm kiếm/lọc và quay về thứ tự mặc định để kéo thả đổi vị trí.
+          </div>
+        )}
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <Table>
           <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900">
             <TableRow>
               {visibleColumns.includes('select') && <TableHead className="w-[40px]"><SelectCheckbox checked={isPageSelected} onChange={toggleSelectAll} indeterminate={isPageIndeterminate} /></TableHead>}
+              {visibleColumns.includes('drag') && <TableHead className="w-[40px]" />}
               {visibleColumns.includes('image') && <TableHead className="w-[60px]">Ảnh</TableHead>}
               {visibleColumns.includes('name') && <SortableHeader label="Tên sản phẩm" sortKey="name" sortConfig={sortConfig} onSort={handleSort} />}
               {visibleColumns.includes('sku') && enabledFields.has('sku') && <SortableHeader label="SKU" sortKey="sku" sortConfig={sortConfig} onSort={handleSort} />}
@@ -945,10 +617,28 @@ function ProductsContent() {
               {visibleColumns.includes('actions') && <TableHead className="text-right">Hành động</TableHead>}
             </TableRow>
           </TableHeader>
+          <SortableContext items={paginatedData.map(product => product._id)} strategy={verticalListSortingStrategy}>
           <TableBody>
-            {paginatedData.map(product => (
-              <TableRow key={product._id} className={selectedIds.includes(product._id) ? 'bg-orange-500/5' : ''}>
+            {isTableLoading ? (
+              Array.from({ length: resolvedProductsPerPage }).map((_, index) => (
+                <TableRow key={`loading-${index}`}>
+                  <TableCell colSpan={tableColumnCount}>
+                    <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <>
+                {paginatedData.map(product => (
+                  <SortableTableRow key={product._id} id={product._id} disabled={!isReorderEnabled} selected={selectedIds.includes(product._id)}>
+                    {({ attributes, disabled, listeners }) => (
+                      <>
                 {visibleColumns.includes('select') && <TableCell><SelectCheckbox checked={selectedIds.includes(product._id)} onChange={() =>{  toggleSelectItem(product._id); }} /></TableCell>}
+                {visibleColumns.includes('drag') && (
+                  <TableCell className="w-[40px]">
+                    <AdminDragHandle attributes={attributes} disabled={disabled} listeners={listeners} />
+                  </TableCell>
+                )}
                 {visibleColumns.includes('image') && (
                   <TableCell>
                     <AdminEntityImage
@@ -1002,14 +692,14 @@ function ProductsContent() {
                 {visibleColumns.includes('status') && (
                   <TableCell>
                     <Badge variant={product.status === 'Active' ? 'success' : (product.status === 'Draft' ? 'secondary' : 'warning')}>
-                      {product.status === 'Active' ? 'Đang bán' : (product.status === 'Draft' ? 'Bản nháp' : 'Lưu trữ')}
+                      {product.status === 'Active' ? 'Hiện' : (product.status === 'Draft' ? 'Ẩn' : 'Lưu trữ')}
                     </Badge>
                   </TableCell>
                 )}
                 {visibleColumns.includes('actions') && (
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" title="Xem trên web" onClick={() =>{  openFrontend(product.slug); }}><ExternalLink size={16}/></Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" title="Xem trên web" onClick={() =>{  openFrontend(product.slug, product.categoryId); }}><ExternalLink size={16}/></Button>
                       {variantEnabled && product.hasVariants && (
                         <Link href={`/admin/products/${product._id}/variants`}>
                           <Button variant="ghost" size="icon" title="Quản lý phiên bản"><Layers size={16} /></Button>
@@ -1029,18 +719,24 @@ function ProductsContent() {
                     </div>
                   </TableCell>
                 )}
-              </TableRow>
-            ))}
-            {paginatedData.length === 0 && (
+                      </>
+                    )}
+                  </SortableTableRow>
+                ))}
+              </>
+            )}
+            {!isTableLoading && paginatedData.length === 0 && (
               <TableRow>
                 <TableCell colSpan={tableColumnCount} className="text-center py-8 text-slate-500">
-                {searchTerm || filterCategory || filterStatus ? 'Không tìm thấy kết quả phù hợp' : 'Chưa có sản phẩm nào.'}
+                  {searchTerm || filterCategory || filterStatus ? 'Không tìm thấy kết quả phù hợp' : 'Chưa có sản phẩm nào.'}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
+          </SortableContext>
         </Table>
-        {totalCount > 0 && !isLoading && (
+        </DndContext>
+        {totalCount > 0 && !isTableLoading && (
           <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="order-2 flex w-full items-center justify-between text-sm text-slate-500 sm:order-1 sm:w-auto sm:justify-start sm:gap-6">
               <div className="flex items-center gap-2">

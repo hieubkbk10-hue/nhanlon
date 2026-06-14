@@ -4,7 +4,7 @@ import React from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '../../../components/ui';
 import { getPartnersColors, type PartnersBrandMode } from '../_lib/colors';
-import type { PartnersAlign, PartnersDisplayMode } from '../_types';
+import { getPartnersContentTopSpacingClassName, getPartnersCornerRadiusClassName, getPartnersHeaderSpacingClassName, getPartnersItemGapClassName, getPartnersLogoBoxClassName, getPartnersLogoFallbackSize, getPartnersSectionSpacingClassName, type PartnersAlign, type PartnersCornerRadius, type PartnersDisplayMode, type PartnersLogoSize, type PartnersSpacing } from '../_types';
 import { PartnersSectionHeader } from './PartnersSectionHeader';
 
 export type PartnerGridItem = {
@@ -24,6 +24,10 @@ export const PartnersGridShared = ({
   secondary,
   mode = 'dual',
   maxVisible = 20,
+  cornerRadius = 'lg',
+  logoSize = 'normal',
+  showBorder = true,
+  spacing = 'normal',
   columnsClassName,
   openInNewTab = false,
   renderImage,
@@ -39,6 +43,10 @@ export const PartnersGridShared = ({
   secondary: string;
   mode?: PartnersBrandMode;
   maxVisible?: number;
+  cornerRadius?: PartnersCornerRadius;
+  logoSize?: PartnersLogoSize;
+  showBorder?: boolean;
+  spacing?: PartnersSpacing;
   columnsClassName?: string;
   openInNewTab?: boolean;
   renderImage: (item: PartnerGridItem, className: string) => React.ReactNode;
@@ -52,6 +60,13 @@ export const PartnersGridShared = ({
   const colors = React.useMemo(() => getPartnersColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
   const linkProps = openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {};
   const showName = displayMode === 'withName';
+  const radiusClassName = getPartnersCornerRadiusClassName(cornerRadius);
+  const logoBoxClassName = getPartnersLogoBoxClassName('grid', logoSize, showName);
+  const fallbackIconSize = getPartnersLogoFallbackSize('grid', logoSize, showName);
+  const sectionSpacingClassName = getPartnersSectionSpacingClassName(spacing, 'grid', skipHeader);
+  const contentTopSpacingClassName = getPartnersContentTopSpacingClassName(spacing);
+  const itemGapClassName = getPartnersItemGapClassName(spacing, 'grid');
+  const headerSpacingClassName = getPartnersHeaderSpacingClassName(spacing);
 
   // Smart responsive columns based on item count
   const autoColumnsClassName = visibleCount === 1
@@ -76,7 +91,7 @@ export const PartnersGridShared = ({
         : 'w-full';
 
   return (
-    <section className={cn('w-full bg-white', skipHeader ? 'pb-8 md:pb-12' : 'py-8 md:py-12', className)}>
+    <section className={cn('w-full bg-white', sectionSpacingClassName, className)}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         {!skipHeader && (
           <PartnersSectionHeader
@@ -86,33 +101,42 @@ export const PartnersGridShared = ({
             brandColor={brandColor}
             secondary={secondary}
             mode={mode}
+            className={headerSpacingClassName}
           />
         )}
-        <div className={cn('mt-5 md:mt-8', gridWrapperClassName)}>
-          <div className={cn('grid gap-3 md:gap-4', resolvedColumnsClassName)}>
+        <div className={cn(contentTopSpacingClassName, gridWrapperClassName)}>
+          <div className={cn('grid', itemGapClassName, resolvedColumnsClassName)}>
             {visibleItems.map((item, idx) => (
               <a
                 key={item.id ?? `${item.url ?? ''}-${idx}`}
                 href={item.link ?? '#'}
                 className={cn(
-                  'group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border bg-white transition-all duration-200',
-                  'hover:shadow-md hover:-translate-y-0.5',
+                  'group relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden border bg-white transition-all duration-200',
+                  'hover:-translate-y-0.5 hover:shadow-md',
+                  !showBorder && 'border-transparent',
+                  radiusClassName,
                   showName ? 'gap-2.5 p-4 md:p-5' : 'p-4 md:p-6',
                 )}
-                style={{ borderColor: colors.itemBorder }}
-                onMouseEnter={(event) => { event.currentTarget.style.borderColor = colors.primary; }}
-                onMouseLeave={(event) => { event.currentTarget.style.borderColor = colors.itemBorder; }}
+                style={{ borderColor: showBorder ? '#000000' : 'transparent' }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.backgroundColor = colors.neutralSubtle;
+                  event.currentTarget.style.borderColor = showBorder ? colors.secondary : 'transparent';
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.backgroundColor = '';
+                  event.currentTarget.style.borderColor = showBorder ? '#000000' : 'transparent';
+                }}
                 {...linkProps}
               >
                 {/* Logo — full color, respect ratio */}
                 <div className={cn(
                   'flex w-full items-center justify-center',
-                  showName ? 'h-12 md:h-14' : 'h-14 md:h-16',
+                  logoBoxClassName,
                 )}>
                   {item.url ? (
                     renderImage(item, 'mx-auto h-full w-auto max-w-full object-contain')
                   ) : (
-                    <ImageIcon size={showName ? 32 : 40} className="text-slate-300" />
+                    <ImageIcon size={fallbackIconSize} className="text-slate-300" />
                   )}
                 </div>
 

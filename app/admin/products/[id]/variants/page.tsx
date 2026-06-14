@@ -72,11 +72,11 @@ function SortableRow({
       {visibleColumns.includes('stock') && <TableCell>{stockDisplay}</TableCell>}
       {visibleColumns.includes('status') && (
         <TableCell>
-          <Badge variant={status === 'Active' ? 'default' : 'secondary'}>{status === 'Active' ? 'Hoạt động' : 'Ẩn'}</Badge>
+          <Badge variant={status === 'Active' ? 'default' : 'secondary'}>{status === 'Active' ? 'Hiện' : 'Ẩn'}</Badge>
         </TableCell>
       )}
       {visibleColumns.includes('actions') && (
-        <TableCell className="text-right space-x-2">
+        <TableCell className="text-right space-x-1">
           <Link href={editHref}>
             <Button variant="ghost" size="icon"><Edit size={16} /></Button>
           </Link>
@@ -647,8 +647,7 @@ function ProductVariantsContent({ params }: { params: Promise<{ id: string }> })
   if (!variantEnabled) {
     return (
       <div className="text-center py-10 text-slate-500 space-y-2">
-        <p>Tính năng phiên bản đang tắt.</p>
-        <Link href="/system/modules/products" className="text-orange-600 hover:underline">Bật trong hệ thống</Link>
+        <p>Tính năng phiên bản đang tắt. Vui lòng liên hệ quản trị viên để bật tính năng này.</p>
       </div>
     );
   }
@@ -708,7 +707,7 @@ function ProductVariantsContent({ params }: { params: Promise<{ id: string }> })
               className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
             >
               <option value="all">Tất cả trạng thái</option>
-              <option value="Active">Hoạt động</option>
+              <option value="Active">Hiện</option>
               <option value="Inactive">Ẩn</option>
             </select>
           </div>
@@ -850,7 +849,7 @@ function ProductVariantsContent({ params }: { params: Promise<{ id: string }> })
                     onChange={(e) =>{  setDefaultStatus(e.target.value as 'Active' | 'Inactive'); }}
                     className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
                   >
-                    <option value="Active">Hoạt động</option>
+                    <option value="Active">Hiện</option>
                     <option value="Inactive">Ẩn</option>
                   </select>
                 </div>
@@ -1081,7 +1080,7 @@ function ProductVariantsContent({ params }: { params: Promise<{ id: string }> })
                                 }))}
                                 className="w-full h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 text-sm"
                               >
-                                <option value="Active">Hoạt động</option>
+                                <option value="Active">Hiện</option>
                                 <option value="Inactive">Ẩn</option>
                               </select>
                             </TableCell>

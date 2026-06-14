@@ -65,7 +65,7 @@ export const normalizeFeatureItems = (items: unknown): FeatureItem[] => {
 
 export const DEFAULT_FEATURES_CONFIG: FeaturesConfig = {
   items: [createFeatureItem()],
-  style: 'iconGrid',
+  style: 'carousel6',
   showIcons: true,
   hideHeader: false,
   showTitle: true,

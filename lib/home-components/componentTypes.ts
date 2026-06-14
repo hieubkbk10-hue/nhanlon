@@ -17,7 +17,7 @@ export const HOME_COMPONENT_BASE_TYPES: HomeComponentBaseType[] = [
   { description: 'Giải thưởng, chứng chỉ', label: 'Chứng nhận', route: 'trust-badges', value: 'TrustBadges', position: 5 },
   { description: 'Hiển thị danh mục SP', label: 'Danh mục sản phẩm', route: 'product-categories', value: 'ProductCategories', recommended: true, position: 5 },
   { description: 'Sản phẩm theo danh mục', label: 'Danh sách Sản phẩm', route: 'product-list', value: 'ProductList', recommended: true, position: 6 },
-  { description: 'Grid SP với tab danh mục, bộ lọc', label: 'Lưới Sản phẩm (Grid)', route: 'product-grid', value: 'ProductGrid', position: 7 },
+  { description: 'Hiển thị sản phẩm trong các tab danh mục', label: 'Sản phẩm theo tab', route: 'product-grid', value: 'ProductGrid', position: 7 },
   { description: 'SP trong từng danh mục', label: 'Sản phẩm theo danh mục', route: 'category-products', value: 'CategoryProducts', position: 7 },
   { description: 'Các dịch vụ cung cấp', label: 'Danh sách Dịch vụ', route: 'service-list', value: 'ServiceList', position: 8 },
   { description: 'Bài viết mới nhất', label: 'Tin tức / Blog', route: 'blog', value: 'Blog', recommended: true, position: 9 },
@@ -33,7 +33,7 @@ export const HOME_COMPONENT_BASE_TYPES: HomeComponentBaseType[] = [
   { description: 'Các gói dịch vụ', label: 'Bảng giá', route: 'pricing', value: 'Pricing', position: 19 },
   { description: 'Voucher khuyến mãi với CTA dẫn tới ưu đãi', label: 'Voucher khuyến mãi', route: 'voucher-promotions', value: 'VoucherPromotions', position: 20 },
   { description: 'Banner khuyến mãi với đếm ngược thời gian', label: 'Khuyến mãi / Countdown', route: 'countdown', value: 'Countdown', position: 21 },
-  { description: 'Popup linh hoạt cho thông báo, khuyến mãi, xác nhận hoặc thu lead', label: 'Popup', route: 'popup', value: 'Popup', recommended: true, position: 22 },
+  { description: 'Popup linh hoạt cho thông báo, khuyến mãi, xác nhận hoặc thu lead', label: 'Popup', route: 'popup', value: 'Popup', singleton: true, recommended: true, position: 22 },
   { description: 'Hỏi đáp', label: 'Câu hỏi thường gặp', route: 'faq', value: 'FAQ', recommended: true, position: 23 },
   { description: 'Giới thiệu ngắn gọn', label: 'Về chúng tôi', route: 'about', value: 'About', recommended: true, position: 24 },
   { description: 'Giới thiệu đội ngũ với ảnh, chức vụ, social links', label: 'Đội ngũ', route: 'team', value: 'Team', position: 25 },
@@ -41,7 +41,7 @@ export const HOME_COMPONENT_BASE_TYPES: HomeComponentBaseType[] = [
   { description: 'Form liên hệ, bản đồ', label: 'Liên hệ', route: 'contact', value: 'Contact', recommended: true, position: 27 },
   { description: 'Vị trí đang tuyển', label: 'Tuyển dụng', route: 'career', value: 'Career', position: 28 },
   { description: 'Chân trang', label: 'Footer', route: 'footer', value: 'Footer', singleton: true, recommended: true, position: 29 },
-  { description: 'Nút liên hệ nhanh (FAB)', label: 'Speed Dial', route: 'speed-dial', value: 'SpeedDial', recommended: true, position: 30 },
+  { description: 'Nút liên hệ nhanh (FAB)', label: 'Speed Dial', route: 'speed-dial', value: 'SpeedDial', singleton: true, recommended: true, position: 30 },
 ];
 
 export const HOME_COMPONENT_TYPE_VALUES = HOME_COMPONENT_BASE_TYPES.map((type) => type.value);

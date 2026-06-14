@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { AiDirectGeneratePanel } from '@/app/admin/components/AiDirectGenerateButton';
 import { Bot, Check, Copy, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Label, cn } from '../../../components/ui';
 import type { PopupConfig } from '../_types';
+import { useTypeAiImportEnabled } from '../../_shared/hooks/useTypeAiImportEnabled';
+import { HomeComponentFooterActionPortal } from '../../_shared/components/HomeComponentFooterActions';
 
 const AI_POPUP_PROMPT = `Bạn là chuyên gia UX copywriting cho popup website tiếng Việt.
 
@@ -106,11 +109,16 @@ const parsePopupJson = (raw: string): { data: Partial<PopupConfig>; errors: stri
 };
 
 export function AiPopupImport({ onApply }: { onApply: (config: Partial<PopupConfig>) => void }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
   const result = useMemo(() => parsePopupJson(rawInput), [rawInput]);
   const canApply = rawInput.trim().length > 0 && result.errors.length === 0;
+
+  if (!isAiImportEnabled) {
+    return null;
+  }
 
   const copyText = async (value: string, type: 'prompt' | 'sample') => {
     await navigator.clipboard.writeText(value);
@@ -129,9 +137,11 @@ export function AiPopupImport({ onApply }: { onApply: (config: Partial<PopupConf
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setOpen(true)}>
-        <Bot size={11} /> Import AI
-      </Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> Import AI
+        </Button>
+      </HomeComponentFooterActionPortal>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -163,6 +173,12 @@ export function AiPopupImport({ onApply }: { onApply: (config: Partial<PopupConf
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={AI_POPUP_PROMPT}
+                  sessionId="admin-popup-import"
+                  onGenerated={setRawInput}
+                  placeholder="Ví dụ: Popup mời khách nhận tư vấn miễn phí về khóa học 3D, CTA Liên hệ tư vấn, không giảm giá."
+                />
                 <textarea
                   className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   placeholder={SAMPLE_JSON}

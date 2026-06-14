@@ -11,6 +11,8 @@ import { Button, Input, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 import { ImageEditorDialog } from './ImageEditorDialog';
+import { useFileDraftUploads } from './useFileDraftUploads';
+import type { ImageAspectRatioInput } from '@/lib/products/image-aspect-ratio';
 
 type InputMode = 'upload' | 'url';
 
@@ -22,6 +24,7 @@ interface ImageUploaderProps {
   naming?: ImageNamingContext;
   className?: string;
   aspectRatio?: 'square' | 'video' | 'auto';
+  cropAspectRatio?: ImageAspectRatioInput;
   quality?: number;
   deleteMode?: 'immediate' | 'defer';
 }
@@ -34,6 +37,7 @@ export function ImageUploader({
   naming,
   className,
   aspectRatio = 'auto',
+  cropAspectRatio,
   quality = 0.85,
   deleteMode = 'immediate',
 }: ImageUploaderProps) {
@@ -48,6 +52,7 @@ export function ImageUploader({
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
   const saveImage = useMutation(api.storage.saveImage);
   const deleteImage = useMutation(api.storage.deleteImage);
+  const { trackDraftUpload } = useFileDraftUploads(`image-uploader:${folder}`);
   
   const [currentStorageId, setCurrentStorageId] = useState<Id<'_storage'> | undefined>();
 
@@ -96,6 +101,7 @@ export function ImageUploader({
         storageId: storageId as Id<"_storage">,
         width: prepared.width,
       });
+      await trackDraftUpload(storageId as Id<'_storage'>, folder);
 
       setPreview(result.url ?? undefined);
       setCurrentStorageId(storageId as Id<'_storage'>);
@@ -108,7 +114,7 @@ export function ImageUploader({
     } finally {
       setIsUploading(false);
     }
-  }, [generateUploadUrl, saveImage, folder, quality, onChange, naming]);
+  }, [generateUploadUrl, saveImage, folder, quality, onChange, naming, trackDraftUpload]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -256,7 +262,7 @@ export function ImageUploader({
               fill
               sizes="(max-width: 768px) 100vw, 400px"
               className="object-cover"
-              onError={() => { setHasError(true); setPreview(undefined); onChange(undefined, undefined); }}
+              onError={() => { setHasError(true); }}
             />
           ) : null}
           <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
@@ -328,6 +334,7 @@ export function ImageUploader({
       {isEditorOpen && preview && (
         <ImageEditorDialog
           imageUrl={preview}
+          preferredCropAspectRatio={cropAspectRatio}
           onClose={() => setIsEditorOpen(false)}
           onApply={(editedFile) => {
             setIsEditorOpen(false);

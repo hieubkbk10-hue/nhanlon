@@ -1,13 +1,16 @@
 'use client';
 
 import React from 'react';
-import { ChevronDown, Film, FileText, MousePointerClick, Settings2 } from 'lucide-react';
-import { Card, CardContent, Input, Label, cn } from '@/app/admin/components/ui';
+import { Film, MousePointerClick } from 'lucide-react';
+import { Card, CardContent, Input, Label } from '@/app/admin/components/ui';
 import { ImageFieldWithUpload } from '@/app/admin/components/ImageFieldWithUpload';
-import { VIDEO_STYLES_WITH_CTA, TEXT_FIELDS, DEFAULT_TEXTS } from '../_lib/constants';
-import { getVideoInfo } from '../_lib/colors';
+import { VIDEO_STYLES_WITH_CTA } from '../_lib/constants';
+import { getVideoInfo, getYouTubeThumbnail } from '../_lib/colors';
 import type { VideoConfig, VideoStyle } from '../_types';
 import { AiVideoImport } from './AiVideoImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -22,49 +25,6 @@ interface VideoFormProps {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Collapsible sub-section                                            */
-/* ------------------------------------------------------------------ */
-
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <Icon size={15} className="text-slate-400 shrink-0" />
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          size={15}
-          className={cn(
-            'text-slate-400 transition-transform duration-200',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && (
-        <div className="p-3 space-y-3 bg-white dark:bg-slate-900">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Main form                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -74,39 +34,68 @@ export function VideoForm({
   selectedStyle,
   defaultExpanded = true,
 }: VideoFormProps) {
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['video', 'cta'],
+    defaultExpanded
+  );
   const videoType = getVideoInfo(config.videoUrl || '').type;
   const showCTAConfig = VIDEO_STYLES_WITH_CTA.includes(selectedStyle);
+  const videoAspect = config.videoAspect === 'portrait' ? 'portrait' : 'landscape';
 
-  const textFields = TEXT_FIELDS[selectedStyle] || [];
-  const defaultTexts = DEFAULT_TEXTS[selectedStyle] || {};
-  const currentTexts = config.texts || {};
-
-  const getTextValue = (key: string) => currentTexts[key] || defaultTexts[key] || '';
-
-  const updateTextValue = (key: string, value: string) => {
-    onChange({
-      ...config,
-      texts: { ...currentTexts, [key]: value },
-    });
+  const getAutoThumbnail = (videoUrl?: string) => {
+    const info = getVideoInfo(videoUrl || '');
+    return info.type === 'youtube' && info.id ? getYouTubeThumbnail(info.id) : '';
   };
 
   const patch = (partial: Partial<VideoConfig>) => onChange({ ...config, ...partial });
+
+  const patchVideoUrl = (videoUrl: string) => {
+    const currentAutoThumbnail = getAutoThumbnail(config.videoUrl);
+    const nextAutoThumbnail = getAutoThumbnail(videoUrl);
+    const shouldSyncThumbnail = !config.thumbnailUrl || config.thumbnailUrl === currentAutoThumbnail;
+
+    patch({
+      videoUrl,
+      ...(shouldSyncThumbnail && nextAutoThumbnail ? { thumbnailUrl: nextAutoThumbnail } : {}),
+    });
+  };
 
   return (
     <Card className="mb-6">
       <CardContent className="p-4 space-y-3">
         {/* ── AI Import ─ */}
         <div className="flex justify-end">
-          <AiVideoImport onApply={(patch) => onChange({ ...config, ...patch })} />
+          <AiVideoImport
+            onApply={(nextPatch) => {
+              const currentAutoThumbnail = getAutoThumbnail(config.videoUrl);
+              const nextAutoThumbnail = getAutoThumbnail(nextPatch.videoUrl);
+              const shouldSyncThumbnail = !config.thumbnailUrl || config.thumbnailUrl === currentAutoThumbnail;
+
+              onChange({
+                ...config,
+                ...nextPatch,
+                ...(shouldSyncThumbnail && nextAutoThumbnail && !nextPatch.thumbnailUrl ? { thumbnailUrl: nextAutoThumbnail } : {}),
+              });
+            }}
+          />
         </div>
+        <FormSectionsToggleAllButton
+          hasClosedSection={hasClosedSection}
+          onToggleAll={handleToggleAll}
+        />
         {/* ── Video & Thumbnail ────────────────────── */}
-        <SubSection icon={Film} title="Video & ảnh bìa" defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={Film}
+          title="Video & ảnh bìa"
+          open={openSections.video}
+          onOpenChange={(open) => toggleSection('video', open)}
+        >
           <div className="space-y-1.5">
             <Label>URL Video <span className="text-red-500">*</span></Label>
             <Input
               type="url"
               value={config.videoUrl || ''}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ videoUrl: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => patchVideoUrl(e.target.value)}
               placeholder="YouTube, Vimeo, Drive hoặc link trực tiếp"
               required
             />
@@ -118,14 +107,47 @@ export function VideoForm({
           </div>
 
           <ImageFieldWithUpload
-            label="Ảnh bìa"
+            label="Thumbnail / ảnh bìa"
             value={config.thumbnailUrl || ''}
             onChange={(thumbnailUrl) => patch({ thumbnailUrl })}
             folder="video-thumbnails"
-            aspectRatio="video"
+            className={videoAspect === 'portrait' ? 'max-w-[180px]' : 'max-w-xs'}
+            aspectRatio={videoAspect === 'portrait' ? 'portrait' : 'video'}
             quality={0.85}
-            placeholder="Trống = tự lấy từ YouTube"
+            placeholder={videoAspect === 'portrait' ? 'Dán URL thumbnail dọc 9:16 hoặc upload ảnh bìa' : 'Dán URL thumbnail ngang 16:9 hoặc upload ảnh bìa'}
           />
+
+          <div className="grid grid-cols-1 gap-2 pt-1 md:grid-cols-2">
+            {([
+              {
+                value: 'landscape' as const,
+                title: 'Video ngang 16:9',
+                description: 'Phù hợp YouTube, Vimeo, banner, cinema.',
+              },
+              {
+                value: 'portrait' as const,
+                title: 'Video dọc 9:16',
+                description: 'Phù hợp shorts/reels, thumbnail dọc.',
+              },
+            ]).map((option) => {
+              const selected = videoAspect === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => patch({ videoAspect: option.value })}
+                  className={`rounded-lg border p-3 text-left transition-colors ${
+                    selected
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/30 dark:text-blue-200'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{option.title}</span>
+                  <span className="mt-1 block text-xs opacity-75">{option.description}</span>
+                </button>
+              );
+            })}
+          </div>
 
           {/* Playback options — inline grid */}
           <div className="grid grid-cols-3 gap-2 pt-1">
@@ -147,50 +169,14 @@ export function VideoForm({
           </div>
         </SubSection>
 
-        {/* ── Nội dung ─────────────────────────────── */}
-        <SubSection icon={FileText} title="Nội dung" defaultOpen={defaultExpanded}>
-          {/* Heading + Description (legacy / fallback) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Tiêu đề</Label>
-              <Input
-                value={config.heading || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ heading: e.target.value })}
-                placeholder="Tiêu đề video section"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Mô tả ngắn</Label>
-              <Input
-                value={config.description || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ description: e.target.value })}
-                placeholder="Mô tả cho video..."
-              />
-            </div>
-          </div>
-
-          {/* Dynamic text fields per style — chỉ hiện nếu khác heading/description */}
-          {textFields.filter((f) => f.key !== 'heading' && f.key !== 'description').length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-              {textFields
-                .filter((f) => f.key !== 'heading' && f.key !== 'description')
-                .map((field) => (
-                  <div key={field.key} className="space-y-1.5">
-                    <Label>{field.label}</Label>
-                    <Input
-                      value={getTextValue(field.key)}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateTextValue(field.key, e.target.value)}
-                      placeholder={field.placeholder}
-                    />
-                  </div>
-                ))}
-            </div>
-          )}
-        </SubSection>
-
         {/* ── CTA & Badge (chỉ styles hỗ trợ) ───── */}
         {showCTAConfig && (
-          <SubSection icon={MousePointerClick} title="CTA & Badge" defaultOpen={defaultExpanded}>
+          <SubSection
+            icon={MousePointerClick}
+            title="CTA & Badge"
+            open={openSections.cta}
+            onOpenChange={(open) => toggleSection('cta', open)}
+          >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>Badge</Label>
@@ -220,31 +206,6 @@ export function VideoForm({
           </SubSection>
         )}
 
-        {/* ── Tùy chọn nâng cao ──────────────────── */}
-        <SubSection icon={Settings2} title="Tùy chọn nâng cao" defaultOpen={false}>
-          <p className="text-xs text-slate-400">
-            Các text field theo style ({selectedStyle}) — dùng khi cần ghi đè nội dung mặc định.
-          </p>
-          {textFields.map((field) => (
-            <div key={`adv-${field.key}`} className="space-y-1.5">
-              <Label className="text-xs">{field.label} (override)</Label>
-              {field.key === 'description' ? (
-                <textarea
-                  value={getTextValue(field.key)}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateTextValue(field.key, e.target.value)}
-                  placeholder={field.placeholder}
-                  className="w-full min-h-[64px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-                />
-              ) : (
-                <Input
-                  value={getTextValue(field.key)}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateTextValue(field.key, e.target.value)}
-                  placeholder={field.placeholder}
-                />
-              )}
-            </div>
-          ))}
-        </SubSection>
       </CardContent>
     </Card>
   );

@@ -3,8 +3,9 @@
 import React from 'react';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
-import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { PreviewWrapper, usePreviewDark } from '../../_shared/components/PreviewWrapper';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import {
   getVideoColorTokens,
   type VideoColorTokens,
@@ -16,6 +17,7 @@ import type {
   VideoStyle,
 } from '../_types';
 import { VideoSectionShared } from './VideoSectionShared';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 interface VideoPreviewProps {
   config: VideoConfig;
@@ -38,6 +40,7 @@ interface VideoPreviewProps {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
 }
 
 const getPreviewInfo = (style: VideoStyle, videoUrl: string) => {
@@ -79,19 +82,21 @@ export const VideoPreview = ({
   uppercaseText,
   showBadge,
   badgeText,
+  spacing,
 }: VideoPreviewProps) => {
   const { device, setDevice } = usePreviewDevice();
+  const { isDark } = usePreviewDark();
 
   const previewStyle = selectedStyle ?? config.style ?? 'centered';
 
   const tokens: VideoColorTokens = React.useMemo(
-    () => getVideoColorTokens({
+    () => adaptTokensForDarkMode(getVideoColorTokens({
       primary: brandColor,
       secondary,
       mode,
       style: previewStyle,
-    }),
-    [brandColor, secondary, mode, previewStyle],
+    }), isDark),
+    [brandColor, secondary, mode, previewStyle, isDark],
   );
 
   return (
@@ -128,6 +133,7 @@ export const VideoPreview = ({
             uppercaseText={uppercaseText}
             showBadge={showBadge}
             badgeText={badgeText}
+            spacing={spacing}
           />
         </BrowserFrame>
       </PreviewWrapper>

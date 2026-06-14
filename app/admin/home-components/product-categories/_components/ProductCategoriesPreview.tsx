@@ -5,7 +5,7 @@ import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { BrowserFrame } from '../../_shared/components/BrowserFrame';
 import { ColorInfoPanel } from '../../_shared/components/ColorInfoPanel';
-import { PreviewWrapper } from '../../_shared/components/PreviewWrapper';
+import { PreviewWrapper, usePreviewDark } from '../../_shared/components/PreviewWrapper';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 import { PRODUCT_CATEGORIES_STYLES } from '../_lib/constants';
 import { getProductCategoriesColors } from '../_lib/colors';
@@ -24,6 +24,7 @@ import type {
   ProductCategoriesSelectionMode,
   ProductCategoriesStyle,
 } from '../_types';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
 
 export const ProductCategoriesPreview = ({ 
   config, 
@@ -53,10 +54,27 @@ export const ProductCategoriesPreview = ({
   demoCategories?: DemoProductCategoryItem[];
 }) => {
   const { device, setDevice } = usePreviewDevice();
-  const previewStyle = (selectedStyle ?? config.style) || 'grid';
+  const { isDark } = usePreviewDark();
+  const previewStyle = (selectedStyle ?? config.style) || 'image-strip';
   const setPreviewStyle = (s: string) => onStyleChange?.(s as ProductCategoriesStyle);
-  const colors = React.useMemo(() => getProductCategoriesColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
+  const colors = React.useMemo(() => adaptTokensForDarkMode(getProductCategoriesColors(brandColor, secondary, mode), isDark), [brandColor, secondary, mode, isDark]);
   const productsData = useQuery(api.products.listPublicResolved, { limit: 100 });
+  const categoriesConfig = React.useMemo(() => config.categories ?? [], [config.categories]);
+
+  const productIdsForImages = React.useMemo(() => {
+    const ids: string[] = [];
+    for (const item of categoriesConfig) {
+      if (item.imageMode === 'product-image' && item.customImage?.startsWith('product:')) {
+        const id = item.customImage.replace('product:', '');
+        if (id) ids.push(id);
+      }
+    }
+    return ids;
+  }, [categoriesConfig]);
+
+  const targetProductsData = useQuery(api.products.listByIds, { ids: productIdsForImages as any });
+  const categoriesWithStats = useQuery(api.productCategories.listActiveWithStats, { productLimit: 5000 });
+
   const categoryMap = React.useMemo(() => {
     const map: Record<string, CategoryData> = {};
     for (const cat of categoriesData) {
@@ -64,6 +82,7 @@ export const ProductCategoriesPreview = ({
     }
     return map;
   }, [categoriesData]);
+
   const productImageMap = React.useMemo(() => {
     const map: Record<string, { image?: string }> = {};
     if (productsData) {
@@ -71,19 +90,24 @@ export const ProductCategoriesPreview = ({
         map[product._id] = { image: product.image };
       }
     }
-    return map;
-  }, [productsData]);
-  const productCountMap = React.useMemo(() => {
-    const map: Record<string, number> = {};
-    if (productsData) {
-      for (const product of productsData) {
-        map[product.categoryId] = (map[product.categoryId] || 0) + 1;
+    if (targetProductsData) {
+      for (const product of targetProductsData) {
+        map[product._id] = { image: product.image };
       }
     }
     return map;
-  }, [productsData]);
+  }, [productsData, targetProductsData]);
 
-  const categoriesConfig = React.useMemo(() => config.categories ?? [], [config.categories]);
+  const productCountMap = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    if (categoriesWithStats?.stats) {
+      for (const stat of categoriesWithStats.stats) {
+        map[stat.categoryId] = stat.productCount;
+      }
+    }
+    return map;
+  }, [categoriesWithStats]);
+
   const uniqueCategories = React.useMemo(() => (
     categoriesConfig.filter((item, index, arr) => {
       if (!item.categoryId) {return true;}
@@ -131,6 +155,7 @@ export const ProductCategoriesPreview = ({
           name: item.name || `Danh mục ${idx + 1}`,
           displayImage: item.image,
           productCount: item.productCount ?? 0,
+          link: item.link,
         }))
       : undefined;
 
@@ -184,8 +209,12 @@ export const ProductCategoriesPreview = ({
             device={device}
             mode={mode}
             showProductCount={config.showProductCount}
+            spacing={config.spacing}
+            cornerRadius={config.cornerRadius}
+            desktopColumns={config.desktopColumns}
             fontClassName={fontClassName}
             fontStyle={fontStyle}
+            getItemHref={(item) => item.link || `#`}
           />
         </BrowserFrame>
       </PreviewWrapper>

@@ -1,13 +1,15 @@
 import { mutation, query } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { api } from "../_generated/api";
+import { anyApi } from "convex/server";
 import { v } from "convex/values";
 import { dependencyType, fieldType, moduleCategory } from "../lib/validators";
 import { syncModuleRuntimeConfig } from "../lib/moduleConfigSync";
-import { cleanupProductFramesByAspectRatio } from "../productImageFrames";
 import { resolveMenuMaxDepthLevel } from "../../lib/utils/menu-tree";
 import { TRUST_PAGE_SLOTS } from "../../lib/ia/trust-pages";
+import { validateShippingMethods, validatePaymentMethods, validateOrderStatuses } from "../../lib/orders/config-validation";
+
+const syncProgrammaticFromSourceChange = anyApi.landingPages.syncProgrammaticFromSourceChange;
 
 // ============ ADMIN MODULES ============
 
@@ -48,7 +50,7 @@ const createToggleResult = (result: ToggleModuleResult): ToggleModuleResult => r
 const createToggleBasicResult = (result: ToggleModuleBasicResult): ToggleModuleBasicResult => result;
 
 function normalizeRolesModule<T extends ModuleRecord>(moduleItem: T): T {
-  if (moduleItem.key !== "roles") {
+  if (moduleItem.key !== "roles" && moduleItem.key !== "customers") {
     return moduleItem;
   }
   if (!moduleItem.isCore) {
@@ -61,7 +63,7 @@ async function normalizeRolesModuleWithPatch<T extends ModuleRecord>(
   ctx: MutationCtx,
   moduleItem: T
 ): Promise<T> {
-  if (moduleItem.key !== "roles") {
+  if (moduleItem.key !== "roles" && moduleItem.key !== "customers") {
     return moduleItem;
   }
   if (!moduleItem.isCore) {
@@ -71,19 +73,17 @@ async function normalizeRolesModuleWithPatch<T extends ModuleRecord>(
   return { ...moduleItem, isCore: false } as T;
 }
 
-async function repairRolesCoreFlag(ctx: MutationCtx) {
-  const rolesRecord = await ctx.db
-    .query("adminModules")
-    .withIndex("by_key", (q) => q.eq("key", "roles"))
-    .unique();
-  if (!rolesRecord) {
-    return null;
+async function repairSystemCoreFlags(ctx: MutationCtx) {
+  const keysToRepair = ["roles", "customers"];
+  for (const key of keysToRepair) {
+    const record = await ctx.db
+      .query("adminModules")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .unique();
+    if (record && record.isCore) {
+      await ctx.db.patch(record._id, { isCore: false });
+    }
   }
-  if (rolesRecord.isCore) {
-    await ctx.db.patch(rolesRecord._id, { isCore: false });
-    return { ...rolesRecord, isCore: false };
-  }
-  return rolesRecord;
 }
 
 async function upsertAdminPermissionMode(ctx: MutationCtx, value: "simple_full_admin" | "rbac") {
@@ -333,7 +333,7 @@ export const createModule = mutation({
       isCore: args.isCore ?? false,
       order: args.order ?? count,
     });
-    await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "module" });
+    await ctx.runMutation(syncProgrammaticFromSourceChange, { source: "module" });
     return id;
   },
   returns: v.id("adminModules"),
@@ -356,7 +356,7 @@ export const updateModule = mutation({
     const moduleRecord = await ctx.db.get(id);
     if (!moduleRecord) {throw new Error("Module not found");}
     await ctx.db.patch(id, updates);
-    await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "module" });
+    await ctx.runMutation(syncProgrammaticFromSourceChange, { source: "module" });
     return null;
   },
   returns: v.null(),
@@ -386,7 +386,7 @@ export const getDependentModules = query({
 export const toggleModule = mutation({
   args: { enabled: v.boolean(), key: v.string(), updatedBy: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
-    await repairRolesCoreFlag(ctx);
+    await repairSystemCoreFlags(ctx);
     const allModules = await ctx.db.query("adminModules").collect();
     const modulesByKey = new Map(allModules.map((module) => [module.key, module]));
     const moduleRecord = modulesByKey.get(args.key) ?? null;
@@ -444,7 +444,7 @@ export const toggleModule = mutation({
     if (args.enabled && args.key === "homepage") {
       await resetHomeComponentCreateVisibility(ctx);
     }
-    await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "module" });
+    await ctx.runMutation(syncProgrammaticFromSourceChange, { source: "module" });
     return createToggleBasicResult({ code: "OK", success: true });
   },
   returns: v.object({
@@ -468,7 +468,7 @@ export const toggleModuleWithCascade = mutation({
     updatedBy: v.optional(v.id("users")), // Modules con cần disable cùng
   },
   handler: async (ctx, args) => {
-    await repairRolesCoreFlag(ctx);
+    await repairSystemCoreFlags(ctx);
     const allModules = await ctx.db.query("adminModules").collect();
     const modulesByKey = new Map(allModules.map((module) => [module.key, module]));
     const moduleRecord = modulesByKey.get(args.key) ?? null;
@@ -687,7 +687,7 @@ export const removeModule = mutation({
       await ctx.db.delete(setting._id);
     }
     await ctx.db.delete(args.id);
-    await ctx.runMutation(api.landingPages.syncProgrammaticFromSourceChange, { source: "module" });
+    await ctx.runMutation(syncProgrammaticFromSourceChange, { source: "module" });
     return null;
   },
   returns: v.null(),
@@ -977,6 +977,30 @@ export const getModuleSetting = query({
 export const setModuleSetting = mutation({
   args: { moduleKey: v.string(), settingKey: v.string(), value: v.any() },
   handler: async (ctx, args) => {
+    if (args.moduleKey === "orders") {
+      if (args.settingKey === "shippingMethods") {
+        const res = validateShippingMethods(args.value);
+        if (!res.success) {
+          throw new Error(res.error);
+        }
+      } else if (args.settingKey === "paymentMethods") {
+        const res = validatePaymentMethods(args.value);
+        if (!res.success) {
+          throw new Error(res.error);
+        }
+      } else if (args.settingKey === "orderStatuses") {
+        const res = validateOrderStatuses(args.value);
+        if (!res.success) {
+          throw new Error(res.error);
+        }
+      } else if (args.settingKey === "addressFormat") {
+        const format = String(args.value);
+        if (!["text", "2-level", "3-level"].includes(format)) {
+          throw new Error("Định dạng địa chỉ không hợp lệ.");
+        }
+      }
+    }
+
     const existing = await ctx.db
       .query("moduleSettings")
       .withIndex("by_module_setting", (q) =>
@@ -991,47 +1015,6 @@ export const setModuleSetting = mutation({
 
     if (args.moduleKey === "menus" && args.settingKey === "maxDepth") {
       await normalizeMenuItemsToMaxLevel(ctx, args.value);
-    }
-
-    if (args.moduleKey === "products" && args.settingKey === "defaultImageAspectRatio") {
-      const cleanupSetting = await ctx.db
-        .query("moduleSettings")
-        .withIndex("by_module_setting", (q) =>
-          q.eq("moduleKey", "products").eq("settingKey", "productFrameCleanupOnArChange")
-        )
-        .unique();
-      const shouldCleanup = cleanupSetting?.value !== false;
-      if (shouldCleanup && typeof args.value === "string") {
-        await cleanupProductFramesByAspectRatio(ctx, args.value);
-      }
-
-      const activeFrameSetting = await ctx.db
-        .query("moduleSettings")
-        .withIndex("by_module_setting", (q) =>
-          q.eq("moduleKey", "products").eq("settingKey", "activeProductFrameId")
-        )
-        .unique();
-      const activeFrameId = typeof activeFrameSetting?.value === "string"
-        ? (activeFrameSetting.value as Id<"productImageFrames">)
-        : null;
-      if (activeFrameSetting && activeFrameId) {
-        const activeFrame = await ctx.db.get(activeFrameId);
-        if (!activeFrame || activeFrame.aspectRatio !== args.value) {
-          await ctx.db.patch(activeFrameSetting._id, { value: null });
-        }
-      }
-    }
-
-    if (args.moduleKey === "products" && args.settingKey === "enableProductFrames" && args.value === false) {
-      const activeFrameSetting = await ctx.db
-        .query("moduleSettings")
-        .withIndex("by_module_setting", (q) =>
-          q.eq("moduleKey", "products").eq("settingKey", "activeProductFrameId")
-        )
-        .unique();
-      if (activeFrameSetting) {
-        await ctx.db.patch(activeFrameSetting._id, { value: null });
-      }
     }
 
     if (args.moduleKey === "settings" && args.settingKey === "site_brand_mode") {

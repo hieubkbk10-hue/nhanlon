@@ -3,24 +3,32 @@
 import React from 'react';
 import { SettingsImageUploader } from '@/app/admin/components/SettingsImageUploader';
 import {
-  ChevronDown,
   GripVertical,
   ImageIcon,
   Plus,
   Trash2,
 } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { ImageFieldWithUpload } from '../../../components/ImageFieldWithUpload';
 import { IconPopoverPicker } from '../../_shared/components/IconPopoverPicker';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 import { AiAboutImport } from './AiAboutImport';
 import { createAboutEditorFeature, createAboutEditorStat } from '../_lib/constants';
 import { ABOUT_POPOVER_OPTIONS } from '../_lib/iconRegistry';
-import type { AboutEditorState, AboutStyle } from '../_types';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
+import type { AboutCornerRadius, AboutEditorState, AboutStyle } from '../_types';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 interface AboutFormProps {
   state: AboutEditorState;
   previewStyle: AboutStyle;
   onChange: (updater: (prev: AboutEditorState) => AboutEditorState) => void;
+  spacing: SectionSpacing;
+  onSpacingChange: (value: SectionSpacing) => void;
+  cornerRadius: AboutCornerRadius;
+  onCornerRadiusChange: (value: AboutCornerRadius) => void;
   /** Mặc định mở (true = create) hay đóng (false = edit) */
   defaultExpanded?: boolean;
 }
@@ -28,11 +36,23 @@ interface AboutFormProps {
 const MIN_FEATURES = 1;
 const MAX_FEATURES = 6;
 
-export function AboutForm({ state, previewStyle, onChange, defaultExpanded = true }: AboutFormProps) {
-  const [configExpanded, setConfigExpanded] = React.useState(defaultExpanded);
-  const [featuresExpanded, setFeaturesExpanded] = React.useState(defaultExpanded);
+export function AboutForm({
+  state,
+  previewStyle,
+  onChange,
+  spacing,
+  onSpacingChange,
+  cornerRadius,
+  onCornerRadiusChange,
+  defaultExpanded = true,
+}: AboutFormProps) {
   const [draggedId, setDraggedId] = React.useState<string | null>(null);
   const [dragOverId, setDragOverId] = React.useState<string | null>(null);
+
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['settings', 'about', 'features'],
+    defaultExpanded
+  );
 
   const updateField = <K extends keyof AboutEditorState>(key: K, value: AboutEditorState[K]) => {
     onChange((prev) => ({
@@ -132,28 +152,31 @@ export function AboutForm({ state, previewStyle, onChange, defaultExpanded = tru
 
   return (
     <>
-      <Card className="mb-6">
-        <CardHeader
-          className="cursor-pointer select-none"
-          onClick={() => setConfigExpanded((prev) => !prev)}
+      <FormSectionsToggleAllButton
+        hasClosedSection={hasClosedSection}
+        onToggleAll={handleToggleAll}
+      />
+
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={onCornerRadiusChange}
+          spacing={spacing}
+          onSpacingChange={onSpacingChange}
+        />
+      </div>
+
+      <div className="mb-3">
+        <SubSection
+          icon={ImageIcon}
+          title="Cấu hình Về chúng tôi"
+          open={openSections.about}
+          onOpenChange={(open) => toggleSection('about', open)}
+          actions={<AiAboutImport onApply={applyAiImport} />}
         >
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Cấu hình Về chúng tôi</CardTitle>
-            <div className="flex items-center gap-2">
-              {configExpanded && (
-                <div onClick={(event) => event.stopPropagation()}>
-                  <AiAboutImport onApply={applyAiImport} />
-                </div>
-              )}
-              <ChevronDown
-                size={18}
-                className={cn('transition-transform text-slate-400', configExpanded && 'rotate-180')}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        {configExpanded && (
-        <CardContent className="space-y-4">
+        <div className="space-y-4">
           {/* Row 1: 3 cols — Sub-heading / Highlight / Phone */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -286,40 +309,30 @@ export function AboutForm({ state, previewStyle, onChange, defaultExpanded = tru
               <p className="text-xs text-slate-500">Layout này dùng 3 ảnh riêng.</p>
             </div>
           ) : null}
-        </CardContent>
-        )}
-      </Card>
+        </div>
+        </SubSection>
+      </div>
 
-      <Card className="mb-6">
-        <CardHeader
-          className="cursor-pointer select-none"
-          onClick={() => setFeaturesExpanded((prev) => !prev)}
+      <div className="mb-3">
+        <SubSection
+          icon={ImageIcon}
+          title={`Điểm nổi bật (${state.features.length}/${MAX_FEATURES})`}
+          open={openSections.features}
+          onOpenChange={(open) => toggleSection('features', open)}
+          actions={(
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addFeature}
+              className="gap-2"
+              disabled={state.features.length >= MAX_FEATURES}
+            >
+              <Plus size={14} /> Thêm
+            </Button>
+          )}
         >
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Điểm nổi bật ({state.features.length}/{MAX_FEATURES})</CardTitle>
-            <div className="flex items-center gap-2">
-              {featuresExpanded && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => { e.stopPropagation(); addFeature(); }}
-                  className="gap-2"
-                  disabled={state.features.length >= MAX_FEATURES}
-                >
-                  <Plus size={14} /> Thêm
-                </Button>
-              )}
-              <ChevronDown
-                size={18}
-                className={cn('transition-transform text-slate-400', featuresExpanded && 'rotate-180')}
-              />
-            </div>
-          </div>
-        </CardHeader>
-
-        {featuresExpanded && (
-        <CardContent className="space-y-2">
+        <div className="space-y-2">
           {state.features.map((feature, idx) => (
             <div
               key={feature.id}
@@ -391,9 +404,9 @@ export function AboutForm({ state, previewStyle, onChange, defaultExpanded = tru
               </div>
             </div>
           ))}
-        </CardContent>
-        )}
-      </Card>
+        </div>
+        </SubSection>
+      </div>
     </>
   );
 }

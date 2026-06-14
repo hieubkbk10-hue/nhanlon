@@ -5,11 +5,16 @@ import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Doc, Id } from '@/convex/_generated/dataModel';
-import { Bot, Briefcase, Check, ChevronDown, FileText, GripVertical, Package, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
+import { Bot, Briefcase, Check, FileText, GripVertical, Package, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { Button, Card, CardContent, Input, Label, cn } from '../../../components/ui';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { getHomeComponentPriceLabel, resolveSaleMode } from '../../_shared/lib/productPrice';
@@ -18,7 +23,7 @@ import type { BlogPostItem } from '../../blog/_components/BlogForm';
 import { sortBlogPosts } from '../../blog/_lib/constants';
 import type { BlogStyle } from '../../blog/_types';
 import { ProductListPreview } from '../../product-list/_components/ProductListPreview';
-import type { ProductListPreviewItem, ProductListStyle } from '../../product-list/_types';
+import { DEFAULT_PRODUCT_LIST_CARD_RADIUS, DEFAULT_PRODUCT_LIST_DESKTOP_COLUMNS, type ProductListCardRadius, type ProductListDesktopColumns, type ProductListPreviewItem, type ProductListStyle } from '../../product-list/_types';
 import type { DemoProductItem } from '../../product-list/_types';
 import { DemoItemImageUploader } from '../../product-list/_components/ProductListForm';
 import { AiDemoProductsImport, AiDemoServicesImport } from '../../product-list/_components/AiDemoProductsImport';
@@ -27,52 +32,17 @@ import type { DemoServiceItem } from '../../service-list/_types';
 import { DEFAULT_DEMO_SERVICES } from '../../service-list/_components/ServiceListForm';
 import { ServiceListPreview } from '../../service-list/_components/ServiceListPreview';
 import type {
+  ServiceListCardRadius,
+  ServiceListDesktopColumns,
   ServiceListPreviewItem,
   ServiceListStyle,
 } from '../../service-list/_types';
+import {
+  DEFAULT_SERVICE_LIST_CARD_RADIUS,
+  DEFAULT_SERVICE_LIST_DESKTOP_COLUMNS,
+} from '../../service-list/_types';
 
 type ComponentType = 'ProductList' | 'ServiceList' | 'Blog';
-
-/* ── Collapsible sub-section ── */
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <Icon size={15} className="text-slate-400 shrink-0" />
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          size={15}
-          className={cn(
-            'text-slate-400 transition-transform duration-200',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && (
-        <div className="p-3 space-y-3 bg-white dark:bg-slate-900">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 interface ProductListCreateSharedProps {
   type: ComponentType;
@@ -102,8 +72,8 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
   const [productStyle, setProductStyle] = useState<ProductListStyle>('commerce');
   const [serviceStyle, setServiceStyle] = useState<ServiceListStyle>('grid');
 
-  const [subTitle, setSubTitle] = useState('Bộ sưu tập');
-  const [sectionTitle, setSectionTitle] = useState('Sản phẩm nổi bật');
+  const [subTitle, setSubTitle] = useState(type === 'ProductList' ? 'Bộ sưu tập' : '');
+  const [sectionTitle, setSectionTitle] = useState(type === 'ProductList' ? 'Sản phẩm nổi bật' : '');
 
   const [selectionMode, setSelectionMode] = useState<'auto' | 'manual' | 'demo'>('auto');
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -117,7 +87,7 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
   const [demoProducts, setDemoProducts] = useState<DemoProductItem[]>([]);
   const [demoServices, setDemoServices] = useState<DemoServiceItem[]>([]);
 
-  // Header config state (ProductList only)
+  // Header config state
   const [hideHeader, setHideHeader] = useState(false);
   const [showTitleHeader, setShowTitleHeader] = useState(true);
   const [showSubtitle, setShowSubtitle] = useState(true);
@@ -126,7 +96,17 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
   const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
   const [uppercaseText, setUppercaseText] = useState(false);
   const [showBadge, setShowBadge] = useState(true);
-  const [headerExpanded, setHeaderExpanded] = useState(true);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header', 'display', 'source'], true);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const [cardRadius, setCardRadius] = useState<ProductListCardRadius>(DEFAULT_PRODUCT_LIST_CARD_RADIUS);
+  const [productDesktopColumns, setProductDesktopColumns] = useState<ProductListDesktopColumns>(DEFAULT_PRODUCT_LIST_DESKTOP_COLUMNS);
+  const [serviceCardRadius, setServiceCardRadius] = useState<ServiceListCardRadius>(DEFAULT_SERVICE_LIST_CARD_RADIUS);
+  const [serviceDesktopColumns, setServiceDesktopColumns] = useState<ServiceListDesktopColumns>(DEFAULT_SERVICE_LIST_DESKTOP_COLUMNS);
+
+  // Cart buttons settings
+  const [showAddToCartButton, setShowAddToCartButton] = useState(true);
+  const [showBuyNowButton, setShowBuyNowButton] = useState(true);
+  const [cartButtonsLayout, setCartButtonsLayout] = useState<'stack' | 'grid-2'>('stack');
 
   const productsData = useQuery(api.products.listAll, type === 'ProductList' ? { limit: 100 } : 'skip');
   const resolvedProductsData = useQuery(api.products.listPublicResolved, type === 'ProductList' ? { limit: 100 } : 'skip');
@@ -162,14 +142,20 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
     const priceDisplay = getHomeComponentPriceLabel({ saleMode, price: priceValue, salePrice: salePriceValue, isRangeFromVariant: resolvedProduct?.hasVariants ?? product.hasVariants });
     const hasBasePrice = priceValue != null || salePriceValue != null;
     return {
+      categoryId: product.categoryId,
       description: product.description,
+      hasVariants: resolvedProduct?.hasVariants ?? product.hasVariants,
       id: product._id,
       image: product.image,
       name: product.name,
       price: !hasBasePrice && saleMode === 'cart' ? undefined : priceDisplay.label,
+      priceValue,
       originalPrice: priceDisplay.comparePrice
         ? getHomeComponentPriceLabel({ saleMode: 'cart', price: priceDisplay.comparePrice }).label
         : undefined,
+      salePriceValue,
+      slug: product.slug,
+      stock: resolvedProduct?.stock ?? product.stock,
     };
   }), [resolvedProductMap, selectedProducts, saleMode]);
 
@@ -183,14 +169,20 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
         const priceDisplay = getHomeComponentPriceLabel({ saleMode, price: product.price, salePrice: product.salePrice, isRangeFromVariant: product.hasVariants });
         const hasBasePrice = product.price != null || product.salePrice != null;
         return {
+          categoryId: product.categoryId,
           description: product.description,
+          hasVariants: product.hasVariants,
           id: product._id,
           image: product.image,
           name: product.name,
           price: !hasBasePrice && saleMode === 'cart' ? undefined : priceDisplay.label,
+          priceValue: product.price,
           originalPrice: priceDisplay.comparePrice
             ? getHomeComponentPriceLabel({ saleMode: 'cart', price: priceDisplay.comparePrice }).label
             : undefined,
+          salePriceValue: product.salePrice,
+          slug: product.slug,
+          stock: product.stock,
         };
       });
   }, [productsData, resolvedProductsData, itemCount, saleMode]);
@@ -287,9 +279,6 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
     };
 
     if (type === 'ProductList') {
-      config.subTitle = subTitle;
-      config.sectionTitle = sectionTitle;
-      // Header config fields
       config.hideHeader = hideHeader;
       config.showTitle = showTitleHeader;
       config.showSubtitle = showSubtitle;
@@ -300,6 +289,14 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
       config.uppercaseText = uppercaseText;
       config.showBadge = showBadge;
       config.badgeText = subTitle;
+      config.spacing = spacing;
+      config.cornerRadius = cardRadius;
+      config.cardRadius = cardRadius;
+      config.desktopColumns = productDesktopColumns;
+      config.lookbookDesktopColumns = productDesktopColumns;
+      config.showAddToCartButton = showAddToCartButton;
+      config.showBuyNowButton = showBuyNowButton;
+      config.cartButtonsLayout = cartButtonsLayout;
     }
 
     if (type === 'ServiceList') {
@@ -314,6 +311,10 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
       config.uppercaseText = uppercaseText;
       config.showBadge = showBadge;
       config.badgeText = subTitle;
+      config.spacing = spacing;
+      config.cornerRadius = serviceCardRadius;
+      config.cardRadius = serviceCardRadius;
+      config.desktopColumns = serviceDesktopColumns;
     }
 
     if (selectionMode === 'manual') {
@@ -352,8 +353,12 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
       customFontState={enableFont ? customFontState : undefined}
       showFontCustomBlock={enableFont ? showFontCustomBlock : false}
       setCustomFontState={enableFont ? setCustomFontState : undefined}
+      skipTitleInput={type === 'ProductList' || type === 'ServiceList'}
     >
+      {type === 'ProductList' ? <AiDemoProductsImport onApply={setDemoProducts} /> : null}
+      {type === 'ServiceList' ? <AiDemoServicesImport onApply={setDemoServices} /> : null}
 
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
 
       {(type === 'ProductList' || type === 'ServiceList') && (
         <HeaderConfigSection
@@ -379,16 +384,139 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
           onUppercaseTextChange={setUppercaseText}
           onShowBadgeChange={setShowBadge}
           onBadgeTextChange={setSubTitle}
-          expanded={headerExpanded}
-          onExpandedChange={setHeaderExpanded}
-          titleLabel="Tiêu đề section"
-          titlePlaceholder="VD: Sản phẩm nổi bật, Bán chạy nhất..."
+          expanded={openSections.header}
+          onExpandedChange={(v) => toggleSection('header', v)}
+          className="mb-3"
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
         />
       )}
 
-      <Card className="mb-6">
-        <CardContent className="p-4 space-y-3">          {/* ── Nguồn dữ liệu ── */}
-          <SubSection icon={Package} title="Nguồn dữ liệu" defaultOpen={true}>
+      {(type === 'ProductList' || type === 'ServiceList') && (
+        <div className="mb-3">
+          <HomeComponentDisplaySettingsSection
+            open={openSections.display}
+            onOpenChange={(v) => toggleSection('display', v)}
+            cornerRadius={type === 'ProductList' ? cardRadius : serviceCardRadius}
+            onCornerRadiusChange={(value) => {
+              if (type === 'ProductList') {
+                setCardRadius(value as ProductListCardRadius);
+                return;
+              }
+              setServiceCardRadius(value as ServiceListCardRadius);
+            }}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+          >
+            {type === 'ProductList' && (
+              <>
+                  <div className="space-y-2">
+                    <Label>Số cột desktop</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[3, 4].map((option) => {
+                        const selected = productDesktopColumns === option;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => setProductDesktopColumns(option as ProductListDesktopColumns)}
+                            className={cn(
+                              'h-10 rounded-md border text-xs transition-colors',
+                              selected
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                            )}
+                          >
+                            {option} cột
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 md:col-span-2">
+                    Ảnh hưởng layout Commerce, Compact và Lookbook. 4 cột: tablet/mobile 2 cột. 3 cột: tablet 3 cột, mobile 1 cột.
+                  </p>
+                  
+                  {saleMode === 'cart' && (
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4 space-y-4 md:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">Hiển thị nút Thêm vào giỏ</Label>
+                          <p className="text-xs text-slate-500">Cho phép khách hàng thêm nhanh sản phẩm vào giỏ</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={showAddToCartButton}
+                          onChange={(e) => setShowAddToCartButton(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">Hiển thị nút Mua ngay</Label>
+                          <p className="text-xs text-slate-500">Khách hàng có thể nhấn mua và đi thẳng tới trang checkout</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={showBuyNowButton}
+                          onChange={(e) => setShowBuyNowButton(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      {showAddToCartButton && showBuyNowButton && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">Bố cục nút hiển thị</Label>
+                          <select
+                            className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+                            value={cartButtonsLayout}
+                            onChange={(e) => setCartButtonsLayout(e.target.value as 'stack' | 'grid-2')}
+                          >
+                            <option value="stack">Xếp dọc (Stack)</option>
+                            <option value="grid-2">Xếp ngang (Grid 2)</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+              </>
+            )}
+            {type === 'ServiceList' && (
+              <>
+                  <div className="space-y-2">
+                    <Label>Số cột desktop</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[3, 4].map((option) => {
+                        const selected = serviceDesktopColumns === option;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => setServiceDesktopColumns(option as ServiceListDesktopColumns)}
+                            className={cn(
+                              'h-10 rounded-md border text-xs transition-colors',
+                              selected
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                            )}
+                          >
+                            {option} cột
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+              </>
+            )}
+          </HomeComponentDisplaySettingsSection>
+        </div>
+      )}
+
+      <Card className={cn(type === 'ServiceList' ? 'mb-3 border-0 bg-transparent shadow-none' : 'mb-6')}>
+        <CardContent className={cn(type === 'ServiceList' ? 'p-0 space-y-0' : 'p-4 space-y-3')}>          {/* ── Nguồn dữ liệu ── */}
+          <SubSection icon={Package} title="Nguồn dữ liệu" open={openSections.source} onOpenChange={(v) => toggleSection('source', v)}>
           <div className="space-y-2">
             <Label>
               Chế độ chọn{' '}
@@ -593,10 +721,16 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
                       <SettingsImageUploader
                         label="Ảnh thumbnail"
                         value={item.image ?? ''}
-                        onChange={(url) => setDemoServices(prev => prev.map(d => d.id === item.id ? { ...d, image: url ?? '' } : d))}
+                        storageId={item.storageId as any}
+                        onChange={(url, storageId) => setDemoServices(prev => prev.map(d => d.id === item.id ? {
+                          ...d,
+                          image: url ?? '',
+                          storageId: storageId ? String(storageId) : null
+                        } : d))}
                         folder="home-components/service-list"
                         naming={{ entityName: item.name || 'demo-service', field: 'thumbnail', index: index + 1 }}
                         previewSize="sm"
+                        cropAspectRatio="landscape43"
                       />
                     </div>
                   </div>
@@ -626,7 +760,14 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
                         <div className="text-slate-400 cursor-move"><GripVertical size={16} /></div>
                         <span className="w-6 h-6 flex items-center justify-center bg-blue-500 text-white text-xs rounded-full font-medium">{index + 1}</span>
                         {product.image ? (
-                          <Image src={product.image} alt="" width={48} height={48} className="w-12 h-12 object-cover rounded" />
+                          <Image
+                            src={product.image}
+                            alt=""
+                            width={48}
+                            height={48}
+                            className="w-12 h-12 object-cover rounded"
+                            fallback={<div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded flex items-center justify-center"><Package size={16} className="text-slate-400" /></div>}
+                          />
                         ) : (
                           <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded flex items-center justify-center"><Package size={16} className="text-slate-400" /></div>
                         )}
@@ -690,7 +831,14 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
                             {isSelected && <Check size={12} className="text-white" />}
                           </div>
                           {product.image ? (
-                            <Image src={product.image} alt="" width={40} height={40} className="w-10 h-10 object-cover rounded" />
+                            <Image
+                              src={product.image}
+                              alt=""
+                              width={40}
+                              height={40}
+                              className="w-10 h-10 object-cover rounded"
+                              fallback={<div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded flex items-center justify-center"><Package size={14} className="text-slate-400" /></div>}
+                            />
                           ) : (
                             <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded flex items-center justify-center"><Package size={14} className="text-slate-400" /></div>
                           )}
@@ -724,7 +872,7 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
                           <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded flex items-center justify-center"><Briefcase size={16} className="text-slate-400" /></div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{service.title}</p>
+                          <p className="font-medium text-sm leading-snug break-words">{service.title}</p>
                           <p className="text-xs text-slate-500">{service.views} lượt xem</p>
                         </div>
                         <Button
@@ -788,7 +936,7 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
                             <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded flex items-center justify-center"><Briefcase size={14} className="text-slate-400" /></div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{service.title}</p>
+                            <p className="text-sm font-medium leading-snug break-words">{service.title}</p>
                             <p className="text-xs text-slate-500">{service.views} lượt xem</p>
                           </div>
                         </div>
@@ -937,6 +1085,11 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
             uppercaseText={uppercaseText}
             showBadge={showBadge}
             badgeText={subTitle}
+            spacing={spacing}
+            cardRadius={serviceCardRadius}
+            desktopColumns={serviceDesktopColumns}
+            fontStyle={fontStyle}
+            fontClassName="font-active"
           />
         </div>
       ) : (
@@ -953,9 +1106,25 @@ export function ProductListCreateShared({ type, titleLabel }: ProductListCreateS
               : (selectionMode === 'manual' && productPreviewItems.length > 0 ? productPreviewItems : (autoProductPreviewItems.length > 0 ? autoProductPreviewItems : undefined))
           }
           subTitle={subTitle}
-          sectionTitle={sectionTitle}
+          sectionTitle={title}
+          subtitle={sectionTitle}
           fontStyle={fontStyle}
           fontClassName="font-active"
+          hideHeader={hideHeader}
+          showTitle={showTitleHeader}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          spacing={spacing}
+          cardRadius={cardRadius}
+          desktopColumns={productDesktopColumns}
+          lookbookDesktopColumns={productDesktopColumns}
+          showAddToCartButton={showAddToCartButton}
+          showBuyNowButton={showBuyNowButton}
+          cartButtonsLayout={cartButtonsLayout}
         />
       ))}
     </ComponentFormWrapper>

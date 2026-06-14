@@ -1,7 +1,12 @@
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
+import type { HomeComponentCornerRadius } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 export type VideoStyle = 'centered' | 'split' | 'fullwidth' | 'cinema' | 'minimal' | 'parallax';
 
 export type VideoBrandMode = 'single' | 'dual';
 export type VideoProvider = 'youtube' | 'vimeo' | 'drive' | 'direct';
+export type VideoAspect = 'landscape' | 'portrait';
+export type VideoCornerRadius = HomeComponentCornerRadius;
+export type VideoPlayButtonSize = 'small' | 'medium' | 'large';
 
 export interface VideoConfig {
   videoUrl: string;
@@ -14,6 +19,9 @@ export interface VideoConfig {
   autoplay?: boolean;
   loop?: boolean;
   muted?: boolean;
+  videoAspect?: VideoAspect;
+  cornerRadius?: VideoCornerRadius;
+  playButtonSize?: VideoPlayButtonSize;
   style?: VideoStyle;
   texts?: Record<string, string>;
   // Header config
@@ -27,4 +35,7 @@ export interface VideoConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
 }

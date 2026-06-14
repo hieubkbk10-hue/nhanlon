@@ -66,6 +66,27 @@ export interface FullscreenColorScheme {
   similarity: number;
 }
 
+export interface ConquestColorScheme {
+  sectionBg: string;
+  sectionText: string;
+  descriptionText: string;
+  accentSolid: string;
+  accentMuted: string;
+  badgeBg: string;
+  badgeText: string;
+  primaryCTA: string;
+  primaryCTAText: string;
+  secondaryCTA: string;
+  secondaryCTAText: string;
+  pillarGradient: string;
+  baseGradient: string;
+  dotActive: string;
+  dotInactive: string;
+  placeholderBg: string;
+  placeholderIcon: string;
+  similarity: number;
+}
+
 export interface SplitColorScheme {
   contentBg: string;
   headingText: string;
@@ -291,6 +312,46 @@ export function getFullscreenColors(
     placeholderBg: '#f1f5f9',
     placeholderIcon: primary,
     similarity: getSimilarity(primary, secondaryColor),
+  };
+}
+
+export function getConquestColors(
+  primary: string,
+  secondary: string,
+  mode: 'single' | 'dual',
+): ConquestColorScheme {
+  const secondaryColor = mode === 'dual' ? resolveSecondaryColor(primary, secondary, mode) : primary;
+  const primaryPalette = generatePalette(primary);
+  const secondaryPalette = generatePalette(secondaryColor);
+  const similarity = getSimilarity(primary, secondaryColor);
+  const sectionBg = primary;
+  const sectionText = getAPCATextColor(sectionBg, 32, 700);
+  const neutralSolid = sectionText === '#ffffff' ? '#ffffff' : '#111827';
+  const neutralMuted = sectionText === '#ffffff' ? '#d4d4d8' : '#797979';
+  const neutralSoft = sectionText === '#ffffff' ? '#71717a' : '#d4d4d8';
+  const canUseDual = mode === 'dual' && similarity < 0.92;
+  const ctaBg = canUseDual ? secondaryPalette.solid : neutralSolid;
+  const badgeBg = canUseDual ? secondaryPalette.solid : neutralSolid;
+
+  return {
+    sectionBg,
+    sectionText,
+    descriptionText: sectionText === '#ffffff' ? 'rgba(255,255,255,0.82)' : 'rgba(15,23,42,0.78)',
+    accentSolid: neutralSolid,
+    accentMuted: neutralMuted,
+    badgeBg,
+    badgeText: getAPCATextColor(badgeBg, 12, 600),
+    primaryCTA: ctaBg,
+    primaryCTAText: getAPCATextColor(ctaBg, 16, 600),
+    secondaryCTA: sectionBg,
+    secondaryCTAText: sectionText,
+    pillarGradient: `linear-gradient(180deg, ${neutralSolid} 0%, ${neutralMuted} 100%)`,
+    baseGradient: `linear-gradient(180deg, ${neutralMuted} 0%, ${neutralSoft} 100%)`,
+    dotActive: ctaBg,
+    dotInactive: sectionText === '#ffffff' ? 'rgba(255,255,255,0.42)' : 'rgba(15,23,42,0.28)',
+    placeholderBg: primaryPalette.surface,
+    placeholderIcon: ctaBg,
+    similarity,
   };
 }
 

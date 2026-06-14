@@ -5,47 +5,55 @@ import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ClipboardPaste, Image as ImageIcon, Link, Loader2, Pencil, Trash2, Upload } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Input, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 import { ImageEditorDialog } from './ImageEditorDialog';
+import { useFileDraftUploads } from './useFileDraftUploads';
+import { getProductImageAspectRatioLabel, type ImageAspectRatioInput } from '@/lib/products/image-aspect-ratio';
+import { ImageSourceActions } from './ImageSourceActions';
 
 type InputMode = 'upload' | 'url';
 
 interface SettingsImageUploaderProps {
   value?: string;
-  onChange: (url: string | undefined) => void;
+  onChange: (url: string | undefined, storageId?: Id<'_storage'> | null) => void;
+  storageId?: Id<'_storage'> | null;
   folder?: string;
   naming?: ImageNamingContext;
   className?: string;
   label?: string;
   previewSize?: 'sm' | 'md' | 'lg';
+  cropAspectRatio?: ImageAspectRatioInput;
+  smartLogoCrop?: boolean;
 }
 
 export function SettingsImageUploader({
   value,
   onChange,
+  storageId: _storageId,
   folder = 'settings',
   naming,
   className,
   label,
   previewSize = 'md',
+  cropAspectRatio,
+  smartLogoCrop = false,
 }: SettingsImageUploaderProps) {
   const [mode, setMode] = useState<InputMode>('upload');
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [preview, setPreview] = useState<string | undefined>(value);
-  const [currentStorageId, setCurrentStorageId] = useState<string | undefined>();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Convex mutations
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
   const saveImage = useMutation(api.storage.saveImage);
-  const deleteImage = useMutation(api.storage.deleteImage);
+  const { trackDraftUpload } = useFileDraftUploads(`settings-image-uploader:${folder}`);
 
   useEffect(() => {
     setPreview(value);
@@ -67,7 +75,10 @@ export function SettingsImageUploader({
 
     try {
       const resolvedNaming = resolveNamingContext(naming, { entityName: folder, field: 'image', index: 1 });
-      const prepared = await prepareImageForUpload(file, { naming: resolvedNaming });
+      const prepared = await prepareImageForUpload(file, {
+        naming: resolvedNaming,
+        smartLogoCrop,
+      });
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(uploadUrl, {
@@ -91,10 +102,10 @@ export function SettingsImageUploader({
         storageId: storageId as Id<"_storage">,
         width: prepared.width,
       });
+      await trackDraftUpload(storageId as Id<'_storage'>, folder);
 
       setPreview(result.url ?? undefined);
-      setCurrentStorageId(storageId);
-      onChange(result.url ?? undefined);
+      onChange(result.url ?? undefined, storageId as Id<'_storage'>);
       toast.success('Tải ảnh lên thành công');
     } catch (error) {
       console.error('Upload error:', error);
@@ -102,7 +113,7 @@ export function SettingsImageUploader({
     } finally {
       setIsUploading(false);
     }
-  }, [generateUploadUrl, saveImage, folder, onChange, naming]);
+  }, [generateUploadUrl, saveImage, folder, onChange, naming, smartLogoCrop, trackDraftUpload]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -173,35 +184,25 @@ export function SettingsImageUploader({
     }
 
     setPreview(urlInput);
-    setCurrentStorageId(undefined);
-    onChange(urlInput);
+    onChange(urlInput, null);
     toast.success('Đã cập nhật URL');
   }, [urlInput, onChange]);
 
-  const handleRemove = useCallback(async () => {
-    // Delete from Convex storage if it's a Convex URL
-    if (currentStorageId) {
-      try {
-        await deleteImage({ storageId: currentStorageId as Id<"_storage"> });
-      } catch (error) {
-        console.error('Delete error:', error);
-      }
-    }
-
+  const handleRemove = useCallback(() => {
     setPreview(undefined);
     setUrlInput('');
-    setCurrentStorageId(undefined);
-    onChange(undefined);
+    onChange(undefined, null);
     if (inputRef.current) {
       inputRef.current.value = '';
     }
-  }, [currentStorageId, deleteImage, onChange]);
+  }, [onChange]);
 
   const previewSizes = {
     lg: 'w-32 h-32',
     md: 'w-24 h-24',
     sm: 'w-16 h-16',
   };
+  const cropRatioLabel = cropAspectRatio ? getProductImageAspectRatioLabel(cropAspectRatio) : undefined;
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -211,45 +212,20 @@ export function SettingsImageUploader({
         </label>
       )}
 
-      {/* Mode Toggle */}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() =>{  setMode('upload'); }}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
-            mode === 'upload'
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
-          )}
-        >
-          <Upload size={14} />
-          Upload
-        </button>
-        <button
-          type="button"
-          onClick={() =>{  setMode('url'); }}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
-            mode === 'url'
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
-          )}
-        >
-          <Link size={14} />
-          URL
-        </button>
-        <button
-          type="button"
-          onClick={handleClipboardPaste}
-          disabled={isUploading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 disabled:opacity-50"
-          title="Copy ảnh rồi click vào đây"
-        >
-          <ClipboardPaste size={14} />
-          Dán
-        </button>
-      </div>
+      <ImageSourceActions
+        mode={mode}
+        onUpload={() => {
+          setMode('upload');
+          window.setTimeout(() => inputRef.current?.click(), 0);
+        }}
+        onUrl={() => setMode('url')}
+        onPaste={handleClipboardPaste}
+        onCrop={() => preview && setIsEditorOpen(true)}
+        cropLabel={cropRatioLabel}
+        cropDisabled={!preview || isUploading}
+        disabled={isUploading}
+        iconSize={14}
+      />
 
       {/* Upload Mode */}
       {mode === 'upload' && (
@@ -272,7 +248,7 @@ export function SettingsImageUploader({
                   sizes="(max-width: 768px) 100vw, 240px"
                   className="object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23f1f5f9" width="100" height="100"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="12">Error</text></svg>';
+                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23fef2f2" width="100" height="100"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="%23ef4444" font-size="10" font-weight="bold">Ảnh lỗi</text><text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" fill="%23991b1b" font-size="7">Hãy upload lại</text></svg>';
                   }}
                 />
                 {isUploading && (
@@ -291,16 +267,6 @@ export function SettingsImageUploader({
                 >
                   <Upload size={14} className="mr-1" />
                   Đổi ảnh
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditorOpen(true)}
-                  disabled={isUploading}
-                >
-                  <Pencil size={14} className="mr-1" />
-                  Chỉnh sửa
                 </Button>
                 <Button
                   type="button"
@@ -381,20 +347,11 @@ export function SettingsImageUploader({
                   sizes="(max-width: 768px) 100vw, 240px"
                   className="object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23f1f5f9" width="100" height="100"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="12">Error</text></svg>';
+                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23fef2f2" width="100" height="100"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="%23ef4444" font-size="10" font-weight="bold">Ảnh lỗi</text><text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" fill="%23991b1b" font-size="7">Kiểm tra URL</text></svg>';
                   }}
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditorOpen(true)}
-                >
-                  <Pencil size={14} className="mr-1" />
-                  Chỉnh sửa
-                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -414,6 +371,7 @@ export function SettingsImageUploader({
       {isEditorOpen && preview && (
         <ImageEditorDialog
           imageUrl={preview}
+          preferredCropAspectRatio={cropAspectRatio}
           onClose={() => setIsEditorOpen(false)}
           onApply={(editedFile) => {
             setIsEditorOpen(false);

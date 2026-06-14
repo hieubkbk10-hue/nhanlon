@@ -8,6 +8,7 @@ import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverr
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { useSectionHeaderState } from '../../_shared/hooks/useSectionHeaderState';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
 import { ContactPreview } from '../../contact/_components/ContactPreview';
 import {
   buildDefaultContactItemsFromSettings,
@@ -41,7 +42,8 @@ export default function ContactCreatePage() {
     badgeText: '',
   });
 
-  const [headerExpanded, setHeaderExpanded] = useState(true);
+  const { openSections: headerOpenSections, toggleSection: toggleHeaderSection } = useFormSectionsState(['header'], true);
+  const [displayExpanded, setDisplayExpanded] = useState(true);
   const [contactDataExpanded, setContactDataExpanded] = useState(true);
   const [formExpanded, setFormExpanded] = useState(true);
   const [socialExpanded, setSocialExpanded] = useState(true);
@@ -149,8 +151,8 @@ export default function ContactCreatePage() {
         onUppercaseTextChange={headerState.setUppercaseText}
         onShowBadgeChange={headerState.setShowBadge}
         onBadgeTextChange={headerState.setBadgeText}
-        expanded={headerExpanded}
-        onExpandedChange={setHeaderExpanded}
+        expanded={headerOpenSections.header}
+        onExpandedChange={(open) => toggleHeaderSection('header', open)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
@@ -160,10 +162,12 @@ export default function ContactCreatePage() {
         value={config}
         onChange={setConfig}
         title="Cấu hình liên hệ"
+        displayExpanded={displayExpanded}
         contactDataExpanded={contactDataExpanded}
         formExpanded={formExpanded}
         socialExpanded={socialExpanded}
         labelsExpanded={labelsExpanded}
+        onDisplayExpandedChange={setDisplayExpanded}
         onContactDataExpandedChange={setContactDataExpanded}
         onFormExpandedChange={setFormExpanded}
         onSocialExpandedChange={setSocialExpanded}

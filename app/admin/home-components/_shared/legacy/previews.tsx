@@ -2603,7 +2603,7 @@ export const CTAPreview = ({ config, brandColor, secondary, selectedStyle, onSty
   );
 };
 
-export type AboutStyle = 'classic' | 'bento' | 'minimal' | 'split' | 'timeline' | 'showcase' | 'spaCollage' | 'solarFeature';
+export type AboutStyle = 'classic' | 'bento' | 'minimal' | 'split' | 'timeline' | 'showcase' | 'spaCollage' | 'solarFeature' | 'kanban';
 
 // ============ BENEFITS PREVIEW (Why Choose Us) ============
 // 6 Professional Styles: Solid Cards, Accent List, Bold Bento, Icon Row, Carousel, Timeline
@@ -3450,7 +3450,7 @@ export interface ContactConfig {
   submitButtonText?: string;
   responseTimeText?: string;
 }
-export type ContactStyle = 'modern' | 'floating' | 'grid' | 'elegant' | 'minimal' | 'centered';
+export type ContactStyle = 'modern' | 'floating' | 'grid' | 'elegant' | 'minimal' | 'centered' | 'kanban';
 
 const getSocialIcon = (platform: string) => {
   switch (platform.toLowerCase()) {
@@ -5037,7 +5037,7 @@ export const FeaturesPreview = ({ items, brandColor: _brandColor, secondary, mod
 
 // ============ PROCESS/HOW IT WORKS PREVIEW ============
 // 7 Professional Styles: Horizontal, Stepper, Cards, Accordion, Minimal, Grid, Alternating
-export type ProcessStyle = 'horizontal' | 'stepper' | 'cards' | 'accordion' | 'minimal' | 'grid' | 'alternating';
+export type ProcessStyle = 'horizontal' | 'stepper' | 'cards' | 'accordion' | 'minimal' | 'compactMinimal' | 'grid' | 'alternating' | 'circular';
 
 export const ProcessPreview = ({
   steps,
@@ -6038,7 +6038,7 @@ export const CountdownPreview = ({
       }
       case 'sticky': { return 'Không dùng ảnh - Thanh compact';
       }
-      case 'popup': { return 'Ảnh nền: 600×400px (3:2) - Modal center';
+      case 'popup': { return 'Ảnh nền: 800×600px (4:3) - Modal center';
       }
       default: { return 'Ảnh nền tùy chọn';
       }

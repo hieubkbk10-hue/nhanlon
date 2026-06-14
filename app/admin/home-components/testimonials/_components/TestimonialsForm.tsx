@@ -4,10 +4,10 @@ import React from 'react';
 import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import * as LucideIcons from 'lucide-react';
 import {
-  Bot, ChevronDown, GripVertical, Plus,
+  Bot, GripVertical, Plus,
   Star, Trash2, User,
 } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
 import { IconPopoverPicker } from '../../_shared/components/IconPopoverPicker';
 import type { IconOption } from '../../_shared/components/IconPopoverPicker';
@@ -20,6 +20,9 @@ import {
   type TestimonialsStyle,
 } from '../_types';
 import { AiDemoTestimonialsImport } from '../../product-list/_components/AiDemoProductsImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 // Demo data — tái dùng team-avatars
 const DEMO_ITEMS: Array<Omit<TestimonialsItem, 'id'>> = [
@@ -48,6 +51,8 @@ const getInitials = (name: string) => {
   if (parts.length === 1) { return parts[0].slice(0, 2).toUpperCase(); }
   return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
 };
+
+const getAvatarCropAspectRatio = (_style?: TestimonialsStyle) => 'square' as const;
 
 // ── Drag reorder ─────────────────────────────────────────────────
 function useDragReorder(items: TestimonialsItem[], setItems: React.Dispatch<React.SetStateAction<TestimonialsItem[]>>) {
@@ -104,8 +109,8 @@ export function TestimonialsForm({
   splitBackgroundOverlayOpacity = 62,
   onSplitBackgroundOverlayOpacityChange,
 }: TestimonialsFormProps) {
-  const [expanded, setExpanded] = React.useState(defaultExpanded);
   const [expandedContentId, setExpandedContentId] = React.useState<string | null>(null);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['items'], defaultExpanded);
   const { draggedId, dragOverId, dragProps } = useDragReorder(items, setItems);
 
   const addItem = () => { setItems((prev) => [...prev, createTestimonialsItem(Date.now())]); };
@@ -138,29 +143,26 @@ export function TestimonialsForm({
   ];
 
   return (
-    <Card className="mb-6">
-      <CardHeader className={cn('transition-all', expanded ? 'pb-0' : 'py-3')}>
-        <div className="flex cursor-pointer items-center justify-between" onClick={() => setExpanded((p) => !p)}>
-          <CardTitle className="text-base">Đánh giá ({items.length})</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
-              onClick={(e) => { e.stopPropagation(); loadDemo(); }}>
+    <div className="mb-6">
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+      <SubSection
+        icon={Star}
+        title={`Đánh giá (${items.length})`}
+        open={openSections.items}
+        onOpenChange={(open) => toggleSection('items', open)}
+        actions={(
+          <>
+            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={loadDemo}>
               <Bot size={11} /> Demo
             </Button>
-            <span onClick={(e) => e.stopPropagation()}>
-              <AiDemoTestimonialsImport onApply={importAiItems} />
-            </span>
-            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs"
-              onClick={(e) => { e.stopPropagation(); addItem(); }}>
+            <AiDemoTestimonialsImport onApply={importAiItems} />
+            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addItem}>
               <Plus size={12} /> Thêm
             </Button>
-            <ChevronDown size={16} className={cn('transition-transform duration-200 text-slate-400', expanded ? 'rotate-180' : '')} />
-          </div>
-        </div>
-      </CardHeader>
-
-      {expanded && (
-        <CardContent className="space-y-2 pt-4">
+          </>
+        )}
+      >
+        <div className="space-y-2">
           {onDesktopColumnsChange && (
             <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
               <div className="text-xs font-medium text-slate-700 dark:text-slate-200">Số cột desktop</div>
@@ -203,6 +205,7 @@ export function TestimonialsForm({
                 folder="testimonials-backgrounds"
                 naming={{ entityName: 'testimonials', field: 'split-background' }}
                 previewSize="sm"
+                cropAspectRatio="wide169"
               />
               {onSplitBackgroundOverlayOpacityChange && (
                 <div className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
@@ -340,6 +343,7 @@ export function TestimonialsForm({
                       folder="testimonials-avatars"
                       naming={{ entityName: item.name || 'testimonial', field: 'avatar', index: idx + 1 }}
                       previewSize="sm"
+                      cropAspectRatio={getAvatarCropAspectRatio(selectedStyle)}
                     />
                   </div>
                 )}
@@ -375,8 +379,8 @@ export function TestimonialsForm({
               </div>
             );
           })}
-        </CardContent>
-      )}
-    </Card>
+        </div>
+      </SubSection>
+    </div>
   );
 }

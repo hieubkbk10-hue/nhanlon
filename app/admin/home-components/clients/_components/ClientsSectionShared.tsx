@@ -1,10 +1,19 @@
 'use client';
 
 import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import useEmblaCarousel from 'embla-carousel-react';
 import { PreviewImage } from '../../_shared/components/PreviewImage';
 import { SectionHeader } from '../../_shared/components/SectionHeader';
+import { cn } from '@/app/admin/components/ui';
+import { DEFAULT_SECTION_SPACING, getSectionSpacingClassName, normalizeSectionSpacing, type SectionSpacing } from '../../_shared/types/sectionSpacing';
 import type { ClientsColorTokens } from '../_lib/colors';
-import type { ClientItem, ClientsHeaderAlign, ClientsStyle } from '../_types';
+import type { ClientItem, ClientsCornerRadius, ClientsHeaderAlign, ClientsStyle } from '../_types';
+import {
+  DEFAULT_CLIENTS_CORNER_RADIUS,
+  getClientsCornerRadiusClassName,
+  normalizeClientsCornerRadius,
+} from '../_types';
 import { normalizeClientItems, type NormalizedClientItem } from '../_lib/items';
 
 export { normalizeClientItems } from '../_lib/items';
@@ -27,6 +36,8 @@ interface ClientsSectionSharedProps {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  cornerRadius?: ClientsCornerRadius;
   noBorderRadius?: boolean;
   brandColor: string;
 }
@@ -40,6 +51,7 @@ export const normalizeClientsStyleSafe = (value: unknown): ClientsStyle => {
     || value === 'layout05'
     || value === 'layout06'
     || value === 'layout07'
+    || value === 'layout08'
   ) {
     return value;
   }
@@ -58,12 +70,12 @@ const renderBannerItem = (
   tokens: ClientsColorTokens,
   sizeClass: string,
   overlayClass = '',
-  noBorderRadius = false,
+  cornerRadius: ClientsCornerRadius = DEFAULT_CLIENTS_CORNER_RADIUS,
 ) => {
-  const radiusClass = noBorderRadius ? 'rounded-none' : 'rounded-xl md:rounded-2xl';
+  const radiusClass = getClientsCornerRadiusClassName(cornerRadius);
   const frame = (
     <div
-      className={`group relative overflow-hidden ring-1 ring-black/5 ${radiusClass} ${sizeClass}`}
+      className={cn('group relative overflow-hidden border', radiusClass, sizeClass)}
       style={{ backgroundColor: tokens.cardBackground, borderColor: tokens.cardBorder }}
     >
       <PreviewImage
@@ -75,7 +87,7 @@ const renderBannerItem = (
         className={`pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/[0.03] ${overlayClass}`}
       />
       {item.link ? (
-        <div className="absolute bottom-3 left-3 rounded-full px-3 py-1 text-[11px] font-medium text-white backdrop-blur-sm" style={{ backgroundColor: tokens.waveBadgeBackground }}>
+        <div className="absolute bottom-3 left-3 rounded-full px-3 py-1 text-[11px] font-medium" style={{ backgroundColor: tokens.waveBadgeBackground, color: tokens.waveBadgeText }}>
           Xem chi tiết
         </div>
       ) : null}
@@ -99,6 +111,82 @@ const renderBannerItem = (
   );
 };
 
+function ClientsCarouselLayout({
+  items,
+  tokens,
+  cornerRadius,
+}: {
+  items: NormalizedClientItem[];
+  tokens: ClientsColorTokens;
+  cornerRadius: ClientsCornerRadius;
+}) {
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: 'start',
+    containScroll: 'trimSnaps',
+    dragFree: true,
+  });
+  const [canScrollPrev, setCanScrollPrev] = React.useState(false);
+  const [canScrollNext, setCanScrollNext] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!emblaApi) { return; }
+
+    const update = () => {
+      setCanScrollPrev(emblaApi.canScrollPrev());
+      setCanScrollNext(emblaApi.canScrollNext());
+    };
+
+    update();
+    emblaApi.on('select', update);
+    emblaApi.on('reInit', update);
+    return () => {
+      emblaApi.off('select', update);
+      emblaApi.off('reInit', update);
+    };
+  }, [emblaApi]);
+
+  const controlClassName = 'inline-flex h-9 w-9 items-center justify-center rounded-full border bg-white text-slate-700 transition-colors disabled:cursor-not-allowed disabled:opacity-40';
+  const showControls = canScrollPrev || canScrollNext;
+
+  return (
+    <div data-can-scroll-prev={canScrollPrev} data-can-scroll-next={canScrollNext}>
+      {showControls ? (
+        <div className="mb-3 flex justify-end gap-2">
+          <button
+            type="button"
+            aria-label="Ảnh trước"
+            disabled={!canScrollPrev}
+            onClick={() => emblaApi?.scrollPrev()}
+            className={controlClassName}
+            style={{ borderColor: tokens.cardBorder }}
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Ảnh tiếp theo"
+            disabled={!canScrollNext}
+            onClick={() => emblaApi?.scrollNext()}
+            className={controlClassName}
+            style={{ borderColor: tokens.cardBorder }}
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      ) : null}
+      <div className="overflow-hidden" ref={emblaRef}>
+        <div className="-ml-3 flex md:-ml-5">
+          {items.map((item, index) => (
+            <div key={item.key} className="min-w-0 shrink-0 basis-[82%] pl-3 sm:basis-1/2 md:basis-1/3 lg:basis-1/4 md:pl-5">
+              {renderBannerItem(item, index, tokens, 'w-full aspect-[16/9]', '', cornerRadius)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ClientsSectionShared({
   context: _context,
   title,
@@ -117,6 +205,8 @@ export function ClientsSectionShared({
   uppercaseText,
   showBadge,
   badgeText,
+  spacing,
+  cornerRadius,
   noBorderRadius,
   brandColor,
 }: ClientsSectionSharedProps) {
@@ -129,6 +219,9 @@ export function ClientsSectionShared({
 
   const sectionTitle = title.trim().length > 0 ? title : 'Khách hàng tin tưởng';
   const effectiveStyle = selectedStyle;
+  const resolvedSpacing = normalizeSectionSpacing(spacing ?? DEFAULT_SECTION_SPACING);
+  const sectionSpacingClassName = getSectionSpacingClassName(resolvedSpacing);
+  const resolvedCornerRadius = normalizeClientsCornerRadius(cornerRadius, noBorderRadius);
 
   const innerContent = (
     <div className="mx-auto max-w-7xl space-y-6 px-4">
@@ -151,51 +244,55 @@ export function ClientsSectionShared({
 
       {effectiveStyle === 'layout01' ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
-          {renderBannerItem(normalizedItems[0], 0, tokens, 'w-full h-full min-h-[350px] sm:min-h-[400px] aspect-square md:aspect-auto', '', noBorderRadius)}
+          {renderBannerItem(normalizedItems[0], 0, tokens, 'w-full h-full min-h-[350px] sm:min-h-[400px] aspect-square md:aspect-auto', '', resolvedCornerRadius)}
           <div className="flex h-full flex-col gap-3 md:gap-5">
             <div className="grid grid-cols-2 gap-3 md:gap-5">
-              {normalizedItems.slice(1, 3).map((item, index) => renderBannerItem(item, index + 1, tokens, 'aspect-square w-full', '', noBorderRadius))}
+              {normalizedItems.slice(1, 3).map((item, index) => renderBannerItem(item, index + 1, tokens, 'aspect-square w-full', '', resolvedCornerRadius))}
             </div>
-            {normalizedItems[3] ? renderBannerItem(normalizedItems[3], 3, tokens, 'aspect-[8/3] md:flex-1 w-full', '', noBorderRadius) : null}
+            {normalizedItems[3] ? renderBannerItem(normalizedItems[3], 3, tokens, 'aspect-[8/3] md:flex-1 w-full', '', resolvedCornerRadius) : null}
           </div>
         </div>
       ) : null}
 
       {effectiveStyle === 'layout02' ? (
-        renderBannerItem(normalizedItems[0], 0, tokens, 'w-full aspect-[8/3]', '', noBorderRadius)
+        renderBannerItem(normalizedItems[0], 0, tokens, 'w-full aspect-[8/3]', '', resolvedCornerRadius)
       ) : null}
 
       {effectiveStyle === 'layout03' ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
           <div className="col-span-1 md:col-span-2">
-            {renderBannerItem(normalizedItems[0], 0, tokens, 'w-full aspect-[8/3]', '', noBorderRadius)}
+            {renderBannerItem(normalizedItems[0], 0, tokens, 'w-full aspect-[8/3]', '', resolvedCornerRadius)}
           </div>
-          {normalizedItems.slice(1, 3).map((item, index) => renderBannerItem(item, index + 1, tokens, 'w-full aspect-[16/9]', '', noBorderRadius))}
+          {normalizedItems.slice(1, 3).map((item, index) => renderBannerItem(item, index + 1, tokens, 'w-full aspect-[16/9]', '', resolvedCornerRadius))}
         </div>
       ) : null}
 
       {effectiveStyle === 'layout04' ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
-          {normalizedItems.slice(0, 2).map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[8/3]', '', noBorderRadius))}
+          {normalizedItems.slice(0, 2).map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[8/3]', '', resolvedCornerRadius))}
         </div>
       ) : null}
 
       {effectiveStyle === 'layout05' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-5">
-          {normalizedItems.slice(0, 3).map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[16/9]', '', noBorderRadius))}
+          {normalizedItems.slice(0, 3).map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[16/9]', '', resolvedCornerRadius))}
         </div>
       ) : null}
 
       {effectiveStyle === 'layout06' ? (
         <div className="grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
-          {normalizedItems.map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[3/4]', '', noBorderRadius))}
+          {normalizedItems.slice(0, 4).map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[3/4]', '', resolvedCornerRadius))}
         </div>
       ) : null}
 
       {effectiveStyle === 'layout07' ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
-          {normalizedItems.slice(0, 4).map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[24/9]', '', noBorderRadius))}
+          {normalizedItems.slice(0, 4).map((item, index) => renderBannerItem(item, index, tokens, 'w-full aspect-[24/9]', '', resolvedCornerRadius))}
         </div>
+      ) : null}
+
+      {effectiveStyle === 'layout08' ? (
+        <ClientsCarouselLayout items={normalizedItems} tokens={tokens} cornerRadius={resolvedCornerRadius} />
       ) : null}
     </div>
   );
@@ -206,7 +303,7 @@ export function ClientsSectionShared({
   }
 
   return (
-    <section className="w-full py-8 px-3" style={{ backgroundColor: tokens.neutralBackground }} aria-label={sectionTitle}>
+    <section className={cn('w-full px-3', sectionSpacingClassName)} style={{ backgroundColor: tokens.neutralBackground }} aria-label={sectionTitle}>
       {innerContent}
     </section>
   );

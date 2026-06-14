@@ -2,11 +2,13 @@
 
 import { HomeComponentRenderer } from '@/components/site/home/HomeComponentRenderer';
 import { HomePageLoading } from '@/components/site/loading/HomePageLoading';
+import { useBrandColors } from '@/components/site/hooks';
+import { useSiteSettings } from '@/components/site/hooks';
 import { api } from '@/convex/_generated/api';
 import type { Doc } from '@/convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import Link from 'next/link';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const EMPTY_COMPONENTS_COUNT = 0;
 const LOADING_DELAY_MS = 120;
@@ -28,14 +30,40 @@ export default function HomePageClient({
   const loadingStartRef = useRef<number | null>(null);
   const delayTimerRef = useRef<number | null>(null);
   const deferredTriggerRef = useRef<HTMLDivElement | null>(null);
-  const [criticalCount, setCriticalCount] = useState(() => {
-    if (typeof window === 'undefined') {
-      return MAX_CRITICAL_COMPONENTS;
-    }
-    return window.innerWidth < 768 ? 1 : MAX_CRITICAL_COMPONENTS;
-  });
+  const [criticalCount, setCriticalCount] = useState(MAX_CRITICAL_COMPONENTS);
 
   const isDataReady = typeof resolvedComponents !== 'undefined';
+
+  const systemConfig = useQuery(api.homeComponentSystemConfig.getConfig);
+  const systemColors = useBrandColors();
+  const { isDark } = useSiteSettings();
+
+  const bgStyle = useMemo(() => {
+    if (!systemConfig?.homePageBackground) {return {};}
+    const { enabled, type, customColor } = systemConfig.homePageBackground;
+    if (!enabled || isDark) {return {};}
+    let color = '';
+    switch (type) {
+      case 'white':
+        color = '#ffffff';
+        break;
+      case 'black':
+        color = '#000000';
+        break;
+      case 'primary':
+        color = systemColors.primary;
+        break;
+      case 'secondary':
+        color = systemColors.secondary || systemColors.primary;
+        break;
+      case 'custom':
+        color = customColor || '#ffffff';
+        break;
+      default:
+        color = '#ffffff';
+    }
+    return { backgroundColor: color };
+  }, [systemConfig?.homePageBackground, systemColors, isDark]);
 
   useEffect(() => {
     const canIdle = typeof window.requestIdleCallback === 'function';
@@ -184,6 +212,7 @@ export default function HomePageClient({
   const sortedComponents = [...resolvedComponents]
     .filter((componentItem) => {
       if (componentItem.type === 'Footer') {return false;}
+      if (componentItem.type === 'Popup') {return false;}
       if (componentItem.type !== 'SpeedDial') {return true;}
 
       const config = componentItem.config as Record<string, unknown>;
@@ -192,9 +221,10 @@ export default function HomePageClient({
     .sort((firstComponent, secondComponent) => firstComponent.order - secondComponent.order);
   const criticalComponents = sortedComponents.slice(0, criticalCount);
   const deferredComponents = showDeferred ? sortedComponents.slice(criticalCount) : [];
+  const popupComponents = resolvedComponents.filter((componentItem) => componentItem.type === 'Popup');
 
   return (
-    <>
+    <div style={bgStyle} className="min-h-screen transition-colors duration-300">
       {criticalComponents.map((component) => (
         <HomeComponentRenderer
           key={component._id}
@@ -223,6 +253,19 @@ export default function HomePageClient({
           />
         </div>
       ))}
-    </>
+      {popupComponents.map((component) => (
+        <HomeComponentRenderer
+          key={component._id}
+          component={{
+            _id: component._id,
+            active: component.active,
+            config: component.config as Record<string, unknown>,
+            order: component.order,
+            title: component.title,
+            type: component.type,
+          }}
+        />
+      ))}
+    </div>
   );
 }

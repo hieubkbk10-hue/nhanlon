@@ -1,3 +1,4 @@
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 export interface FooterLink {
   label: string;
   url: string;
@@ -24,6 +25,8 @@ export type FooterMaxWidth = '6xl' | '7xl' | '8xl' | '9xl';
 
 export type FooterLogoBackgroundStyle = 'none' | 'flat-light' | 'flat-dark' | 'flat-brand';
 
+export type FooterCornerRadius = 'none' | 'sm' | 'lg';
+
 export interface FooterConfig {
   columns: FooterColumn[];
   copyright: string;
@@ -33,6 +36,9 @@ export interface FooterConfig {
   maxWidth?: FooterMaxWidth;
   logoSizeLevel?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   logoBackgroundStyle?: FooterLogoBackgroundStyle;
+  cornerRadius?: FooterCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
   showCopyright?: boolean;
   showBctLogo?: boolean;
   bctLogoType?: 'thong-bao' | 'dang-ky';
@@ -40,5 +46,6 @@ export interface FooterConfig {
   showSocialLinks: boolean;
   useOriginalSocialIconColors?: boolean;
   socialLinks: FooterSocialLink[];
+  spacing?: SectionSpacing;
   style: FooterStyle;
 }

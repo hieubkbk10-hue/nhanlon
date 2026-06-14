@@ -11,8 +11,11 @@ import { SectionHeader } from '../../_shared/components/SectionHeader';
 import { deviceWidths, usePreviewDevice } from '../../_shared/hooks/usePreviewDevice';
 import { STATS_STYLES } from '../_lib/constants';
 import { AnimatedValue } from './AnimatedValue';
+import { adaptTokensForDarkMode } from '@/components/site/home/utils/darkModeColorAdapter';
+import { usePreviewDark } from '../../_shared/components/PreviewWrapper';
 import {
   getCardsColors,
+  getBuilderOverlayColors,
   getCounterColors,
   getGradientColors,
   getHorizontalColors,
@@ -20,7 +23,16 @@ import {
   getMinimalColors,
   getSolarHeroColors,
 } from '../_lib/colors';
-import type { StatsBrandMode, StatsItem, StatsStyle } from '../_types';
+import type { StatsBrandMode, StatsCornerRadius, StatsItem, StatsStyle } from '../_types';
+import {
+  DEFAULT_STATS_CORNER_RADIUS,
+  DEFAULT_STATS_SPACING,
+  getStatsBottomCornerRadiusClassName,
+  getStatsCornerRadiusClassName,
+  getStatsSectionSpacingClassName,
+  getStatsTopCornerRadiusClassName,
+  type StatsSpacing,
+} from '../_types';
 
 const resolveIconComponent = (iconName?: string) => {
   if (!iconName) {return Sparkles;}
@@ -76,6 +88,8 @@ export const StatsPreview = ({
   mediaAlign,
   backgroundImage,
   fullWidth,
+  spacing = DEFAULT_STATS_SPACING,
+  cornerRadius = DEFAULT_STATS_CORNER_RADIUS,
   titleColorPrimary,
   subtitleAboveTitle,
   uppercaseText,
@@ -102,6 +116,8 @@ export const StatsPreview = ({
   mediaAlign?: 'left' | 'center' | 'right';
   backgroundImage?: string;
   fullWidth?: boolean;
+  spacing?: StatsSpacing;
+  cornerRadius?: StatsCornerRadius;
   hideHeader?: boolean;
   titleColorPrimary?: boolean;
   subtitleAboveTitle?: boolean;
@@ -111,11 +127,16 @@ export const StatsPreview = ({
   enableAnimation?: boolean;
 }) => {
   const { device, setDevice } = usePreviewDevice();
+  const { isDark } = usePreviewDark();
   const previewStyle = selectedStyle ?? 'horizontal';
   const setPreviewStyle = (style: string) => onStyleChange?.(style as StatsStyle);
   const modeLabel = mode === 'dual' ? '2 màu' : '1 màu';
   const columnsLabel = desktopColumns === 3 ? '3 cột' : '4 cột';
   const info = `${items.filter((item) => item.value || item.label).length} số liệu • ${modeLabel} • ${columnsLabel}`;
+  const sectionSpacingClassName = getStatsSectionSpacingClassName(spacing);
+  const cardRadiusClassName = getStatsCornerRadiusClassName(cornerRadius);
+  const cardTopRadiusClassName = getStatsTopCornerRadiusClassName(cornerRadius);
+  const cardBottomRadiusClassName = getStatsBottomCornerRadiusClassName(cornerRadius);
 
   const sharedHeader = (
     <SectionHeader
@@ -137,7 +158,7 @@ export const StatsPreview = ({
   const containerClass = fullWidth ? 'w-full' : 'max-w-7xl mx-auto';
 
   const renderHorizontalStyle = () => {
-    const colors = getHorizontalColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getHorizontalColors(brandColor, secondary, mode), isDark);
     
     // Responsive logic based on device state and desktopColumns
     let displayCount: number = desktopColumns ?? 4;
@@ -162,7 +183,7 @@ export const StatsPreview = ({
         {sharedHeader}
         <div className={containerClass}>
           <section 
-            className="w-full rounded-lg overflow-hidden" 
+            className={cn('w-full overflow-hidden', cardRadiusClassName)}
             style={{ backgroundColor: colors.sectionBg }}
           >
             <div className={cn(
@@ -183,20 +204,22 @@ export const StatsPreview = ({
                 return (
                   <div
                     key={idx}
-                    className="flex items-center gap-3"
+                    className={cn(getItemContainerClass(mediaPlacement, mediaAlign))}
                   >
                     {iconElement && (
                       <div 
                         className={cn(
                           "rounded-full flex items-center justify-center shrink-0 overflow-hidden",
-                          circleSize
+                          circleSize,
+                          mediaPlacement === 'left' ? 'mb-0' : 'mb-2',
+                          getMediaWrapperClass(mediaPlacement, mediaAlign)
                         )}
                         style={{ backgroundColor: colors.iconBg }}
                       >
                         {iconElement}
                       </div>
                     )}
-                    <div className="flex flex-col">
+                    <div className={cn("flex flex-col", mediaPlacement === 'left' ? '' : getItemAlignClass(mediaAlign))}>
                       <AnimatedValue
                         value={item.value || '0'}
                         enabled={enableAnimation || false}
@@ -227,7 +250,7 @@ export const StatsPreview = ({
   };
 
   const renderCardsStyle = () => {
-    const colors = getCardsColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getCardsColors(brandColor, secondary, mode), isDark);
     
     // Responsive logic
     let displayCount: number = desktopColumns ?? 4;
@@ -251,9 +274,9 @@ export const StatsPreview = ({
     
     return (
       <div>
-        {sharedHeader}
         <div className={containerClass}>
-          <section className={cn("w-full", device === 'mobile' ? 'p-2' : 'p-3')}>
+          {sharedHeader}
+          <section className={cn('w-full overflow-hidden border', cardRadiusClassName, device === 'mobile' ? 'p-2' : 'p-3')} style={{ backgroundColor: colors.sectionBg, borderColor: colors.border }}>
             <div className={cn('grid divide-x divide-y divide-gray-200', gridClass, device === 'desktop' && 'divide-y-0')}>
               {items.slice(0, displayCount).map((item, idx) => {
                 const IconCmp = item.iconType === 'lucide' && item.iconName ? resolveIconComponent(item.iconName) : null;
@@ -268,14 +291,18 @@ export const StatsPreview = ({
                 return (
                   <div
                     key={idx}
-                    className={cn("flex items-center gap-3 justify-center", device === 'mobile' ? 'py-3 px-4' : 'py-4 px-4')}
+                    className={cn(
+                      getItemContainerClass(mediaPlacement, mediaAlign),
+                      "justify-center",
+                      device === 'mobile' ? 'py-3 px-4' : 'py-4 px-4'
+                    )}
                   >
                     {iconElement && (
-                      <div className="shrink-0">
+                      <div className={cn("shrink-0", mediaPlacement === 'left' ? 'mb-0' : 'mb-2', getMediaWrapperClass(mediaPlacement, mediaAlign))}>
                         {iconElement}
                       </div>
                     )}
-                    <div className="flex flex-col">
+                    <div className={cn("flex flex-col", mediaPlacement === 'left' ? '' : getItemAlignClass(mediaAlign))}>
                       <AnimatedValue
                         value={item.value || '0'}
                         enabled={enableAnimation || false}
@@ -306,7 +333,7 @@ export const StatsPreview = ({
   };
 
   const renderIconsStyle = () => {
-    const colors = getIconsColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getIconsColors(brandColor, secondary, mode), isDark);
     let gridClass = '';
     if (device === 'mobile') {
       gridClass = desktopColumns === 3 ? 'grid-cols-1' : 'grid-cols-2';
@@ -315,11 +342,17 @@ export const StatsPreview = ({
     } else {
       gridClass = desktopColumns === 3 ? 'grid-cols-3' : 'grid-cols-4';
     }
+    const circleSizeClass = device === 'mobile' ? 'w-14 h-14' : device === 'tablet' ? 'w-16 h-16' : 'w-20 h-20';
+    const lucideIconSize = device === 'mobile' ? 24 : device === 'tablet' ? 28 : 30;
+    const uploadIconClass = device === 'mobile' ? 'w-9 h-9' : device === 'tablet' ? 'w-11 h-11' : 'w-14 h-14';
+    const urlIconClass = device === 'mobile' ? 'w-5 h-5' : device === 'tablet' ? 'w-6 h-6' : 'w-7 h-7';
+    const valueTextClass = device === 'mobile' ? 'text-base' : device === 'tablet' ? 'text-lg' : 'text-xl';
+    const labelTextClass = device === 'mobile' ? 'text-xs leading-snug' : 'text-sm';
     return (
       <div>
-        {sharedHeader}
         <div className={containerClass}>
-          <section className={cn("w-full", device === 'mobile' ? 'py-3 px-2' : 'py-4 px-3')}>
+          {sharedHeader}
+          <section className={cn("w-full", device === 'mobile' ? 'py-3 px-2' : 'py-4 px-3')} style={{ backgroundColor: colors.sectionBg }}>
             <div className={cn('grid gap-4', device === 'mobile' ? 'gap-3' : '', gridClass)}>
               {items.slice(0, desktopColumns).map((item, idx) => {
                 const IconCmp = item.iconType === 'lucide' && item.iconName ? resolveIconComponent(item.iconName) : null;
@@ -329,7 +362,7 @@ export const StatsPreview = ({
                   <div
                     className={cn(
                       "relative rounded-full flex items-center justify-center border shadow-sm shrink-0 overflow-hidden",
-                      device === 'mobile' ? 'w-16 h-16' : 'w-20 h-20',
+                      circleSizeClass,
                       mediaPlacement === 'left' ? 'mb-0' : 'mb-2'
                     )}
                     style={{
@@ -338,18 +371,18 @@ export const StatsPreview = ({
                     }}
                   >
                     {item.iconType === 'lucide' && IconCmp ? (
-                      <IconCmp size={device === 'mobile' ? 24 : 30} style={{ color: colors.textOnCircle }} />
+                      <IconCmp size={lucideIconSize} style={{ color: colors.textOnCircle }} />
                     ) : item.iconType === 'upload' && item.iconUrl ? (
-                      <img src={item.iconUrl} alt="" className={cn("object-contain", device === 'mobile' ? 'w-11 h-11' : 'w-14 h-14')} />
+                      <img src={item.iconUrl} alt="" className={cn("object-contain", uploadIconClass)} />
                     ) : item.iconType === 'url' && item.iconUrl ? (
-                      <img src={item.iconUrl} alt="" className={cn("object-contain", device === 'mobile' ? 'w-6 h-6' : 'w-7 h-7')} />
+                      <img src={item.iconUrl} alt="" className={cn("object-contain", urlIconClass)} />
                     ) : (
                       <AnimatedValue
                         value={item.value || '0'}
                         enabled={enableAnimation || false}
                         className={cn(
                           "font-bold tracking-tight z-10 tabular-nums",
-                          device === 'mobile' ? 'text-lg' : 'text-xl'
+                          valueTextClass
                         )}
                         style={{ color: colors.textOnCircle }}
                       />
@@ -358,13 +391,17 @@ export const StatsPreview = ({
                 );
 
                 return (
-                  <div key={idx} className={cn(getItemContainerClass(mediaPlacement, mediaAlign))}>
+                  <div key={idx} className={cn(
+                    mediaPlacement === 'left'
+                      ? 'flex w-full items-center justify-center gap-2 text-left'
+                      : getItemContainerClass(mediaPlacement, mediaAlign)
+                  )}>
                     {circleElement}
-                    <div className={cn(mediaPlacement === 'left' ? 'flex-1' : '')}>
+                    <div className={cn(mediaPlacement === 'left' ? 'w-[76px] min-w-0 shrink-0' : '')}>
                       <h3
                         className={cn(
                           "font-semibold text-slate-800 dark:text-slate-200",
-                          device === 'mobile' ? 'text-xs' : 'text-sm'
+                          labelTextClass
                         )}
                         style={{ color: colors.label }}
                       >
@@ -374,7 +411,7 @@ export const StatsPreview = ({
                         <AnimatedValue
                           value={item.value || '0'}
                           enabled={enableAnimation || false}
-                          className={cn("font-bold tabular-nums mt-1", device === 'mobile' ? 'text-base' : 'text-lg')}
+                          className={cn("font-bold tabular-nums", device === 'mobile' ? 'mt-0.5 text-base' : 'mt-1 text-lg')}
                           style={{ color: brandColor }}
                         />
                       )}
@@ -390,7 +427,7 @@ export const StatsPreview = ({
   };
 
   const renderGradientStyle = () => {
-    const colors = getGradientColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getGradientColors(brandColor, secondary, mode), isDark);
     let gridClass = '';
     if (device === 'mobile') {
       gridClass = desktopColumns === 3 ? 'grid-cols-1' : 'grid-cols-2';
@@ -401,11 +438,11 @@ export const StatsPreview = ({
     }
     return (
       <div>
-        {sharedHeader}
         <div className={containerClass}>
+          {sharedHeader}
           <section className={cn("w-full", device === 'mobile' ? 'p-2' : 'p-4')}>
             <div
-              className="rounded-2xl overflow-hidden border"
+              className={cn('overflow-hidden border', cardRadiusClassName)}
               style={{
                 background: colors.background,
                 borderColor: colors.border
@@ -470,7 +507,7 @@ export const StatsPreview = ({
   };
 
   const renderMinimalStyle = () => {
-    const colors = getMinimalColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getMinimalColors(brandColor, secondary, mode), isDark);
     let gridClass = '';
     if (device === 'mobile') {
       gridClass = desktopColumns === 3 ? 'grid-cols-1' : 'grid-cols-2';
@@ -487,9 +524,9 @@ export const StatsPreview = ({
     
     return (
       <div>
-        {sharedHeader}
         <div className={containerClass}>
-          <section className={cn("w-full bg-slate-50 dark:bg-slate-900", device === 'mobile' ? 'py-6 px-3' : 'py-8 px-4')}>
+          {sharedHeader}
+          <section className={cn('w-full', cardRadiusClassName, device === 'mobile' ? 'py-6 px-3' : 'py-8 px-4')} style={{ backgroundColor: colors.sectionBg }}>
             <div className={cn('grid gap-4', device === 'mobile' ? '' : '', gridClass)}>
               {items.slice(0, desktopColumns).map((item, idx) => {
                 const IconCmp = item.iconType === 'lucide' && item.iconName ? resolveIconComponent(item.iconName) : null;
@@ -545,7 +582,7 @@ export const StatsPreview = ({
   };
 
   const renderCounterStyle = () => {
-    const colors = getCounterColors(brandColor, secondary, mode);
+    const colors = adaptTokensForDarkMode(getCounterColors(brandColor, secondary, mode), isDark);
     let gridClass = '';
     if (device === 'mobile') {
       gridClass = desktopColumns === 3 ? 'grid-cols-1' : 'grid-cols-2';
@@ -562,9 +599,9 @@ export const StatsPreview = ({
     
     return (
       <div>
-        {sharedHeader}
         <div className={containerClass}>
-          <section className={cn("w-full rounded-lg overflow-hidden", device === 'mobile' ? 'py-6 px-3' : 'py-8 px-4')} style={{ backgroundColor: colors.background }}>
+          {sharedHeader}
+          <section className={cn('w-full overflow-hidden', cardRadiusClassName, device === 'mobile' ? 'py-6 px-3' : 'py-8 px-4')} style={{ backgroundColor: colors.background }}>
             <div className={cn('grid gap-4', device === 'mobile' ? '' : '', gridClass)}>
               {items.slice(0, desktopColumns).map((item, idx) => {
                 const IconCmp = item.iconType === 'lucide' && item.iconName ? resolveIconComponent(item.iconName) : null;
@@ -622,8 +659,10 @@ export const StatsPreview = ({
   };
 
   const renderSolarHeroStyle = () => {
-    const colors = getSolarHeroColors(brandColor, secondary, mode);
-    const gridClass = device === 'mobile' ? 'grid-cols-1' : device === 'tablet' ? 'grid-cols-2' : 'grid-cols-4';
+    const colors = adaptTokensForDarkMode(getSolarHeroColors(brandColor, secondary, mode), isDark);
+    const gridClass = desktopColumns === 3
+      ? device === 'mobile' ? 'grid-cols-1' : 'grid-cols-3'
+      : device === 'desktop' ? 'grid-cols-4' : 'grid-cols-2';
     const iconSize = device === 'mobile' ? 'h-12 w-12' : 'h-[60px] w-[60px]';
     const valueSize = device === 'desktop' ? 'text-[38px]' : device === 'tablet' ? 'text-[30px]' : 'text-[28px]';
 
@@ -647,7 +686,7 @@ export const StatsPreview = ({
 
               return (
                 <article key={idx} className="flex min-w-0 flex-col">
-                  <div className="flex items-center justify-between gap-2.5 rounded-t-[14px] border px-3 py-3" style={{ backgroundColor: colors.cardSurface, borderColor: colors.border }}>
+                  <div className={cn('flex items-center justify-between gap-2.5 border px-3 py-3', cardTopRadiusClassName)} style={{ backgroundColor: colors.cardSurface, borderColor: colors.border }}>
                     <div className="min-w-0">
                       <AnimatedValue
                         value={item.value || '0'}
@@ -660,7 +699,7 @@ export const StatsPreview = ({
                     <div className="shrink-0">{iconElement}</div>
                   </div>
                   <p
-                    className="min-h-[84px] flex-1 rounded-b-[14px] px-3 py-3 text-sm leading-relaxed"
+                    className={cn('min-h-[84px] flex-1 px-3 py-3 text-sm leading-relaxed', cardBottomRadiusClassName)}
                     style={{ backgroundColor: colors.descriptionBg, color: colors.descriptionText }}
                   >
                     {item.description || `${item.label || 'Số liệu'} nổi bật, khẳng định năng lực và uy tín của thương hiệu.`}
@@ -668,6 +707,84 @@ export const StatsPreview = ({
                 </article>
               );
             })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBuilderOverlayStyle = () => {
+    const colors = adaptTokensForDarkMode(getBuilderOverlayColors(brandColor, secondary, mode), isDark);
+    const gridClass = desktopColumns === 3 ? 'md:basis-1/3 md:max-w-[33.333333%]' : 'md:basis-1/4 md:max-w-[25%]';
+    const visibleItems = items.slice(0, desktopColumns ?? 4);
+    const isCompact = device !== 'desktop';
+    const itemWidthClass = desktopColumns === 3
+      ? device === 'mobile' ? 'basis-full max-w-full' : 'basis-1/3 max-w-[33.333333%]'
+      : device === 'desktop' ? gridClass : 'basis-1/2 max-w-[50%]';
+    const iconClass = device === 'desktop' ? 'h-16 w-16' : device === 'tablet' ? 'h-12 w-12' : 'h-9 w-9';
+    const itemPaddingClass = device === 'desktop' ? 'px-2.5 py-3' : 'px-2 py-2.5';
+    const textGapClass = device === 'desktop' ? 'ml-5' : device === 'tablet' ? 'ml-3' : 'ml-2';
+    const valueClass = device === 'desktop'
+      ? 'text-[36px] leading-[43.2px]'
+      : device === 'tablet'
+        ? 'text-[30px] leading-[36px]'
+        : 'text-[24px] leading-[28px]';
+    const labelClass = device === 'desktop'
+      ? 'text-base leading-[19.2px]'
+      : device === 'tablet'
+        ? 'text-sm leading-[17px]'
+        : 'max-w-[86px] text-[13px] leading-[15px]';
+
+    return (
+      <div
+        className={cn('relative bg-cover bg-center bg-no-repeat px-5 py-8', isCompact ? 'px-3 py-5' : '')}
+        style={backgroundImage ? { backgroundImage: `url("${backgroundImage}")` } : undefined}
+      >
+        <div className={containerClass}>
+          {sharedHeader}
+          <div className={cn('relative min-h-[132px]', backgroundImage && (isCompact ? 'min-h-[240px]' : 'min-h-[320px]'))}>
+            <div className={cn(
+              'p-2.5 font-sans text-sm leading-[23.8px]',
+              cardRadiusClassName,
+              backgroundImage ? 'absolute bottom-5 left-5 w-[calc(100%-40px)]' : 'w-full',
+            )}
+            style={{ backgroundColor: `${colors.surface}cc` }}>
+              <div className="-mx-2.5 flex flex-row flex-wrap">
+                {visibleItems.map((item, idx) => {
+                  const IconCmp = item.iconType === 'lucide' && item.iconName ? resolveIconComponent(item.iconName) : Sparkles;
+                  const hasImage = (item.iconType === 'upload' || item.iconType === 'url') && item.iconUrl;
+                  return (
+                    <div
+                      key={idx}
+                      className={cn(
+                        'flex w-full items-center justify-center',
+                        itemPaddingClass,
+                        itemWidthClass,
+                        !isCompact && idx !== visibleItems.length - 1 && 'border-r',
+                      )}
+                      style={!isCompact && idx !== visibleItems.length - 1 ? { borderColor: colors.border } : undefined}
+                    >
+                      <div className="shrink-0">
+                        {hasImage ? (
+                          <img src={item.iconUrl} alt={item.label || ''} className={cn('object-contain align-middle', iconClass)} loading="lazy" />
+                        ) : (
+                          <IconCmp size={64} className={iconClass} style={{ color: colors.icon }} />
+                        )}
+                      </div>
+                      <div className={cn('flex min-w-0 flex-col', textGapClass)}>
+                        <AnimatedValue
+                          value={item.value || '0'}
+                          enabled={enableAnimation || false}
+                          className={cn('font-bold tracking-normal tabular-nums', valueClass)}
+                          style={{ color: colors.accent }}
+                        />
+                        <span className={cn('capitalize', labelClass)} style={{ color: colors.label }}>{item.label || 'Label'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -689,13 +806,16 @@ export const StatsPreview = ({
         fontClassName={fontClassName}
       >
         <BrowserFrame>
-          {previewStyle === 'horizontal' && renderHorizontalStyle()}
-          {previewStyle === 'cards' && renderCardsStyle()}
-          {previewStyle === 'icons' && renderIconsStyle()}
-          {previewStyle === 'gradient' && renderGradientStyle()}
-          {previewStyle === 'minimal' && renderMinimalStyle()}
-          {previewStyle === 'counter' && renderCounterStyle()}
-          {previewStyle === 'solar-hero' && renderSolarHeroStyle()}
+          <div className={sectionSpacingClassName}>
+            {previewStyle === 'horizontal' && renderHorizontalStyle()}
+            {previewStyle === 'cards' && renderCardsStyle()}
+            {previewStyle === 'icons' && renderIconsStyle()}
+            {previewStyle === 'gradient' && renderGradientStyle()}
+            {previewStyle === 'minimal' && renderMinimalStyle()}
+            {previewStyle === 'counter' && renderCounterStyle()}
+            {previewStyle === 'solar-hero' && renderSolarHeroStyle()}
+            {previewStyle === 'builder-overlay' && renderBuilderOverlayStyle()}
+          </div>
         </BrowserFrame>
       </PreviewWrapper>
       <ColorInfoPanel brandColor={brandColor} secondary={secondary} />

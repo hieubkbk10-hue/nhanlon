@@ -190,7 +190,7 @@ export const calculateAccentBalance = ({
     };
   }
 
-  if (style === 'cards' || style === 'slider' || style === 'split-carousel' || style === 'overlap-carousel') {
+  if (style === 'cards' || style === 'slider' || style === 'split-carousel' || style === 'overlap-carousel' || style === 'builder-cards' || style === 'builder-carousel') {
     return {
       neutral: 60,
       primary: 28,

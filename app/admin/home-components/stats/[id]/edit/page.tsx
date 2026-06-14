@@ -1,15 +1,19 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { AlertCircle, Loader2, ChevronDown } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { ToggleSwitch } from '@/components/modules/shared';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../../components/ui';
+import { Label, cn } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
@@ -17,21 +21,50 @@ import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOver
 import { getSuggestedSecondary, resolveSecondaryByMode } from '../../../_shared/lib/typeColorOverride';
 import { StatsForm, type StatsFormItem } from '../../_components/StatsForm';
 import { StatsPreview } from '../../_components/StatsPreview';
-import { InputWithClear } from '../../_components/InputWithClear';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
+import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { HomeComponentDisplaySettingsSection } from '../../../_shared/components/HomeComponentDisplaySettingsSection';
 import { DEFAULT_STATS_ITEMS, DEFAULT_STATS_CONFIG } from '../../_lib/constants';
-import type { StatsBrandMode, StatsItem, StatsStyle, StatsHeaderAlign, StatsMediaPlacement, StatsMediaAlign } from '../../_types';
+import { normalizeStatsCornerRadius, normalizeStatsSpacing, type StatsBrandMode, type StatsItem, type StatsStyle, type StatsHeaderAlign, type StatsMediaPlacement, type StatsMediaAlign, type StatsSpacing, type StatsCornerRadius } from '../../_types';
+import { useFormSectionsState } from '../../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../../_shared/components/FormSectionsToggleAllButton';
 
 const COMPONENT_TYPE = 'Stats';
 
-export default function StatsEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type StatsEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function StatsEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: StatsEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [hideHeader, setHideHeader] = useState(false);
@@ -44,7 +77,10 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
   const [mediaPlacement, setMediaPlacement] = useState<StatsMediaPlacement>(DEFAULT_STATS_CONFIG.mediaPlacement ?? 'top');
   const [mediaAlign, setMediaAlign] = useState<StatsMediaAlign>(DEFAULT_STATS_CONFIG.mediaAlign ?? 'center');
   const [backgroundImage, setBackgroundImage] = useState(DEFAULT_STATS_CONFIG.backgroundImage ?? '');
+  const [backgroundImageStorageId, setBackgroundImageStorageId] = useState<string | null>(null);
   const [fullWidth, setFullWidth] = useState(DEFAULT_STATS_CONFIG.fullWidth ?? false);
+  const [spacing, setSpacing] = useState<StatsSpacing>(DEFAULT_STATS_CONFIG.spacing ?? 'normal');
+  const [cornerRadius, setCornerRadius] = useState<StatsCornerRadius>(DEFAULT_STATS_CONFIG.cornerRadius ?? 'lg');
   const [titleColorPrimary, setTitleColorPrimary] = useState(false);
   const [subtitleAboveTitle, setSubtitleAboveTitle] = useState(false);
   const [uppercaseText, setUppercaseText] = useState(false);
@@ -52,14 +88,19 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
   const [badgeText, setBadgeText] = useState('');
   const [enableAnimation, setEnableAnimation] = useState(false);
   const [active, setActive] = useState(true);
-  const [statsItems, setStatsItems] = useState<StatsFormItem[]>([]);
+  const {
+    state: statsItems,
+    set: setStatsItems,
+    undo: undostatsItems,
+    redo: redostatsItems,
+    canUndo: canUndostatsItems,
+    canRedo: canRedostatsItems,
+    reset: resetstatsItems,
+  } = useUndoRedo<StatsFormItem[]>([], { maxHistory: 15 });
   const [statsStyle, setStatsStyle] = useState<StatsStyle>('horizontal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [expandedSections, setExpandedSections] = useState({
-    header: false,
-    config: false,
-  });
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header', 'display', 'stats'], false);
   const [initialData, setInitialData] = useState<{
     hideHeader: boolean;
     title: string;
@@ -71,7 +112,10 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
     mediaPlacement: StatsMediaPlacement;
     mediaAlign: StatsMediaAlign;
     backgroundImage: string;
+    backgroundImageStorageId: string | null;
     fullWidth: boolean;
+    spacing: StatsSpacing;
+    cornerRadius: StatsCornerRadius;
     titleColorPrimary: boolean;
     subtitleAboveTitle: boolean;
     uppercaseText: boolean;
@@ -87,7 +131,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     if (component) {
-      if (component.type !== 'Stats') {
+      if (!snapshotComponent && component.type !== 'Stats') {
         router.replace(`/admin/home-components/${id}/edit`);
         return;
       }
@@ -105,6 +149,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
         iconType: item.iconType,
         iconName: item.iconName,
         iconUrl: item.iconUrl,
+        iconStorageId: item.iconStorageId,
       }));
       const style = (config.style as StatsStyle) || 'horizontal';
       const resolvedShowTitle = typeof config.showTitle === 'boolean' ? config.showTitle : DEFAULT_STATS_CONFIG.showTitle !== false;
@@ -115,7 +160,10 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
       const resolvedMediaPlacement = (config.mediaPlacement as StatsMediaPlacement) || DEFAULT_STATS_CONFIG.mediaPlacement || 'top';
       const resolvedMediaAlign = (config.mediaAlign as StatsMediaAlign) || DEFAULT_STATS_CONFIG.mediaAlign || 'center';
       const resolvedBackgroundImage = typeof config.backgroundImage === 'string' ? config.backgroundImage : DEFAULT_STATS_CONFIG.backgroundImage ?? '';
+      const resolvedBackgroundImageStorageId = typeof config.backgroundImageStorageId === 'string' ? config.backgroundImageStorageId : null;
       const resolvedFullWidth = typeof config.fullWidth === 'boolean' ? config.fullWidth : DEFAULT_STATS_CONFIG.fullWidth ?? false;
+      const resolvedSpacing = config.noVerticalMargin === true ? 'none' : normalizeStatsSpacing(config.spacing);
+      const resolvedCornerRadius = normalizeStatsCornerRadius(config.cornerRadius, config.noBorderRadius);
       const resolvedTitleColorPrimary = typeof config.titleColorPrimary === 'boolean' ? config.titleColorPrimary : false;
       const resolvedSubtitleAboveTitle = typeof config.subtitleAboveTitle === 'boolean' ? config.subtitleAboveTitle : false;
       const resolvedUppercaseText = typeof config.uppercaseText === 'boolean' ? config.uppercaseText : false;
@@ -124,7 +172,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
       const resolvedEnableAnimation = typeof config.enableAnimation === 'boolean' ? config.enableAnimation : false;
       const resolvedHideHeader = typeof config.hideHeader === 'boolean' ? config.hideHeader : false;
 
-      setStatsItems(mappedItems);
+      resetstatsItems(mappedItems);
       setStatsStyle(style);
       setShowTitle(resolvedShowTitle);
       setSubtitle(resolvedSubtitle);
@@ -134,7 +182,10 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
       setMediaPlacement(resolvedMediaPlacement);
       setMediaAlign(resolvedMediaAlign);
       setBackgroundImage(resolvedBackgroundImage);
+      setBackgroundImageStorageId(resolvedBackgroundImageStorageId);
       setFullWidth(resolvedFullWidth);
+      setSpacing(resolvedSpacing);
+      setCornerRadius(resolvedCornerRadius);
       setTitleColorPrimary(resolvedTitleColorPrimary);
       setSubtitleAboveTitle(resolvedSubtitleAboveTitle);
       setUppercaseText(resolvedUppercaseText);
@@ -153,7 +204,10 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
         mediaPlacement: resolvedMediaPlacement,
         mediaAlign: resolvedMediaAlign,
         backgroundImage: resolvedBackgroundImage,
+        backgroundImageStorageId: resolvedBackgroundImageStorageId,
         fullWidth: resolvedFullWidth,
+        spacing: resolvedSpacing,
+        cornerRadius: resolvedCornerRadius,
         titleColorPrimary: resolvedTitleColorPrimary,
         subtitleAboveTitle: resolvedSubtitleAboveTitle,
         uppercaseText: resolvedUppercaseText,
@@ -166,20 +220,20 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
       });
       setHasChanges(false);
     }
-  }, [component, id, router]);
+  }, [component, id, router, snapshotComponent]);
 
   useEffect(() => {
     if (!initialData) {return;}
 
     const currentItems = JSON.stringify(statsItems);
     const initialItems = JSON.stringify(initialData.items);
-    const customChanged = showCustomBlock
+    const customChanged = enableTypeOverrides && showCustomBlock
       ? customState.enabled !== initialCustom.enabled
         || customState.mode !== initialCustom.mode
         || customState.primary !== initialCustom.primary
         || resolvedCustomSecondary !== resolvedInitialSecondary
       : false;
-    const customFontChanged = showFontCustomBlock
+    const customFontChanged = enableTypeOverrides && showFontCustomBlock
       ? customFontState.enabled !== initialFontCustom.enabled
         || customFontState.fontKey !== initialFontCustom.fontKey
       : false;
@@ -194,7 +248,10 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
       || mediaPlacement !== initialData.mediaPlacement
       || mediaAlign !== initialData.mediaAlign
       || backgroundImage !== initialData.backgroundImage
+      || backgroundImageStorageId !== initialData.backgroundImageStorageId
       || fullWidth !== initialData.fullWidth
+      || spacing !== initialData.spacing
+      || cornerRadius !== initialData.cornerRadius
       || titleColorPrimary !== initialData.titleColorPrimary
       || subtitleAboveTitle !== initialData.subtitleAboveTitle
       || uppercaseText !== initialData.uppercaseText
@@ -208,7 +265,9 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
       || customFontChanged;
 
     setHasChanges(changed);
-  }, [hideHeader, title, showTitle, subtitle, showSubtitle, headerAlign, desktopColumns, mediaPlacement, mediaAlign, backgroundImage, fullWidth, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, enableAnimation, active, statsItems, statsStyle, initialData, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock, resolvedCustomSecondary, resolvedInitialSecondary]);
+  }, [hideHeader, title, showTitle, subtitle, showSubtitle, headerAlign, desktopColumns, mediaPlacement, mediaAlign, backgroundImage, backgroundImageStorageId, fullWidth, spacing, cornerRadius, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, enableAnimation, active, statsItems, statsStyle, initialData, customState, initialCustom, showCustomBlock, customFontState, initialFontCustom, showFontCustomBlock, resolvedCustomSecondary, resolvedInitialSecondary, enableTypeOverrides]);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,9 +275,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
 
     setIsSubmitting(true);
     try {
-      await updateMutation({
-        active,
-        config: {
+      const nextConfig = {
           items: statsItems.map((item) => ({ 
             label: item.label, 
             value: item.value,
@@ -226,6 +283,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
             iconType: item.iconType,
             iconName: item.iconName,
             iconUrl: item.iconUrl,
+            iconStorageId: item.iconStorageId,
           })),
           style: statsStyle,
           hideHeader,
@@ -237,18 +295,31 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
           mediaPlacement,
           mediaAlign,
           backgroundImage,
+          backgroundImageStorageId,
           fullWidth,
+          spacing,
+          cornerRadius,
+          noBorderRadius: cornerRadius === 'none',
+          noVerticalMargin: spacing === 'none',
           titleColorPrimary,
           subtitleAboveTitle,
           uppercaseText,
           showBadge,
           badgeText,
           enableAnimation,
-        },
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+        };
+
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: nextConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         await setTypeColorOverride({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -257,7 +328,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -276,7 +347,10 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
         mediaPlacement,
         mediaAlign,
         backgroundImage,
+        backgroundImageStorageId,
         fullWidth,
+        spacing,
+        cornerRadius,
         titleColorPrimary,
         subtitleAboveTitle,
         uppercaseText,
@@ -287,7 +361,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
         items: statsItems,
         style: statsStyle,
       });
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -295,7 +369,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
           secondary: resolvedCustomSecondary,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -328,184 +402,53 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Thống kê</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500">Snapshot: {snapshotLabel}</p> : null}
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="space-y-3">
-              <div 
-                className="cursor-pointer flex items-center justify-between"
-                onClick={() => setExpandedSections(prev => ({ ...prev, header: !prev.header }))}
-              >
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertCircle size={20} />
-                  Tiêu đề & Mô tả
-                </CardTitle>
-                <ChevronDown 
-                  size={16} 
-                  className={cn(
-                    "transition-transform duration-200",
-                    expandedSections.header ? "rotate-180" : ""
-                  )}
-                />
-              </div>
+        <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
 
-              <div 
-                className="flex items-center justify-between gap-3 rounded-lg border-2 border-orange-200 bg-orange-50 px-3 py-2 dark:border-orange-800 dark:bg-orange-950/30"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-semibold text-orange-900 dark:text-orange-100">Ẩn toàn bộ header</Label>
-                  <p className="text-xs text-orange-700 dark:text-orange-300">Bật để ẩn title, subtitle và badge</p>
-                </div>
-                <ToggleSwitch 
-                  enabled={hideHeader} 
-                  onChange={() => {
-                    const newValue = !hideHeader;
-                    setHideHeader(newValue);
-                    if (newValue) {
-                      // Đóng dropdown khi bật hideHeader
-                      setExpandedSections(prev => ({ ...prev, header: false }));
-                    }
-                  }} 
-                />
-              </div>
-            </div>
-          </CardHeader>
-          {expandedSections.header && (
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Tiêu đề hiển thị <span className="text-red-500">*</span></Label>
-                <InputWithClear
-                  value={title}
-                  onChange={setTitle}
-                  required
-                  placeholder="Nhập tiêu đề component..."
-                />
-              </div>
+        <HeaderConfigSection
+          hideHeader={hideHeader}
+          title={title}
+          showTitle={showTitle}
+          subtitle={subtitle}
+          showSubtitle={showSubtitle}
+          headerAlign={headerAlign}
+          titleColorPrimary={titleColorPrimary}
+          subtitleAboveTitle={subtitleAboveTitle}
+          uppercaseText={uppercaseText}
+          showBadge={showBadge}
+          badgeText={badgeText}
+          onHideHeaderChange={setHideHeader}
+          onTitleChange={setTitle}
+          onShowTitleChange={setShowTitle}
+          onSubtitleChange={setSubtitle}
+          onShowSubtitleChange={setShowSubtitle}
+          onHeaderAlignChange={setHeaderAlign}
+          onTitleColorPrimaryChange={setTitleColorPrimary}
+          onSubtitleAboveTitleChange={setSubtitleAboveTitle}
+          onUppercaseTextChange={setUppercaseText}
+          onShowBadgeChange={setShowBadge}
+          onBadgeTextChange={setBadgeText}
+          expanded={openSections.header}
+          onExpandedChange={(value) => toggleSection('header', value)}
+          className="mb-3"
+          titleRequired={true}
+          titleLabel="Tiêu đề hiển thị"
+          titlePlaceholder="Nhập tiêu đề component..."
+        />
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm">Hiển thị title</Label>
-                    <p className="text-xs text-slate-500">Tắt để ẩn tiêu đề ngoài preview/site</p>
-                  </div>
-                  <ToggleSwitch enabled={showTitle} onChange={() => setShowTitle((current) => !current)} />
-                </div>
-
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm">Hiển thị subtitle</Label>
-                    <p className="text-xs text-slate-500">Tắt để ẩn dòng mô tả phụ</p>
-                  </div>
-                  <ToggleSwitch enabled={showSubtitle} onChange={() => setShowSubtitle((current) => !current)} />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Subtitle</Label>
-                <InputWithClear
-                  value={subtitle}
-                  onChange={setSubtitle}
-                  placeholder="Nhập subtitle hiển thị..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Badge text</Label>
-                <InputWithClear
-                  value={badgeText}
-                  onChange={setBadgeText}
-                  placeholder="Nhập text cho badge (ví dụ: DỊCH VỤ CỦA CHÚNG TÔI)"
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Hiển thị badge</Label>
-                  <p className="text-xs text-slate-500">Bật để hiển thị badge ở trên title/subtitle</p>
-                </div>
-                <ToggleSwitch enabled={showBadge} onChange={() => setShowBadge((current) => !current)} />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Title màu chính</Label>
-                  <p className="text-xs text-slate-500">Bật để title hiển thị màu brand</p>
-                </div>
-                <ToggleSwitch enabled={titleColorPrimary} onChange={() => setTitleColorPrimary((current) => !current)} />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Subtitle ở trên title</Label>
-                  <p className="text-xs text-slate-500">Bật để hiển thị subtitle trước title</p>
-                </div>
-                <ToggleSwitch enabled={subtitleAboveTitle} onChange={() => setSubtitleAboveTitle((current) => !current)} />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                <div className="space-y-0.5">
-                  <Label className="text-sm">Viết in hoa</Label>
-                  <p className="text-xs text-slate-500">Bật để title và subtitle viết in hoa</p>
-                </div>
-                <ToggleSwitch enabled={uppercaseText} onChange={() => setUppercaseText((current) => !current)} />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Căn tiêu đề / subtitle</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'left', label: 'Trái' },
-                    { value: 'center', label: 'Giữa' },
-                    { value: 'right', label: 'Phải' },
-                  ].map((option) => {
-                    const selected = headerAlign === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setHeaderAlign(option.value as StatsHeaderAlign)}
-                        className={cn(
-                          'h-9 rounded-md border text-xs transition-colors',
-                          selected
-                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          )}
-        </Card>
-
-        <Card className="mb-6">
-          <CardHeader 
-            className="cursor-pointer"
-            onClick={() => setExpandedSections(prev => ({ ...prev, config: !prev.config }))}
+        <div className="mb-3">
+          <HomeComponentDisplaySettingsSection
+            open={openSections.display}
+            onOpenChange={(value) => toggleSection('display', value)}
+            cornerRadius={cornerRadius}
+            onCornerRadiusChange={setCornerRadius}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
           >
-            <CardTitle className="text-base flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle size={20} />
-                Cấu hình hiển thị
-              </div>
-              <ChevronDown 
-                size={16} 
-                className={cn(
-                  "transition-transform duration-200",
-                  expandedSections.config ? "rotate-180" : ""
-                )}
-              />
-            </CardTitle>
-          </CardHeader>
-          {expandedSections.config && (
-            <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Số cột desktop</Label>
                 <div className="grid grid-cols-2 gap-2">
@@ -545,9 +488,8 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
                 </div>
                 <ToggleSwitch enabled={enableAnimation} onChange={() => setEnableAnimation((current) => !current)} />
               </div>
-</CardContent>
-          )}
-        </Card>
+          </HomeComponentDisplaySettingsSection>
+        </div>
 
         <StatsForm 
           items={statsItems} 
@@ -555,16 +497,23 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
           mediaPlacement={mediaPlacement}
           mediaAlign={mediaAlign}
           backgroundImage={backgroundImage}
+          backgroundImageStorageId={backgroundImageStorageId}
           onMediaPlacementChange={setMediaPlacement}
           onMediaAlignChange={setMediaAlign}
-          onBackgroundImageChange={setBackgroundImage}
-          defaultExpanded={false}
+          onBackgroundImageChange={(url, storageId) => {
+            setBackgroundImage(url);
+            setBackgroundImageStorageId(storageId ?? null);
+          }}
+          className="mb-4"
+          openSections={openSections}
+          onToggleSection={toggleSection}
+          showToggleAll={false}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Thống kê"
                 enabled={customState.enabled}
@@ -593,7 +542,7 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
                 onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: value }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Thống kê"
                 enabled={customFontState.enabled}
@@ -624,6 +573,8 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
               mediaAlign={mediaAlign}
               backgroundImage={backgroundImage}
               fullWidth={fullWidth}
+              spacing={spacing}
+              cornerRadius={cornerRadius}
               hideHeader={hideHeader}
               titleColorPrimary={titleColorPrimary}
               subtitleAboveTitle={subtitleAboveTitle}
@@ -638,10 +589,17 @@ export default function StatsEditPage({ params }: { params: Promise<{ id: string
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndostatsItems,
+          canRedo: canRedostatsItems,
+          onUndo: undostatsItems,
+          onRedo: redostatsItems,
+        }}
         />
       </form>
     </div>

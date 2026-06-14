@@ -1,30 +1,50 @@
 import React, { useState } from 'react';
-import { Bot, GripVertical, Package, Plus, Trash2 } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, cn } from '../../../components/ui';
+import { Bot, GripVertical, Package, Plus, Settings2, Trash2 } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { Button, Input, Label, cn } from '../../../components/ui';
 import { SettingsImageUploader } from '../../../components/SettingsImageUploader';
 import { DEFAULT_DEMO_CATEGORY_PRODUCTS_SECTIONS } from '../_lib/constants';
+import { SectionSpacingControl } from '../../_shared/components/SectionSpacingControl';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import type {
+  CategoryProductsCornerRadius,
   CategoryProductsSelectionMode,
   CategoryProductsSection,
   DemoCategoryProduct,
   DemoCategoryProductsSection,
 } from '../_types';
 import { AiDemoCategoryProductsImport } from '../../product-list/_components/AiDemoProductsImport';
+import type { ImageAspectRatioInput } from '@/lib/products/image-aspect-ratio';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
 
 interface CategoryProductsFormProps {
   sections: CategoryProductsSection[];
   setSections: (sections: CategoryProductsSection[]) => void;
   columnsDesktop: number;
-  setColumnsDesktop: (value: number) => void;
-  columnsMobile: number;
-  setColumnsMobile: (value: number) => void;
+  setColumnsDesktop: (value: 3 | 4) => void;
   showViewAll: boolean;
   setShowViewAll: (value: boolean) => void;
-  categoriesData: { _id: string; name: string }[];
+  categoriesData: { _id: string; name: string; _creationTime?: number; productCount?: number }[];
   selectionMode: CategoryProductsSelectionMode;
   setSelectionMode: (value: CategoryProductsSelectionMode) => void;
   demoSections: DemoCategoryProductsSection[];
   setDemoSections: React.Dispatch<React.SetStateAction<DemoCategoryProductsSection[]>>;
+  spacing: SectionSpacing;
+  setSpacing: (value: SectionSpacing) => void;
+  cornerRadius: CategoryProductsCornerRadius;
+  setCornerRadius: (value: CategoryProductsCornerRadius) => void;
+  productImageCropAspectRatio: ImageAspectRatioInput;
+  defaultExpanded?: boolean;
+  className?: string;
+  showAddToCartButton?: boolean;
+  setShowAddToCartButton?: (value: boolean) => void;
+  showBuyNowButton?: boolean;
+  setShowBuyNowButton?: (value: boolean) => void;
+  cartButtonsLayout?: 'stack' | 'grid-2';
+  setCartButtonsLayout?: (value: 'stack' | 'grid-2') => void;
 }
 
 export const CategoryProductsForm = ({
@@ -32,8 +52,6 @@ export const CategoryProductsForm = ({
   setSections,
   columnsDesktop,
   setColumnsDesktop,
-  columnsMobile,
-  setColumnsMobile,
   showViewAll,
   setShowViewAll,
   categoriesData,
@@ -41,9 +59,53 @@ export const CategoryProductsForm = ({
   setSelectionMode,
   demoSections,
   setDemoSections,
+  spacing,
+  setSpacing,
+  cornerRadius,
+  setCornerRadius,
+  productImageCropAspectRatio,
+  defaultExpanded = true,
+  className,
+  showAddToCartButton,
+  setShowAddToCartButton,
+  showBuyNowButton,
+  setShowBuyNowButton,
+  cartButtonsLayout,
+  setCartButtonsLayout,
 }: CategoryProductsFormProps) => {
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
+
+  const saleModeSetting = useQuery(api.admin.modules.getModuleSetting, { moduleKey: 'products', settingKey: 'saleMode' });
+  const isCartMode = saleModeSetting?.value === 'cart';
+
+  const handleQuickGenerate = (type: 'largest' | 'newest' | 'non-empty' | 'all') => {
+    let selected: typeof categoriesData = [];
+    if (type === 'largest') {
+      selected = [...categoriesData]
+        .filter(c => (c.productCount ?? 0) > 0)
+        .sort((a, b) => (b.productCount ?? 0) - (a.productCount ?? 0))
+        .slice(0, 4);
+    } else if (type === 'newest') {
+      selected = [...categoriesData]
+        .sort((a, b) => (b._creationTime ?? 0) - (a._creationTime ?? 0))
+        .slice(0, 4);
+    } else if (type === 'non-empty') {
+      selected = categoriesData.filter(c => (c.productCount ?? 0) > 0);
+    } else if (type === 'all') {
+      selected = categoriesData;
+    }
+
+    const items = selected.map((cat, index) => ({
+      categoryId: cat._id,
+      id: index + 1,
+      itemCount: 4,
+    }));
+    setSections(items);
+  };
+
+  const activeSections = React.useMemo(() => ['settings', 'sections'], []);
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(activeSections, defaultExpanded);
 
   const addSection = () => {
     if (!categoriesData || categoriesData.length === 0) {return;}
@@ -148,57 +210,125 @@ export const CategoryProductsForm = ({
   };
 
   return (
-    <>
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base">Cấu hình hiển thị</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Số cột (Desktop)</Label>
-              <select
-                value={columnsDesktop}
-                onChange={(e) =>{  setColumnsDesktop(Number.parseInt(e.target.value)); }}
-                className="w-full h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
-              >
-                <option value={3}>3 cột</option>
-                <option value={4}>4 cột</option>
-                <option value={5}>5 cột</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Số cột (Mobile)</Label>
-              <select
-                value={columnsMobile}
-                onChange={(e) =>{  setColumnsMobile(Number.parseInt(e.target.value)); }}
-                className="w-full h-9 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
-              >
-                <option value={1}>1 cột</option>
-                <option value={2}>2 cột</option>
-              </select>
-            </div>
-          </div>
+    <div className={cn('mb-6', className)}>
+      <div className="space-y-3">
+        <AiDemoCategoryProductsImport onApply={setDemoSections} />
+        <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
 
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="showViewAll"
-              checked={showViewAll}
-              onChange={(e) =>{  setShowViewAll(e.target.checked); }}
-              className="w-4 h-4 rounded border-slate-300"
-            />
-            <Label htmlFor="showViewAll" className="cursor-pointer">Hiển thị nút “Xem danh mục”</Label>
-          </div>
-        </CardContent>
-      </Card>
+        <SubSection
+          icon={Settings2}
+          title="Cài đặt hiển thị"
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Bo góc card</Label>
+                <select
+                  value={cornerRadius}
+                  onChange={(event) => { setCornerRadius(event.target.value as CategoryProductsCornerRadius); }}
+                  className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
+                >
+                  <option value="none">Không bo góc</option>
+                  <option value="sm">Bo góc ít</option>
+                  <option value="lg">Bo góc nhiều</option>
+                </select>
+              </div>
+              <SectionSpacingControl value={spacing} onChange={setSpacing} />
+            </div>
 
-      <Card className="mb-6">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">
-            {selectionMode === 'demo' ? `Dữ liệu demo (${demoSections.length})` : `Các section danh mục (${sections.length})`}
-          </CardTitle>
-          <div className="flex items-center gap-2">
+            <div className="space-y-2">
+              <div className="space-y-2">
+                <Label>Số cột (Desktop)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([3, 4] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setColumnsDesktop(option)}
+                      className={cn(
+                        'h-9 rounded-md border text-xs font-medium transition-colors',
+                        columnsDesktop === option
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                      )}
+                    >
+                      {option} cột
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Desktop 4 cột → tablet/mobile 2 cột. Desktop 3 cột → tablet 3 cột, mobile 1 cột.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="showViewAll"
+                checked={showViewAll}
+                onChange={(e) => { setShowViewAll(e.target.checked); }}
+                className="w-4 h-4 rounded border-slate-300"
+              />
+              <Label htmlFor="showViewAll" className="cursor-pointer">Hiển thị nút “Xem danh mục”</Label>
+            </div>
+
+            {/* Cấu hình hiển thị nút mua hàng & giỏ hàng */}
+            {isCartMode && setShowAddToCartButton && setShowBuyNowButton && setCartButtonsLayout && (
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">Hiển thị nút Thêm vào giỏ</Label>
+                    <p className="text-xs text-slate-500">Cho phép khách hàng thêm nhanh sản phẩm vào giỏ</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={showAddToCartButton ?? true}
+                    onChange={(e) => setShowAddToCartButton(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">Hiển thị nút Mua ngay</Label>
+                    <p className="text-xs text-slate-500">Khách hàng có thể nhấn mua và đi thẳng tới trang checkout</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={showBuyNowButton ?? true}
+                    onChange={(e) => setShowBuyNowButton(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </div>
+
+                {(showAddToCartButton ?? true) && (showBuyNowButton ?? true) && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">Bố cục nút hiển thị</Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+                      value={cartButtonsLayout ?? 'stack'}
+                      onChange={(e) => setCartButtonsLayout(e.target.value as 'stack' | 'grid-2')}
+                    >
+                      <option value="stack">Xếp dọc (Stack)</option>
+                      <option value="grid-2">Xếp ngang (Grid 2)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </SubSection>
+
+        <SubSection
+          icon={Package}
+          title={selectionMode === 'demo' ? `Dữ liệu demo (${demoSections.length})` : `Các section danh mục (${sections.length})`}
+          open={openSections.sections}
+          onOpenChange={(open) => toggleSection('sections', open)}
+          actions={(
+            <div className="flex items-center gap-2">
             {selectionMode === 'demo' && (
               <>
                 <Button type="button" variant="outline" size="sm" onClick={loadDefaultDemo} className="gap-2">
@@ -218,8 +348,9 @@ export const CategoryProductsForm = ({
               <Plus size={14} /> Thêm
             </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        )}
+      >
+        <div className="space-y-4">
           <div className="space-y-2">
             <Label>Nguồn dữ liệu</Label>
             <div className="flex gap-2">
@@ -245,6 +376,53 @@ export const CategoryProductsForm = ({
 
           {selectionMode === 'real' ? (
             <>
+              {categoriesData.length > 0 && (
+                <div className="space-y-2 p-3 bg-slate-50/50 dark:bg-slate-900/30 rounded-lg border border-slate-100 dark:border-slate-800">
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Sinh nhanh danh mục</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleQuickGenerate('largest')}
+                      disabled={categoriesData.length === 0}
+                      className="text-xs h-8"
+                    >
+                      🔥 4 danh mục nhiều SP nhất
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleQuickGenerate('newest')}
+                      disabled={categoriesData.length === 0}
+                      className="text-xs h-8"
+                    >
+                      ✨ 4 danh mục mới nhất
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleQuickGenerate('non-empty')}
+                      disabled={categoriesData.length === 0}
+                      className="text-xs h-8"
+                    >
+                      📦 Danh mục có SP &gt; 0
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleQuickGenerate('all')}
+                      disabled={categoriesData.length === 0}
+                      className="text-xs h-8"
+                    >
+                      🌐 Tất cả mọi danh mục
+                    </Button>
+                  </div>
+                </div>
+              )}
               {categoriesData.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-4">
                   Chưa có danh mục sản phẩm. Vui lòng tạo danh mục trước.
@@ -346,10 +524,15 @@ export const CategoryProductsForm = ({
                         <SettingsImageUploader
                           label="Ảnh danh mục"
                           value={section.categoryImage ?? ''}
-                          onChange={(url) => updateDemoSection(section.id, { categoryImage: url ?? '' })}
+                          storageId={section.categoryImageStorageId as any}
+                          onChange={(url, storageId) => updateDemoSection(section.id, {
+                            categoryImage: url ?? '',
+                            categoryImageStorageId: storageId ? String(storageId) : null
+                          })}
                           folder="home-components/category-products"
                           naming={{ entityName: section.categoryName || 'demo-category', field: 'category-image', index: sectionIndex + 1 }}
                           previewSize="sm"
+                          cropAspectRatio="square"
                         />
                       </div>
                     </div>
@@ -373,10 +556,15 @@ export const CategoryProductsForm = ({
                               <SettingsImageUploader
                                 label="Ảnh sản phẩm"
                                 value={product.image ?? ''}
-                                onChange={(url) => updateDemoProduct(section.id, product.id, { image: url ?? '', storageId: undefined })}
+                                storageId={product.storageId as any}
+                                onChange={(url, storageId) => updateDemoProduct(section.id, product.id, {
+                                  image: url ?? '',
+                                  storageId: storageId ? String(storageId) : undefined
+                                })}
                                 folder="home-components/category-products"
                                 naming={{ entityName: product.name || 'demo-product', field: 'product-image', index: productIndex + 1 }}
                                 previewSize="sm"
+                                cropAspectRatio={productImageCropAspectRatio}
                               />
                               <Input value={product.name} onChange={(e) => updateDemoProduct(section.id, product.id, { name: e.target.value })} placeholder="Tên sản phẩm" className="h-8 text-xs" />
                               <Input type="number" value={product.price ?? 0} onChange={(e) => updateDemoProduct(section.id, product.id, { price: Number.parseInt(e.target.value) || 0 })} placeholder="Giá" className="h-8 text-xs" />
@@ -397,8 +585,9 @@ export const CategoryProductsForm = ({
               </p>
             </div>
           )}
-        </CardContent>
-      </Card>
-    </>
+        </div>
+      </SubSection>
+      </div>
+    </div>
   );
 };

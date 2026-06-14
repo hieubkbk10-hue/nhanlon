@@ -1,5 +1,9 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -12,6 +16,7 @@ import { Button } from '../../../../components/ui';
 import { TypeColorOverrideCard } from '../../../_shared/components/TypeColorOverrideCard';
 import { TypeFontOverrideCard } from '../../../_shared/components/TypeFontOverrideCard';
 import { HeaderConfigSection } from '../../../_shared/components/HeaderConfigSection';
+import { DEFAULT_SECTION_SPACING, type SectionSpacing } from '../../../_shared/types/sectionSpacing';
 import { extractSectionHeaderConfig } from '../../../_shared/hooks/useSectionHeaderState';
 import { useTypeColorOverrideState } from '../../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../../_shared/hooks/useTypeFontOverride';
@@ -28,8 +33,12 @@ import { normalizeClientsHeaderAlign, toClientEditorItems, toPersistClientItems 
 import type {
   ClientEditorItem,
   ClientsConfig,
+  ClientsCornerRadius,
   ClientsHeaderAlign,
   ClientsStyle,
+} from '../../_types';
+import {
+  normalizeClientsCornerRadius,
 } from '../../_types';
 import { AiDemoClientsImport } from '../../../product-list/_components/AiDemoProductsImport';
 
@@ -56,7 +65,10 @@ const toSnapshot = (payload: {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
+  cornerRadius?: ClientsCornerRadius;
   noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
 }) => JSON.stringify({
   ...payload,
   items: toPersistItems(toEditorItems(payload.items)),
@@ -64,19 +76,52 @@ const toSnapshot = (payload: {
 
 const COMPONENT_TYPE = 'Clients';
 
-export default function ClientsEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type ClientsEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function ClientsEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: ClientsEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<'homeComponents'> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<'homeComponents'> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
 
   const [title, setTitle] = useState('');
   const [active, setActive] = useState(true);
-  const [items, setItems] = useState<ClientEditorItem[]>(toEditorItems(DEFAULT_CLIENTS_CONFIG.items));
+  const {
+    state: items,
+    set: setItems,
+    undo: undoitems,
+    redo: redoitems,
+    canUndo: canUndoitems,
+    canRedo: canRedoitems,
+  } = useUndoRedo<ClientEditorItem[]>(toEditorItems(DEFAULT_CLIENTS_CONFIG.items), { maxHistory: 15 });
   const [style, setStyle] = useState<ClientsStyle>(DEFAULT_CLIENTS_CONFIG.style);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -94,12 +139,13 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
   const [uppercaseText, setUppercaseText] = useState(DEFAULT_CLIENTS_CONFIG.uppercaseText ?? false);
   const [showBadge, setShowBadge] = useState(DEFAULT_CLIENTS_CONFIG.showBadge ?? true);
   const [badgeText, setBadgeText] = useState(DEFAULT_CLIENTS_CONFIG.badgeText ?? '');
-  const [noBorderRadius, setNoBorderRadius] = useState(DEFAULT_CLIENTS_CONFIG.noBorderRadius ?? false);
+  const [spacing, setSpacing] = useState<SectionSpacing>(DEFAULT_SECTION_SPACING);
+  const [cornerRadius, setCornerRadius] = useState<ClientsCornerRadius>(normalizeClientsCornerRadius(DEFAULT_CLIENTS_CONFIG.cornerRadius, DEFAULT_CLIENTS_CONFIG.noBorderRadius));
 
   useEffect(() => {
     if (!component || isInitialized) {return;}
 
-    if (component.type !== 'Clients') {
+    if (!snapshotComponent && component.type !== 'Clients') {
       router.replace(`/admin/home-components/${id}/edit`);
       return;
     }
@@ -126,7 +172,10 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
     setUppercaseText(headerConfig.uppercaseText ?? false);
     setShowBadge(headerConfig.showBadge ?? true);
     setBadgeText(headerConfig.badgeText ?? '');
-    setNoBorderRadius(rawConfig.noBorderRadius === true);
+    const nextSpacing = rawConfig.noVerticalMargin === true ? 'none' : (headerConfig.spacing ?? DEFAULT_SECTION_SPACING);
+    setSpacing(nextSpacing);
+    const nextCornerRadius = normalizeClientsCornerRadius(rawConfig.cornerRadius, rawConfig.noBorderRadius);
+    setCornerRadius(nextCornerRadius);
 
     setInitialSnapshot(toSnapshot({
       title: component.title,
@@ -143,10 +192,13 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
       uppercaseText: headerConfig.uppercaseText ?? false,
       showBadge: headerConfig.showBadge ?? true,
       badgeText: headerConfig.badgeText ?? '',
-      noBorderRadius: rawConfig.noBorderRadius === true,
+      spacing: nextSpacing,
+      cornerRadius: nextCornerRadius,
+      noBorderRadius: nextCornerRadius === 'none',
+      noVerticalMargin: nextSpacing === 'none',
     }));
     setIsInitialized(true);
-  }, [component, id, isInitialized, router]);
+  }, [component, id, isInitialized, router, snapshotComponent]);
 
   const currentItems = useMemo(() => toPersistItems(items), [items]);
 
@@ -165,17 +217,20 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
     uppercaseText,
     showBadge,
     badgeText,
-    noBorderRadius,
-  }), [title, active, style, currentItems, hideHeader, showTitle, subtitle, showSubtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, noBorderRadius]);
+    spacing,
+    cornerRadius,
+    noBorderRadius: cornerRadius === 'none',
+    noVerticalMargin: spacing === 'none',
+  }), [title, active, style, currentItems, hideHeader, showTitle, subtitle, showSubtitle, headerAlign, titleColorPrimary, subtitleAboveTitle, uppercaseText, showBadge, badgeText, spacing, cornerRadius]);
 
   const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-  const customChanged = showCustomBlock
+  const customChanged = enableTypeOverrides && showCustomBlock
     ? customState.enabled !== initialCustom.enabled
       || customState.mode !== initialCustom.mode
       || customState.primary !== initialCustom.primary
       || resolvedCustomSecondary !== initialCustom.secondary
     : false;
-  const customFontChanged = showFontCustomBlock
+  const customFontChanged = enableTypeOverrides && showFontCustomBlock
     ? customFontState.enabled !== initialFontCustom.enabled
       || customFontState.fontKey !== initialFontCustom.fontKey
     : false;
@@ -191,6 +246,8 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
       inputMode: 'url',
     })));
   };
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -211,16 +268,23 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
         uppercaseText,
         showBadge,
         badgeText,
-        noBorderRadius,
+        spacing,
+        noVerticalMargin: spacing === 'none',
+        cornerRadius,
+        noBorderRadius: cornerRadius === 'none',
       };
 
-      await updateMutation({
-        active,
-        config: nextConfig,
-        id: id as Id<'homeComponents'>,
-        title,
-      });
-      if (showCustomBlock) {
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig as Record<string, any>, title });
+      } else {
+        await updateMutation({
+          active,
+          config: nextConfig,
+          id: id as Id<'homeComponents'>,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -230,7 +294,7 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -253,10 +317,13 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
         uppercaseText,
         showBadge,
         badgeText,
-        noBorderRadius,
+        spacing,
+        cornerRadius,
+        noBorderRadius: cornerRadius === 'none',
+        noVerticalMargin: spacing === 'none',
       }));
 
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -264,7 +331,7 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -297,7 +364,8 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Banner ảnh thương hiệu</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500 dark:text-slate-400">Snapshot: {snapshotLabel}</p> : null}
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -337,8 +405,11 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
               items={items}
               setItems={setItems}
               selectedStyle={style}
-              noBorderRadius={noBorderRadius}
-              setNoBorderRadius={setNoBorderRadius}
+              spacing={spacing}
+              setSpacing={setSpacing}
+              cornerRadius={cornerRadius}
+              setCornerRadius={setCornerRadius}
+              maxItems={style === 'layout08' ? 8 : 4}
               action={(
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={handleUseDemoImages}>
@@ -350,7 +421,7 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
             />
           </div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Clients"
                 enabled={customState.enabled}
@@ -378,7 +449,7 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
               }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Clients"
                 enabled={customFontState.enabled}
@@ -410,7 +481,8 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
               uppercaseText={uppercaseText}
               showBadge={showBadge}
               badgeText={badgeText}
-              noBorderRadius={noBorderRadius}
+              spacing={spacing}
+              cornerRadius={cornerRadius}
             />
           </div>
         </div>
@@ -418,10 +490,17 @@ export default function ClientsEditPage({ params }: { params: Promise<{ id: stri
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndoitems,
+          canRedo: canRedoitems,
+          onUndo: undoitems,
+          onRedo: redoitems,
+        }}
         />
       </form>
     </div>

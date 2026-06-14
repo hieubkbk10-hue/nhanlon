@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { AiDirectGeneratePanel } from '@/app/admin/components/AiDirectGenerateButton';
 import { Bot, Check, Copy, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Label, cn } from '../../../components/ui';
 import type { VideoConfig } from '../_types';
+import { useTypeAiImportEnabled } from '../../_shared/hooks/useTypeAiImportEnabled';
+import { HomeComponentFooterActionPortal } from '../../_shared/components/HomeComponentFooterActions';
 
 const AI_VIDEO_PROMPT = `Hãy tạo nội dung video section cho website doanh nghiệp tiếng Việt.
 Chỉ trả về JSON hợp lệ, không giải thích.
@@ -27,18 +30,25 @@ const parse = (raw: string): { item: Partial<VideoConfig> | null; errors: string
   return { errors: [], item: { videoUrl, heading: trim(src.heading, 120), description: trim(src.description, 300), badge: trim(src.badge, 60), buttonText: trim(src.buttonText, 60), buttonLink: trim(src.buttonLink, 300) } };
 };
 
-export function AiVideoImport({ buttonClassName, onApply }: { buttonClassName?: string; onApply: (item: Partial<VideoConfig>) => void }) {
+export function AiVideoImport({ onApply }: { buttonClassName?: string; onApply: (item: Partial<VideoConfig>) => void }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
   const result = useMemo(() => parse(rawInput), [rawInput]);
   const canApply = rawInput.trim().length > 0 && result.item !== null;
 
+  if (!isAiImportEnabled) {
+    return null;
+  }
+
   const cp = async (v: string, t: 'prompt' | 'sample') => { await navigator.clipboard.writeText(v); setLastCopied(t); toast.success(t === 'prompt' ? 'Đã copy prompt' : 'Đã copy JSON mẫu'); setTimeout(() => setLastCopied(null), 1500); };
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={cn('h-7 gap-1 text-xs', buttonClassName)} onClick={() => setOpen(true)}><Bot size={11} /> Import AI</Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}><Bot size={16} /> Import AI</Button>
+      </HomeComponentFooterActionPortal>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Import Video bằng AI</DialogTitle><DialogDescription>Copy prompt, nhờ AI tạo JSON, dán vào đây.</DialogDescription></DialogHeader>
@@ -62,6 +72,12 @@ export function AiVideoImport({ buttonClassName, onApply }: { buttonClassName?: 
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={AI_VIDEO_PROMPT}
+                  sessionId="admin-video-import"
+                  onGenerated={setRawInput}
+                  placeholder="Ví dụ: Tạo section video giới thiệu Dohy Studio, dùng video YouTube hiện có, CTA Xem khóa học."
+                />
                 <textarea className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder={SAMPLE} value={rawInput} onChange={(e) => setRawInput(e.target.value)} />
               </div>
               {rawInput.trim().length > 0 && (

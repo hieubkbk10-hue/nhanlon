@@ -9,6 +9,7 @@ import { Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAdminMutationErrorMessage } from '@/app/admin/lib/mutation-error';
 import { Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Input, Label } from '../../components/ui';
+import { CopyableInput } from '../../components/CopyTextButton';
 import { LexicalEditor } from '../../components/LexicalEditor';
 import { ImageUploader } from '../../components/ImageUploader';
 import { QuickCreateCategoryModal } from '../../components/QuickCreateCategoryModal';
@@ -17,6 +18,8 @@ import { getMacroTemplate, getTemplateFieldSpec, type GeneratorFieldKey } from '
 import type { GeneratorRequest, GeneratedArticlePayload } from '@/lib/posts/generator/types';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
 import { AiEntityImportDialog, type AiEntityImportPayload } from '@/app/admin/components/AiEntityImportDialog';
+import { CategoryTagsInput } from '@/app/admin/components/AdditionalCategoriesSelect';
+import { HeadlineGeneratorWidget } from '@/app/admin/components/HeadlineGeneratorWidget';
 
 const MODULE_KEY = 'posts';
 const COC_TARGET_OPTIONS: Array<{ key: GeneratorRequest['templateKey']; label: string; description: string }> = [
@@ -56,6 +59,7 @@ export default function PostCreatePage() {
   const [thumbnail, setThumbnail] = useState<string | undefined>();
   const [thumbnailStorageId, setThumbnailStorageId] = useState<Id<'_storage'> | undefined>();
   const [categoryId, setCategoryId] = useState('');
+  const [additionalCategoryIds, setAdditionalCategoryIds] = useState<string[]>([]);
   const [authorName, setAuthorName] = useState('');
   const [status, setStatus] = useState<'Draft' | 'Published'>('Draft');
   const [publishAtLocal, setPublishAtLocal] = useState('');
@@ -69,6 +73,7 @@ export default function PostCreatePage() {
   const [generatorBudgetMin, setGeneratorBudgetMin] = useState('');
   const [generatorBudgetMax, setGeneratorBudgetMax] = useState('');
   const [generatorKeyword, setGeneratorKeyword] = useState('');
+  const [generatorSecondaryKeyword, setGeneratorSecondaryKeyword] = useState('');
   const [generatorCompareProductAId, setGeneratorCompareProductAId] = useState<Id<'products'> | ''>('');
   const [generatorCompareProductBId, setGeneratorCompareProductBId] = useState<Id<'products'> | ''>('');
   const [generatorSelectedProductIds, setGeneratorSelectedProductIds] = useState<Array<Id<'products'> | ''>>([]);
@@ -100,12 +105,17 @@ export default function PostCreatePage() {
     return fields;
   }, [fieldsData]);
 
+  const categoryData = categoriesData?.find((c) => c._id === categoryId);
+  const categorySlugPreview = categoryData?.slug || 'chua-phan-loai';
+
+
   const hasMarkdownRender = enabledFields.has('markdownRender');
   const hasHtmlRender = enabledFields.has('htmlRender');
   const showAdvancedRenderCard = hasMarkdownRender || hasHtmlRender;
   const schedulingEnabled = enabledFields.has('publish_date') && (schedulingFeature?.enabled ?? false);
 
   const generatorEnabled = Boolean(settingsData?.find(s => s.settingKey === 'enableAutoPostGenerator')?.value);
+  const multiCategoryEnabled = Boolean(settingsData?.find(s => s.settingKey === 'enableMultipleCategories')?.value);
   const cocTarget = useMemo(
     () => COC_TARGET_OPTIONS.find((option) => option.key === generatorTemplateKey),
     [generatorTemplateKey],
@@ -134,6 +144,7 @@ export default function PostCreatePage() {
     const activeFields = new Set<GeneratorFieldKey>(templateFieldSpec.required);
     if (!activeFields.has('keyword')) {
       setGeneratorKeyword('');
+      setGeneratorSecondaryKeyword('');
     }
     if (!activeFields.has('budgetMin')) {
       setGeneratorBudgetMin('');
@@ -196,7 +207,16 @@ export default function PostCreatePage() {
       .replaceAll(/\s+/g, '-');
   };
 
+  const handleApplyHeadline = (nextTitle: string) => {
+    setTitle(nextTitle);
+    setSlug(generateSlugFromTitle(nextTitle));
+  };
+
   const handleGeneratePreview = () => {
+    const generatorKeywords = [generatorKeyword, generatorSecondaryKeyword]
+      .map((keyword) => keyword.trim().replaceAll(/\s+/g, ' '))
+      .filter(Boolean)
+      .slice(0, 2);
     if (isFieldActive('keyword') && !generatorKeyword.trim()) {
       toast.error('Vui lòng nhập nhu cầu/keyword');
       return;
@@ -272,8 +292,11 @@ export default function PostCreatePage() {
       nextRequest.budgetMax = Number.isFinite(budgetMax) ? budgetMax : undefined;
     }
     if (isFieldActive('keyword')) {
-      nextRequest.keyword = generatorKeyword.trim() || undefined;
-      nextRequest.useCase = generatorKeyword.trim() || undefined;
+      const [primaryKeyword, secondaryKeyword] = generatorKeywords;
+      nextRequest.keyword = primaryKeyword;
+      nextRequest.secondaryKeyword = secondaryKeyword;
+      nextRequest.keywords = generatorKeywords.length > 0 ? generatorKeywords : undefined;
+      nextRequest.useCase = generatorKeywords.join(' và ') || undefined;
     }
     if (isFieldActive('categoryId')) {
       nextRequest.categoryId = generatorProductCategoryId || undefined;
@@ -374,9 +397,13 @@ export default function PostCreatePage() {
 
     setTitle(nextTitle);
     setSlug(item.slug?.trim() || generateSlugFromTitle(nextTitle));
-    const nextContent = item.content || item.description || '';
+    const nextContent = item.content || item.description || item.htmlRender || item.markdownRender || '';
     setContent(nextContent);
-    if (item.htmlRender) {
+    if (item.content) {
+      setRenderType('content');
+      setHtmlRender(item.htmlRender || '');
+      setMarkdownRender(item.markdownRender || '');
+    } else if (item.htmlRender) {
       setRenderType('html');
       setHtmlRender(item.htmlRender);
       setMarkdownRender('');
@@ -414,6 +441,9 @@ export default function PostCreatePage() {
       await createPost({
         authorName: enabledFields.has('author_name') ? authorName.trim() || undefined : undefined,
         categoryId: categoryId as Id<"postCategories">,
+        additionalCategoryIds: multiCategoryEnabled
+          ? additionalCategoryIds.filter((id) => id !== categoryId) as Id<"postCategories">[]
+          : undefined,
         content,
         renderType,
         markdownRender: markdownRender.trim() || undefined,
@@ -509,13 +539,27 @@ export default function PostCreatePage() {
                     </div>
                   )}
                   {requiredFieldSet.has('keyword') && (
-                    <div className="space-y-2">
-                      <Label>Nhu cầu / Keyword</Label>
-                      <Input
-                        value={generatorKeyword}
-                        onChange={(e) =>{  setGeneratorKeyword(e.target.value); }}
-                        placeholder="VD: chăm sóc tóc, gaming, tiết kiệm"
-                      />
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Nhu cầu / Keywords</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label className="text-xs text-slate-500">Từ khóa chính</Label>
+                          <Input
+                            value={generatorKeyword}
+                            onChange={(e) =>{  setGeneratorKeyword(e.target.value); }}
+                            placeholder="VD: chăm sóc tóc, gaming"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs text-slate-500">Từ khóa phụ</Label>
+                          <Input
+                            value={generatorSecondaryKeyword}
+                            onChange={(e) =>{  setGeneratorSecondaryKeyword(e.target.value); }}
+                            placeholder="VD: tiết kiệm, cho người mới"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500">Có thể nhập 1 hoặc 2 từ khóa. Khi nhập 2 từ khóa, bài viết sẽ dùng cả hai làm nhu cầu chính.</p>
                     </div>
                   )}
                   {requiredFieldSet.has('categoryId') && (
@@ -639,8 +683,11 @@ export default function PostCreatePage() {
             <CardContent className="p-6 space-y-4">
               {/* Title - always shown (system field) */}
               <div className="space-y-2">
-                <Label>Tiêu đề <span className="text-red-500">*</span></Label>
-                <Input value={title} onChange={handleTitleChange} required placeholder="Nhập tiêu đề bài viết..." />
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Label>Tiêu đề <span className="text-red-500">*</span></Label>
+                  <HeadlineGeneratorWidget currentTitle={title} onSelect={handleApplyHeadline} />
+                </div>
+                <CopyableInput value={title} onChange={handleTitleChange} required placeholder="Nhập tiêu đề bài viết..." copyLabel="tiêu đề" />
               </div>
               {/* Slug - always shown (system field) */}
               <div className="space-y-2">
@@ -744,7 +791,7 @@ export default function PostCreatePage() {
                     {metaTitle.trim() || title || 'Tiêu đề bài viết'}
                   </div>
                   <div className="text-emerald-600 text-xs">
-                    /posts/{slug || 'bai-viet'}
+                    /{categorySlugPreview}/{slug || 'bai-viet'}
                   </div>
                   <div className="text-slate-600 text-xs mt-1 line-clamp-2">
                     {metaDescription.trim() || excerpt || 'Mô tả ngắn sẽ hiển thị tại đây.'}
@@ -796,7 +843,21 @@ export default function PostCreatePage() {
               )}
               <div className="space-y-2">
                 <Label>Danh mục <span className="text-red-500">*</span></Label>
-                <div className="flex gap-2">
+                {multiCategoryEnabled ? (
+                  <>
+                  <CategoryTagsInput
+                    categories={categoriesData}
+                    value={[categoryId, ...additionalCategoryIds].filter(Boolean)}
+                    onQuickCreate={() =>{  setShowCategoryModal(true); }}
+                    onChange={(ids) => {
+                      setCategoryId(ids[0] ?? '');
+                      setAdditionalCategoryIds(ids.slice(1));
+                    }}
+                  />
+                  <p className="text-xs text-slate-500">Thẻ đầu tiên là danh mục chính/canonical, các thẻ sau là danh mục phụ.</p>
+                  </>
+                ) : (
+                  <div className="flex gap-2">
                   <select 
                     value={categoryId} 
                     onChange={(e) =>{  setCategoryId(e.target.value); }}
@@ -817,7 +878,8 @@ export default function PostCreatePage() {
                   >
                     <Plus size={16} />
                   </Button>
-                </div>
+                  </div>
+                )}
               </div>
               {enabledFields.has('author_name') && (
                 <div className="space-y-2">

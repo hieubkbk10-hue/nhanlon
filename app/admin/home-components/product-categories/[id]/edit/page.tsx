@@ -1,5 +1,9 @@
 'use client';
 
+import { useUndoRedo } from '../../../_shared/hooks/useUndoRedo';
+
+import { useUnsavedGuard } from '../../../_shared/hooks/useUnsavedGuard';
+
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -20,26 +24,61 @@ import { ProductCategoriesPreview } from '../../_components/ProductCategoriesPre
 import { sanitizeDemoCategories } from '../../_lib/imageSrc';
 import { useProductCategoriesAutoGenerate } from '../../_lib/useProductCategoriesAutoGenerate';
 import { HomeComponentStickyFooter } from '@/app/admin/home-components/_shared/components/HomeComponentStickyFooter';
-import type {
-  CategoryConfigItem,
-  DemoProductCategoryItem,
-  ProductCategoriesAlign,
-  ProductCategoriesBrandMode,
-  ProductCategoriesSelectionMode,
-  ProductCategoriesStyle,
+import {
+  DEFAULT_PRODUCT_CATEGORIES_SPACING,
+  DEFAULT_PRODUCT_CATEGORIES_CORNER_RADIUS,
+  normalizeProductCategoriesCornerRadius,
+  normalizeProductCategoriesSpacing,
+  type CategoryConfigItem,
+  type DemoProductCategoryItem,
+  type ProductCategoriesAlign,
+  type ProductCategoriesBrandMode,
+  type ProductCategoriesCornerRadius,
+  type ProductCategoriesSelectionMode,
+  type ProductCategoriesSpacing,
+  type ProductCategoriesStyle,
+  type ProductCategoriesDesktopColumns,
+  DEFAULT_PRODUCT_CATEGORIES_DESKTOP_COLUMNS,
+  normalizeProductCategoriesDesktopColumns,
 } from '../../_types';
 
 const COMPONENT_TYPE = 'ProductCategories';
 
-export default function ProductCategoriesEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type SnapshotEditableComponent = {
+  _id: string;
+  active: boolean;
+  config?: Record<string, any>;
+  title: string;
+  type: string;
+};
+
+type ProductCategoriesEditPageProps = {
+  backHref?: string;
+  enableTypeOverrides?: boolean;
+  onSnapshotSave?: (next: { active: boolean; config: Record<string, any>; title: string }) => Promise<void>;
+  params?: Promise<{ id: string }>;
+  snapshotComponent?: SnapshotEditableComponent;
+  snapshotLabel?: string;
+};
+
+export default function ProductCategoriesEditPage({
+  backHref = '/admin/home-components',
+  enableTypeOverrides = true,
+  onSnapshotSave,
+  params,
+  snapshotComponent,
+  snapshotLabel,
+}: ProductCategoriesEditPageProps) {
+  const routeParams = snapshotComponent ? null : use(params!);
+  const id = snapshotComponent?._id ?? routeParams?.id ?? '';
   const router = useRouter();
   const { customState, effectiveColors, initialCustom, setCustomState, setInitialCustom, showCustomBlock } = useTypeColorOverrideState(COMPONENT_TYPE);
   const { customState: customFontState, effectiveFont, initialCustom: initialFontCustom, setCustomState: setCustomFontState, setInitialCustom: setInitialFontCustom, showCustomBlock: showFontCustomBlock } = useTypeFontOverrideState(COMPONENT_TYPE);
   const brandMode: ProductCategoriesBrandMode = effectiveColors.mode === 'single' ? 'single' : 'dual';
   const setTypeColorOverride = useMutation(api.homeComponentSystemConfig.setTypeColorOverride);
   const setTypeFontOverride = useMutation(api.homeComponentSystemConfig.setTypeFontOverride);
-  const component = useQuery(api.homeComponents.getById, { id: id as Id<"homeComponents"> });
+  const liveComponent = useQuery(api.homeComponents.getById, snapshotComponent ? 'skip' : { id: id as Id<"homeComponents"> });
+  const component = snapshotComponent ?? liveComponent;
   const updateMutation = useMutation(api.homeComponents.update);
   const productCategoriesData = useQuery(api.productCategories.listActive);
   const {
@@ -70,10 +109,21 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     badgeText: string;
     selectionMode: ProductCategoriesSelectionMode;
     demoCategories: DemoProductCategoryItem[];
+    spacing: ProductCategoriesSpacing;
+    cornerRadius: ProductCategoriesCornerRadius;
+    desktopColumns: ProductCategoriesDesktopColumns;
   } | null>(null);
 
-  const [productCategoriesItems, setProductCategoriesItems] = useState<CategoryConfigItem[]>([]);
-  const [productCategoriesStyle, setProductCategoriesStyle] = useState<ProductCategoriesStyle>('grid');
+  const {
+    state: productCategoriesItems,
+    set: setProductCategoriesItems,
+    undo: undoproductCategoriesItems,
+    redo: redoproductCategoriesItems,
+    canUndo: canUndoproductCategoriesItems,
+    canRedo: canRedoproductCategoriesItems,
+    reset: resetproductCategoriesItems,
+  } = useUndoRedo<CategoryConfigItem[]>([], { maxHistory: 15 });
+  const [productCategoriesStyle, setProductCategoriesStyle] = useState<ProductCategoriesStyle>('image-strip');
   const [productCategoriesShowCount, setProductCategoriesShowCount] = useState(true);
   const [productCategoriesSubheading, setProductCategoriesSubheading] = useState('');
   const [productCategoriesAlign, setProductCategoriesAlign] = useState<ProductCategoriesAlign>('center');
@@ -88,10 +138,13 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
   const [badgeText, setBadgeText] = useState('');
   const [selectionMode, setSelectionMode] = useState<ProductCategoriesSelectionMode>('real');
   const [demoCategories, setDemoCategories] = useState<DemoProductCategoryItem[]>([]);
+  const [spacing, setSpacing] = useState<ProductCategoriesSpacing>(DEFAULT_PRODUCT_CATEGORIES_SPACING);
+  const [cornerRadius, setCornerRadius] = useState<ProductCategoriesCornerRadius>(DEFAULT_PRODUCT_CATEGORIES_CORNER_RADIUS);
+  const [desktopColumns, setDesktopColumns] = useState<ProductCategoriesDesktopColumns>(DEFAULT_PRODUCT_CATEGORIES_DESKTOP_COLUMNS);
 
   useEffect(() => {
     if (component) {
-      if (component.type !== 'ProductCategories') {
+      if (!snapshotComponent && component.type !== 'ProductCategories') {
         router.replace(`/admin/home-components/${id}/edit`);
         return;
       }
@@ -100,13 +153,14 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       setActive(component.active);
 
       const config = component.config ?? {};
-      const categories = config.categories?.map((c: { categoryId: string; customImage?: string; imageMode?: string }, i: number) => ({
+      const categories = config.categories?.map((c: { categoryId: string; customImage?: string; imageMode?: string; storageId?: string | null }, i: number) => ({
         categoryId: c.categoryId,
         customImage: c.customImage ?? '',
         id: i,
-        imageMode: (c.imageMode as 'product-image' | 'default' | 'icon' | 'upload' | 'url') || 'default'
+        imageMode: (c.imageMode as 'product-image' | 'default' | 'icon' | 'upload' | 'url') || 'default',
+        storageId: c.storageId ?? null,
       })) ?? [];
-      const style = (config.style as ProductCategoriesStyle) || 'grid';
+      const style = (config.style as ProductCategoriesStyle) || 'image-strip';
       const showProductCount = config.showProductCount ?? true;
       const headerConfig = extractSectionHeaderConfig({
         ...config,
@@ -117,8 +171,11 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       const align = (headerConfig.headerAlign as ProductCategoriesAlign) ?? 'center';
       const loadedSelectionMode = (config.selectionMode as ProductCategoriesSelectionMode) || 'real';
       const loadedDemoCategories = Array.isArray(config.demoCategories) ? sanitizeDemoCategories(config.demoCategories as DemoProductCategoryItem[]) : [];
+      const loadedSpacing = normalizeProductCategoriesSpacing(config.spacing, config.noVerticalMargin);
+      const loadedCornerRadius = normalizeProductCategoriesCornerRadius(config.cornerRadius, config.noBorderRadius);
+      const loadedDesktopColumns = normalizeProductCategoriesDesktopColumns(config.desktopColumns);
 
-      setProductCategoriesItems(categories);
+      resetproductCategoriesItems(categories);
       setProductCategoriesStyle(style);
       setProductCategoriesShowCount(showProductCount);
       setProductCategoriesSubheading(subheading);
@@ -133,6 +190,9 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       setBadgeText(headerConfig.badgeText ?? '');
       setSelectionMode(loadedSelectionMode);
       setDemoCategories(loadedDemoCategories);
+      setSpacing(loadedSpacing);
+      setCornerRadius(loadedCornerRadius);
+      setDesktopColumns(loadedDesktopColumns);
       setInitialData({
         title: component.title,
         active: component.active,
@@ -151,10 +211,13 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
         badgeText: headerConfig.badgeText ?? '',
         selectionMode: loadedSelectionMode,
         demoCategories: loadedDemoCategories,
+        spacing: loadedSpacing,
+        cornerRadius: loadedCornerRadius,
+        desktopColumns: loadedDesktopColumns,
       });
       setHasChanges(false);
     }
-  }, [component, id, router]);
+  }, [component, id, router, snapshotComponent]);
 
   useEffect(() => {
     if (!initialData) {return;}
@@ -162,13 +225,13 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     const currentCategories = JSON.stringify(productCategoriesItems);
     const initialCategories = JSON.stringify(initialData.categories);
     const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
-    const customChanged = showCustomBlock
+    const customChanged = enableTypeOverrides && showCustomBlock
       ? customState.enabled !== initialCustom.enabled
         || customState.mode !== initialCustom.mode
         || customState.primary !== initialCustom.primary
         || resolvedCustomSecondary !== initialCustom.secondary
       : false;
-    const customFontChanged = showFontCustomBlock
+    const customFontChanged = enableTypeOverrides && showFontCustomBlock
       ? customFontState.enabled !== initialFontCustom.enabled
         || customFontState.fontKey !== initialFontCustom.fontKey
       : false;
@@ -189,6 +252,9 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       || badgeText !== initialData.badgeText
       || selectionMode !== initialData.selectionMode
       || JSON.stringify(demoCategories) !== JSON.stringify(initialData.demoCategories)
+      || spacing !== initialData.spacing
+      || cornerRadius !== initialData.cornerRadius
+      || desktopColumns !== initialData.desktopColumns
       || customChanged
       || customFontChanged;
 
@@ -211,6 +277,8 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     badgeText,
     selectionMode,
     demoCategories,
+    spacing,
+    cornerRadius,
     initialData,
     customState,
     initialCustom,
@@ -218,7 +286,10 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     customFontState,
     initialFontCustom,
     showFontCustomBlock,
+    enableTypeOverrides,
   ]);
+
+  useUnsavedGuard(hasChanges);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,14 +301,13 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
       const sanitizedSubtitle = productCategoriesSubheading.trim();
       const sanitizedBadgeText = badgeText.trim();
 
-      await updateMutation({
-        active,
-        config: {
+      const nextConfig = {
           selectionMode,
           categories: selectionMode === 'real' ? productCategoriesItems.map(c => ({
             categoryId: c.categoryId,
             customImage: c.customImage || undefined,
             imageMode: c.imageMode ?? 'default',
+            storageId: c.storageId ?? null,
           })) : [],
           demoCategories: selectionMode === 'demo' ? sanitizedDemoCategories : [],
           showProductCount: productCategoriesShowCount,
@@ -254,11 +324,22 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
           badgeText: sanitizedBadgeText,
           subheading: sanitizedSubtitle,
           align: productCategoriesAlign,
-        },
-        id: id as Id<"homeComponents">,
-        title,
-      });
-      if (showCustomBlock) {
+          spacing,
+          cornerRadius,
+          desktopColumns,
+        };
+
+      if (onSnapshotSave) {
+        await onSnapshotSave({ active, config: nextConfig, title });
+      } else {
+        await updateMutation({
+          active,
+          config: nextConfig,
+          id: id as Id<"homeComponents">,
+          title,
+        });
+      }
+      if (enableTypeOverrides && showCustomBlock) {
         const resolvedCustomSecondary = resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary);
         await setTypeColorOverride({
           enabled: customState.enabled,
@@ -268,7 +349,7 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
           type: COMPONENT_TYPE,
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         await setTypeFontOverride({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -294,11 +375,14 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
         badgeText: sanitizedBadgeText,
         selectionMode,
         demoCategories: sanitizedDemoCategories,
+        spacing,
+        cornerRadius,
+        desktopColumns,
       });
       setDemoCategories(sanitizedDemoCategories);
       setProductCategoriesSubheading(sanitizedSubtitle);
       setBadgeText(sanitizedBadgeText);
-      if (showCustomBlock) {
+      if (enableTypeOverrides && showCustomBlock) {
         setInitialCustom({
           enabled: customState.enabled,
           mode: customState.mode,
@@ -306,7 +390,7 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
           secondary: resolveSecondaryByMode(customState.mode, customState.primary, customState.secondary),
         });
       }
-      if (showFontCustomBlock) {
+      if (enableTypeOverrides && showFontCustomBlock) {
         setInitialFontCustom({
           enabled: customFontState.enabled,
           fontKey: customFontState.fontKey,
@@ -328,6 +412,16 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     }
   };
 
+  const handleAutoGenerateAllActive = () => {
+    const items = (productCategoriesData ?? []).map((cat, index) => ({
+      id: index + 1,
+      categoryId: cat._id,
+      customImage: cat.image || '',
+      imageMode: cat.image ? ('upload' as const) : ('default' as const),
+    }));
+    setProductCategoriesItems(items);
+  };
+
   if (component === undefined) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -346,7 +440,8 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa Danh mục sản phẩm</h1>
-        <Link href="/admin/home-components" className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        <Link href={backHref} className="text-sm text-blue-600 hover:underline">Quay lại danh sách</Link>
+        {snapshotLabel ? <p className="text-sm text-slate-500">Snapshot: {snapshotLabel}</p> : null}
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -386,6 +481,7 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
           productCategoriesShowCount={productCategoriesShowCount}
           setProductCategoriesShowCount={setProductCategoriesShowCount}
           onAutoGenerate={handleAutoGenerate}
+          onAutoGenerateAllActive={handleAutoGenerateAllActive}
           autoGenerateReady={isAutoGenerateReady}
           autoGenerateLoading={isAutoGenerateLoading}
           productCategoriesData={productCategoriesData ?? []}
@@ -394,13 +490,20 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
           onSelectionModeChange={setSelectionMode}
           demoCategories={demoCategories}
           setDemoCategories={setDemoCategories}
+          productCategoriesStyle={productCategoriesStyle}
+          spacing={spacing}
+          setSpacing={setSpacing}
+          cornerRadius={cornerRadius}
+          setCornerRadius={setCornerRadius}
+          desktopColumns={desktopColumns}
+          setDesktopColumns={setDesktopColumns}
           defaultExpanded={false}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-6">
           <div></div>
           <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-            {showCustomBlock && (
+            {enableTypeOverrides && showCustomBlock && (
               <TypeColorOverrideCard
                 title="Màu custom cho Danh mục sản phẩm"
                 enabled={customState.enabled}
@@ -425,7 +528,7 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
                 onSecondaryChange={(value) => setCustomState((prev) => ({ ...prev, secondary: value }))}
               />
             )}
-            {showFontCustomBlock && (
+            {enableTypeOverrides && showFontCustomBlock && (
               <TypeFontOverrideCard
                 title="Font custom cho Danh mục"
                 enabled={customFontState.enabled}
@@ -454,6 +557,9 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
               badgeText,
               subheading: productCategoriesSubheading,
               align: productCategoriesAlign,
+              spacing,
+              cornerRadius,
+              desktopColumns,
               }}
             title={title}
               brandColor={effectiveColors.primary}
@@ -473,10 +579,17 @@ export default function ProductCategoriesEditPage({ params }: { params: Promise<
         <HomeComponentStickyFooter
           isSubmitting={isSubmitting}
           hasChanges={hasChanges}
-          onCancel={() =>{  router.push('/admin/home-components'); }}
+          onCancel={() =>{  router.push(backHref); }}
           submitLabel="Lưu thay đổi"
         active={active}
         onActiveChange={setActive}
+        
+        undoRedo={{
+          canUndo: canUndoproductCategoriesItems,
+          canRedo: canRedoproductCategoriesItems,
+          onUndo: undoproductCategoriesItems,
+          onRedo: redoproductCategoriesItems,
+        }}
         />
       </form>
     </div>

@@ -4,6 +4,8 @@ import React from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/app/admin/components/ui';
+import { getPartnersColors, type PartnersBrandMode } from '../_lib/colors';
+import { getPartnersCornerRadiusClassName, getPartnersLogoBoxClassName, getPartnersLogoFallbackSize, getPartnersSectionSpacingClassName, type PartnersCornerRadius, type PartnersLogoSize, type PartnersSpacing } from '../_types';
 
 type PartnersLogoCloudItem = {
   id?: string | number;
@@ -17,12 +19,24 @@ const AUTOPLAY_INTERVAL_MS = 2600;
 export const PartnersLogoCloudShared = ({
   items,
   brandColor = '#ECAA4D',
+  secondary = '',
+  mode = 'dual',
+  cornerRadius = 'lg',
+  logoSize = 'normal',
+  showBorder = true,
+  spacing = 'normal',
   openInNewTab = false,
   renderImage,
   className,
 }: {
   items: PartnersLogoCloudItem[];
   brandColor?: string;
+  secondary?: string;
+  mode?: PartnersBrandMode;
+  cornerRadius?: PartnersCornerRadius;
+  logoSize?: PartnersLogoSize;
+  showBorder?: boolean;
+  spacing?: PartnersSpacing;
   openInNewTab?: boolean;
   renderImage?: (item: PartnersLogoCloudItem, className: string) => React.ReactNode;
   className?: string;
@@ -46,7 +60,7 @@ export const PartnersLogoCloudShared = ({
 
   if (items.length === 0) {
     return (
-      <div className={cn('flex flex-col items-center justify-center py-8 text-center', className)}>
+      <div className={cn('flex flex-col items-center justify-center text-center', getPartnersSectionSpacingClassName(spacing, 'empty'), className)}>
         <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
           <ImageIcon size={28} className="text-slate-400" />
         </div>
@@ -56,13 +70,18 @@ export const PartnersLogoCloudShared = ({
     );
   }
 
+  const radiusClassName = getPartnersCornerRadiusClassName(cornerRadius);
+  const logoClassName = getPartnersLogoBoxClassName('logoCloud', logoSize, false);
+  const fallbackIconSize = getPartnersLogoFallbackSize('logoCloud', logoSize, false);
+  const colors = React.useMemo(() => getPartnersColors(brandColor, secondary, mode), [brandColor, secondary, mode]);
+
   return (
     <div
       className={cn('relative w-full', className)}
       role="region"
       aria-roledescription="carousel"
       style={{
-        '--partners-logo-cloud-accent': `${brandColor}66`,
+        '--partners-logo-cloud-accent': colors.secondary,
         '--partners-logo-cloud-ring': brandColor,
       } as React.CSSProperties}
     >
@@ -74,11 +93,15 @@ export const PartnersLogoCloudShared = ({
             const content = (
               <>
                 {item.url
-                  ? renderImage?.(item, 'max-h-[80px] w-auto max-w-full object-contain transition-transform duration-300 hover:scale-105') ?? null
-                  : <ImageIcon size={32} className="text-slate-300" />}
+                  ? renderImage?.(item, cn(logoClassName, 'w-auto h-auto max-w-full object-contain transition-transform duration-300 hover:scale-105')) ?? null
+                  : <ImageIcon size={fallbackIconSize} className="text-slate-300" />}
               </>
             );
-            const innerClassName = 'flex h-full items-center justify-center rounded-xl border border-transparent p-2 transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--partners-logo-cloud-accent)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--partners-logo-cloud-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+            const innerClassName = cn(
+              'flex h-full items-center justify-center p-2 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--partners-logo-cloud-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white',
+              showBorder ? 'border border-transparent hover:border-[var(--partners-logo-cloud-accent)]' : 'border border-transparent',
+              radiusClassName,
+            );
 
             return (
               <div

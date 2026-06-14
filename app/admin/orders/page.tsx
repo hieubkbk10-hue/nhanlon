@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ChevronDown, Edit, Eye, Loader2, Plus, Search, ShoppingBag, Trash2 } from 'lucide-react';
+import { ChevronDown, Copy, Edit, ExternalLink, Eye, Plus, Search, ShoppingBag, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, Input, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui';
 import { BulkActionBar, ColumnToggle, generatePaginationItems, SelectCheckbox, SortableHeader, useSortableData } from '../components/TableUtilities';
@@ -13,6 +13,7 @@ import { ModuleGuard } from '../components/ModuleGuard';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { useOrderStatuses } from '@/lib/experiences';
 import { usePersistedPageSize } from '../components/usePersistedPageSize';
+import { buildAbsoluteWebUrl, buildPublicOrderLookupPath } from '@/lib/orders/links';
 
 const MODULE_KEY = 'orders';
 
@@ -107,6 +108,26 @@ function OrdersContent() {
     return 'secondary';
   };
 
+  const buildOrderLookupUrl = (orderNumber: string) => {
+    const path = buildPublicOrderLookupPath(orderNumber);
+    return typeof window === 'undefined'
+      ? path
+      : buildAbsoluteWebUrl(window.location.origin, path);
+  };
+
+  const handleCopyOrderLookupUrl = async (orderNumber: string) => {
+    try {
+      await navigator.clipboard.writeText(buildOrderLookupUrl(orderNumber));
+      toast.success('Đã copy link tra cứu đơn hàng.');
+    } catch {
+      toast.error('Không thể copy link. Vui lòng copy thủ công.');
+    }
+  };
+
+  const handleOpenOrderLookupUrl = (orderNumber: string) => {
+    window.open(buildOrderLookupUrl(orderNumber), '_blank', 'noopener,noreferrer');
+  };
+
   const columns = useMemo(() => {
     const cols = [
       { key: 'select', label: 'Chọn' },
@@ -178,7 +199,7 @@ function OrdersContent() {
       : 'skip'
   );
 
-  const isLoading = ordersData === undefined || totalCountData === undefined || customersData === undefined || fieldsData === undefined;
+  const isTableLoading = ordersData === undefined || totalCountData === undefined || customersData === undefined || fieldsData === undefined;
 
   useEffect(() => {
     if (selectAllData?.hasMore) {
@@ -302,14 +323,6 @@ function OrdersContent() {
   const formatPrice = (price: number) => new Intl.NumberFormat('vi-VN', { currency: 'VND', style: 'currency' }).format(price);
   const formatDate = (timestamp: number) => new Date(timestamp).toLocaleDateString('vi-VN');
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 size={32} className="animate-spin text-emerald-500" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -380,8 +393,18 @@ function OrdersContent() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedData.map(order => (
-              <TableRow key={order._id} className={selectedIds.includes(order._id) ? 'bg-emerald-500/5' : ''}>
+            {isTableLoading ? (
+              Array.from({ length: resolvedOrdersPerPage }).map((_, index) => (
+                <TableRow key={`loading-${index}`}>
+                  <TableCell colSpan={tableColumnCount}>
+                    <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <>
+                {paginatedData.map(order => (
+                  <TableRow key={order._id} className={selectedIds.includes(order._id) ? 'bg-emerald-500/5' : ''}>
                 {visibleColumns.includes('select') && <TableCell><SelectCheckbox checked={selectedIds.includes(order._id)} onChange={() =>{  toggleSelectItem(order._id); }} /></TableCell>}
                 {visibleColumns.includes('orderNumber') && <TableCell className="font-mono text-sm font-medium text-emerald-600">{order.orderNumber}</TableCell>}
                 {visibleColumns.includes('customer') && <TableCell>{order.customerName}</TableCell>}
@@ -414,16 +437,20 @@ function OrdersContent() {
                 {visibleColumns.includes('createdAt') && <TableCell className="text-slate-500 text-sm">{formatDate(order._creationTime)}</TableCell>}
                 {visibleColumns.includes('actions') && (
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-1">
                       <Link href={`/admin/orders/${order._id}/edit`}><Button variant="ghost" size="icon" title="Xem chi tiết"><Eye size={16}/></Button></Link>
                       <Link href={`/admin/orders/${order._id}/edit`}><Button variant="ghost" size="icon"><Edit size={16}/></Button></Link>
+                      <Button variant="ghost" size="icon" title="Copy link tra cứu" onClick={async () => handleCopyOrderLookupUrl(order.orderNumber)}><Copy size={16}/></Button>
+                      <Button variant="ghost" size="icon" title="Mở link tra cứu" onClick={() => handleOpenOrderLookupUrl(order.orderNumber)}><ExternalLink size={16}/></Button>
                       <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600" onClick={ async () => handleDelete(order._id)}><Trash2 size={16}/></Button>
                     </div>
                   </TableCell>
                 )}
-              </TableRow>
-            ))}
-            {paginatedData.length === 0 && (
+                  </TableRow>
+                ))}
+              </>
+            )}
+            {!isTableLoading && paginatedData.length === 0 && (
               <TableRow>
                 <TableCell colSpan={tableColumnCount} className="text-center py-8 text-slate-500">
                   {searchTerm || filterStatus || filterPaymentStatus ? 'Không tìm thấy kết quả phù hợp' : 'Chưa có đơn hàng nào.'}
@@ -432,7 +459,7 @@ function OrdersContent() {
             )}
           </TableBody>
         </Table>
-        {totalCount > 0 && !isLoading && (
+        {totalCount > 0 && !isTableLoading && (
           <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="order-2 flex w-full items-center justify-between text-sm text-slate-500 sm:order-1 sm:w-auto sm:justify-start sm:gap-6">
               <div className="flex items-center gap-2">

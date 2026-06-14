@@ -1,3 +1,5 @@
+import type { SectionSpacing } from './sectionSpacing';
+
 export interface SectionHeaderConfig {
   hideHeader?: boolean;
   showTitle?: boolean;
@@ -10,6 +12,7 @@ export interface SectionHeaderConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
 }
 
 export const DEFAULT_SECTION_HEADER_CONFIG: SectionHeaderConfig = {
@@ -24,4 +27,5 @@ export const DEFAULT_SECTION_HEADER_CONFIG: SectionHeaderConfig = {
   uppercaseText: false,
   showBadge: true,
   badgeText: '',
+  spacing: 'normal',
 };

@@ -6,6 +6,7 @@ import { REQUIRED_SLOTS, OPTIONAL_SLOTS } from './slot-families';
 import { buildSlotVariant, estimateVariantCapacity } from './variant-synthesizer';
 import { resolveThumbnail } from './thumbnail';
 import { closingStatements, differentiatorPhrases, editorialCheckpoints, decisionBullets } from './phrase-banks';
+import { getGeneratorKeywordPhrase, getGeneratorKeywords } from './keywords';
 import type {
   GeneratedArticlePayload,
   GeneratedContentBlock,
@@ -163,6 +164,10 @@ const buildGalleryStrip = ({ images, slotKey }: { images: string[]; slotKey: Slo
   `;
 };
 
+const buildProductHref = (product: Pick<GeneratorProduct, 'slug' | 'categorySlug'>) => (
+  product.categorySlug ? `/${product.categorySlug}/${product.slug}` : `/products/${product.slug}`
+);
+
 const renderProductCard = ({
   product,
   saleMode,
@@ -176,8 +181,9 @@ const renderProductCard = ({
 }) => {
   const summary = truncateSentence(product.description, 120) ?? 'Phù hợp nhu cầu cần lựa chọn ổn định, dễ triển khai.';
   const image = product.image ?? product.images?.[0] ?? product.categoryImage;
-  const primaryLink = saleMode === 'affiliate' ? product.affiliateLink?.trim() : `/products/${product.slug}`;
-  const secondaryLink = saleMode === 'affiliate' ? `/products/${product.slug}` : undefined;
+  const detailLink = buildProductHref(product);
+  const primaryLink = saleMode === 'affiliate' ? product.affiliateLink?.trim() : detailLink;
+  const secondaryLink = saleMode === 'affiliate' ? detailLink : undefined;
   const primaryLabel = saleMode === 'affiliate' ? 'Mua ngay' : 'Xem chi tiết';
   const secondaryLabel = saleMode === 'affiliate' ? 'Xem chi tiết' : 'Tư vấn';
   const overlayButton = primaryLink && saleMode === 'affiliate'
@@ -241,6 +247,7 @@ const renderTopListBody = ({
 
   if (pick === 'featured') {
     const [featured, ...others] = products;
+    const featuredHref = featured ? buildProductHref(featured) : '';
     const featuredHtml = featured ? `
       <div class="group relative overflow-hidden rounded-xl border border-slate-100 bg-white">
         <div class="relative aspect-[4/3] overflow-hidden border-b border-slate-100 bg-slate-50 p-2">
@@ -260,9 +267,9 @@ const renderTopListBody = ({
           <div class="flex gap-2 flex-wrap">
             ${featured.affiliateLink?.trim()
               ? buildButton({ label: 'Mua ngay', href: featured.affiliateLink.trim(), variant: 'primary' })
-              : buildButton({ label: 'Xem chi tiết', href: `/products/${featured.slug}`, variant: 'secondary' })
+              : buildButton({ label: 'Xem chi tiết', href: featuredHref, variant: 'secondary' })
             }
-            ${saleMode === 'affiliate' ? buildButton({ label: 'Xem chi tiết', href: `/products/${featured.slug}`, variant: 'secondary' }) : ''}
+            ${saleMode === 'affiliate' ? buildButton({ label: 'Xem chi tiết', href: featuredHref, variant: 'secondary' }) : ''}
           </div>
         </div>
       </div>
@@ -315,9 +322,10 @@ const renderHeroBody = ({
     return { html: wrapParagraphs(paragraphs), variant: 'hero-text' };
   }
   const image = product.image ?? product.images?.[0] ?? product.categoryImage;
-  const primaryLink = saleMode === 'affiliate' ? product.affiliateLink?.trim() : `/products/${product.slug}`;
+  const detailLink = buildProductHref(product);
+  const primaryLink = saleMode === 'affiliate' ? product.affiliateLink?.trim() : detailLink;
   const primaryLabel = saleMode === 'affiliate' ? 'Mua ngay' : 'Xem chi tiết';
-  const secondaryLink = saleMode === 'affiliate' ? `/products/${product.slug}` : undefined;
+  const secondaryLink = saleMode === 'affiliate' ? detailLink : undefined;
   const secondaryLabel = 'Xem chi tiết';
   return {
     variant: 'hero-card',
@@ -448,6 +456,7 @@ const buildBulletList = (items: string[]) => `
 const buildHashtagHtml = (options: {
   categoryName?: string;
   keyword?: string;
+  keywords?: string[];
   useCase?: string;
   productNames?: string[];
 }) => {
@@ -466,6 +475,7 @@ const buildHashtagHtml = (options: {
     base.add(`#${normalized}`);
   };
   addFromText(options.categoryName);
+  options.keywords?.forEach((keyword) => addFromText(keyword));
   addFromText(options.keyword);
   addFromText(options.useCase);
   options.productNames?.forEach((name) => addFromText(name));
@@ -516,6 +526,9 @@ export const generateArticlePayload = ({
   const mediaPlan = buildMediaPlan({ products, slots, rng });
   const internalLinks = buildInternalLinks({ products, density: settings.internalLinkDensity, saleMode });
   const budgetRange = resolveBudgetLabel(request);
+  const requestKeywords = getGeneratorKeywords(request);
+  const keywordPhrase = getGeneratorKeywordPhrase(request);
+  const useCasePhrase = request.useCase?.trim() || keywordPhrase;
 
   const rawBlocks = slots.map((slotKey) => {
     const primaryProduct = products[0];
@@ -577,9 +590,9 @@ export const generateArticlePayload = ({
   });
   const blocks = rawBlocks.filter((block) => block !== null) as GeneratedContentBlock[];
 
-  const categoryLabel = products[0]?.categoryName ?? request.keyword ?? 'sản phẩm';
+  const categoryLabel = (products[0]?.categoryName ?? keywordPhrase) || 'sản phẩm';
   const differentiator = differentiatorPhrases[Math.floor(rng() * differentiatorPhrases.length)] ?? 'phù hợp nhu cầu';
-  const useCaseLabel = request.useCase ?? request.keyword ?? 'nhu cầu thực tế';
+  const useCaseLabel = useCasePhrase || 'nhu cầu thực tế';
   const budgetLabel = resolveBudgetLabel(request);
   const titleTemplate = template.titlePatterns[Math.floor(rng() * template.titlePatterns.length)];
   const title = titleTemplate
@@ -631,8 +644,9 @@ export const generateArticlePayload = ({
     title: 'Hashtag',
     body: buildHashtagHtml({
       categoryName: products[0]?.categoryName,
-      keyword: request.keyword,
-      useCase: request.useCase,
+      keywords: requestKeywords,
+      keyword: keywordPhrase,
+      useCase: useCasePhrase,
       productNames: products.slice(0, 4).map((product) => product.name).filter(Boolean),
     }),
     slotKey: 'cta',
@@ -643,7 +657,7 @@ export const generateArticlePayload = ({
 
   const contentHtml = [
     '<article class="space-y-5 generated-article">',
-    buildIntroHtml({ title, tone, useCase: request.useCase ?? request.keyword }),
+    buildIntroHtml({ title, tone, useCase: useCasePhrase }),
     tocHtml,
     sectionsHtml,
     conclusionHtml,

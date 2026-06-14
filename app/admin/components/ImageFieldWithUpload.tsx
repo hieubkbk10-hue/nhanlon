@@ -5,12 +5,14 @@ import { AdminImage as Image } from '@/app/admin/components/AdminImage';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ClipboardPaste, Link2, Loader2, Pencil, Trash2, Upload } from 'lucide-react';
+import { Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Input, Label, cn } from './ui';
 import { prepareImageForUpload, validateImageFile } from '@/lib/image/uploadPipeline';
 import { resolveNamingContext, type ImageNamingContext } from '@/lib/image/uploadNaming';
 import { ImageEditorDialog } from './ImageEditorDialog';
+import { ImageSourceActions } from './ImageSourceActions';
+import type { ImageAspectRatioInput } from '@/lib/products/image-aspect-ratio';
 
 type InputMode = 'upload' | 'url';
 
@@ -22,7 +24,7 @@ interface ImageFieldWithUploadProps {
   naming?: ImageNamingContext;
   label?: string;
   className?: string;
-  aspectRatio?: 'square' | 'video' | 'banner' | 'auto';
+  aspectRatio?: 'square' | 'video' | 'portrait' | 'banner' | 'auto';
   quality?: number;
   placeholder?: string;
 }
@@ -204,52 +206,40 @@ export function ImageFieldWithUpload({
   const aspectClasses = {
     auto: 'min-h-[180px]',
     banner: 'aspect-[21/9]',
+    portrait: 'aspect-[9/16]',
     square: 'aspect-square',
     video: 'aspect-video',
   };
+  const preferredCropAspectRatio: ImageAspectRatioInput | undefined = aspectRatio === 'auto'
+    ? undefined
+    : aspectRatio === 'banner'
+      ? { cssValue: '21 / 9', label: '21:9', value: 21 / 9 }
+      : aspectRatio === 'portrait'
+        ? { cssValue: '9 / 16', label: '9:16', value: 9 / 16 }
+      : aspectRatio === 'video'
+        ? 'wide169'
+        : 'square';
+  const cropLabel = typeof preferredCropAspectRatio === 'string'
+    ? (preferredCropAspectRatio === 'wide169' ? '16:9' : '1:1')
+    : preferredCropAspectRatio?.label;
 
   return (
     <div className={cn('space-y-3', className)}>
-      {/* Label + Mode Toggle */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Label>{label}</Label>
-        <div className="flex items-center gap-1.5">
-          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-            <button
-              type="button"
-              onClick={() =>{  setMode('upload'); }}
-              className={cn(
-                "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
-                mode === 'upload' 
-                  ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" 
-                  : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              <Upload size={12} /> Upload
-            </button>
-            <button
-              type="button"
-              onClick={() =>{  setMode('url'); }}
-              className={cn(
-                "px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
-                mode === 'url' 
-                  ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" 
-                  : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              <Link2 size={12} /> URL
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={handleClipboardPaste}
-            disabled={isUploading}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 disabled:opacity-50"
-            title="Copy ảnh rồi click vào đây"
-          >
-            <ClipboardPaste size={12} /> Dán
-          </button>
-        </div>
+        <ImageSourceActions
+          mode={mode}
+          onUpload={() => {
+            setMode('upload');
+            inputRef.current?.click();
+          }}
+          onUrl={() => setMode('url')}
+          onPaste={handleClipboardPaste}
+          onCrop={() => preview && setIsEditorOpen(true)}
+          cropLabel={cropLabel}
+          cropDisabled={!preview || isUploading}
+          disabled={isUploading}
+        />
       </div>
 
       {/* Hidden file input */}
@@ -305,16 +295,6 @@ export function ImageFieldWithUpload({
                   <Upload size={18} />
                 </Button>
               )}
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                onClick={() => setIsEditorOpen(true)}
-                className="h-10 w-10"
-                title="Cắt / Xoá nền"
-              >
-                <Pencil size={18} />
-              </Button>
               <Button
                 type="button"
                 variant="destructive"
@@ -373,6 +353,7 @@ export function ImageFieldWithUpload({
       {isEditorOpen && preview && (
         <ImageEditorDialog
           imageUrl={preview}
+          preferredCropAspectRatio={preferredCropAspectRatio}
           onClose={() => setIsEditorOpen(false)}
           onApply={(editedFile) => {
             setIsEditorOpen(false);

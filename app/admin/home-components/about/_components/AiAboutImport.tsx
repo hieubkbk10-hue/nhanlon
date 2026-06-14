@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { AiDirectGeneratePanel } from '@/app/admin/components/AiDirectGenerateButton';
 import { Bot, Check, Copy, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Label, cn } from '../../../components/ui';
 import { createAboutEditorFeature, createAboutEditorStat, normalizeAboutImages, normalizeAboutStyle } from '../_lib/constants';
 import type { AboutEditorState } from '../_types';
+import { useTypeAiImportEnabled } from '../../_shared/hooks/useTypeAiImportEnabled';
+import { HomeComponentFooterActionPortal } from '../../_shared/components/HomeComponentFooterActions';
 
 const MAX_FEATURES = 6;
 
@@ -207,17 +210,21 @@ const parseAiAbout = (raw: string): ParseResult => {
 };
 
 export function AiAboutImport({
-  buttonClassName,
   onApply,
 }: {
   buttonClassName?: string;
   onApply: (item: Partial<AboutEditorState>) => void;
 }) {
+  const isAiImportEnabled = useTypeAiImportEnabled();
   const [open, setOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [lastCopied, setLastCopied] = useState<'prompt' | 'sample' | null>(null);
   const result = useMemo(() => parseAiAbout(rawInput), [rawInput]);
   const canApply = rawInput.trim().length > 0 && result.item !== null && result.errors.length === 0;
+
+  if (!isAiImportEnabled) {
+    return null;
+  }
 
   const copyText = async (value: string, type: 'prompt' | 'sample') => {
     await navigator.clipboard.writeText(value);
@@ -236,9 +243,11 @@ export function AiAboutImport({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className={cn('h-7 gap-1 text-xs', buttonClassName)} onClick={() => setOpen(true)}>
-        <Bot size={11} /> Import AI
-      </Button>
+      <HomeComponentFooterActionPortal>
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Bot size={16} /> Import AI
+        </Button>
+      </HomeComponentFooterActionPortal>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[94vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -269,6 +278,12 @@ export function AiAboutImport({
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Dán kết quả AI</Label>
+                <AiDirectGeneratePanel
+                  prompt={AI_ABOUT_PROMPT}
+                  sessionId="admin-about-import"
+                  onGenerated={setRawInput}
+                  placeholder="Ví dụ: Viết giới thiệu Dohy Studio, chuyên đào tạo 3D và tài nguyên thiết kế, giọng chuyên nghiệp, có 3 số liệu và 4 điểm mạnh."
+                />
                 <textarea className="min-h-64 w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder={SAMPLE_ABOUT_JSON} value={rawInput} onChange={(event) => setRawInput(event.target.value)} />
               </div>
               {rawInput.trim().length > 0 && (

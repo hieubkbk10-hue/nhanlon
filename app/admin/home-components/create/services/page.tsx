@@ -1,18 +1,20 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Briefcase } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, Label, cn } from '../../../components/ui';
+import { Label, cn } from '../../../components/ui';
 import { ComponentFormWrapper, useComponentForm } from '../shared';
 import { useTypeColorOverrideState } from '../../_shared/hooks/useTypeColorOverride';
 import { useTypeFontOverrideState } from '../../_shared/hooks/useTypeFontOverride';
 import { HeaderConfigSection } from '../../_shared/components/HeaderConfigSection';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
 import { ServicesForm } from '../../services/_components/ServicesForm';
 import { ServicesPreview } from '../../services/_components/ServicesPreview';
 import { getServicesValidationResult } from '../../services/_lib/colors';
 import { DEFAULT_SERVICES_CONFIG } from '../../services/_lib/constants';
 import { getServicesHeaderAlign, toServicesPersistItems } from '../../services/_lib/items';
-import type { ServiceEditorItem, ServiceItemMediaAlign, ServicesStyle } from '../../services/_types';
+import { DEFAULT_SERVICES_CORNER_RADIUS, DEFAULT_SERVICES_SPACING, type ServiceEditorItem, type ServiceItemMediaAlign, type ServicesCornerRadius, type ServicesSpacing, type ServicesStyle } from '../../services/_types';
 
 const DEFAULT_EDITOR_ITEMS: ServiceEditorItem[] = [
   { id: 1, mediaType: 'icon', icon: 'Truck', image: '', title: 'Miễn phí vẫn chuyển', description: 'Cho tất cả đơn hàng trong nội thành Hồ Chí Minh' },
@@ -36,7 +38,7 @@ export default function ServicesCreatePage() {
   const [mediaAlign, setMediaAlign] = useState<'left' | 'center' | 'right'>(DEFAULT_SERVICES_CONFIG.mediaAlign ?? 'center');
 
   // Header config state
-  const [expandedSections, setExpandedSections] = useState({ header: false });
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(['header', 'display'], true);
   const [hideHeader, setHideHeader] = useState(DEFAULT_SERVICES_CONFIG.hideHeader ?? false);
   const [showTitle, setShowTitle] = useState(DEFAULT_SERVICES_CONFIG.showTitle !== false);
   const [subtitle, setSubtitle] = useState(DEFAULT_SERVICES_CONFIG.subtitle ?? '');
@@ -47,6 +49,8 @@ export default function ServicesCreatePage() {
   const [uppercaseText, setUppercaseText] = useState(DEFAULT_SERVICES_CONFIG.uppercaseText ?? false);
   const [showBadge, setShowBadge] = useState(DEFAULT_SERVICES_CONFIG.showBadge ?? true);
   const [badgeText, setBadgeText] = useState(DEFAULT_SERVICES_CONFIG.badgeText ?? '');
+  const [spacing, setSpacing] = useState<ServicesSpacing>(DEFAULT_SERVICES_CONFIG.spacing ?? DEFAULT_SERVICES_SPACING);
+  const [cornerRadius, setCornerRadius] = useState<ServicesCornerRadius>(DEFAULT_SERVICES_CONFIG.cornerRadius ?? DEFAULT_SERVICES_CORNER_RADIUS);
 
   const validation = useMemo(() => getServicesValidationResult({ primary, secondary, mode }), [primary, secondary, mode]);
 
@@ -67,6 +71,8 @@ export default function ServicesCreatePage() {
       uppercaseText,
       showBadge,
       badgeText,
+      spacing,
+      cornerRadius,
     });
   };
 
@@ -88,6 +94,8 @@ export default function ServicesCreatePage() {
       setCustomFontState={setCustomFontState}
       skipTitleInput={true}
     >
+      <FormSectionsToggleAllButton hasClosedSection={hasClosedSection} onToggleAll={handleToggleAll} />
+
       <HeaderConfigSection
         hideHeader={hideHeader}
         title={title}
@@ -111,46 +119,47 @@ export default function ServicesCreatePage() {
         onUppercaseTextChange={setUppercaseText}
         onShowBadgeChange={setShowBadge}
         onBadgeTextChange={setBadgeText}
-        expanded={expandedSections.header}
-        onExpandedChange={(value) => setExpandedSections({ header: value })}
+        expanded={openSections.header}
+        onExpandedChange={(value) => toggleSection('header', value)}
         titleRequired={true}
         titleLabel="Tiêu đề hiển thị"
         titlePlaceholder="Nhập tiêu đề component..."
       />
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Briefcase size={20} />
-            Services
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Số cột desktop</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {[3, 4].map((option) => {
-                const selected = desktopColumns === option;
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setDesktopColumns(option as 3 | 4)}
-                    className={cn(
-                      'h-9 rounded-md border text-xs transition-colors',
-                      selected
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                        : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
-                    )}
-                  >
-                    {option} cột
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="mb-3">
+        <HomeComponentDisplaySettingsSection
+          open={openSections.display}
+          onOpenChange={(open) => toggleSection('display', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={setCornerRadius}
+          spacing={spacing}
+          onSpacingChange={setSpacing}
+        >
+              <div className="space-y-2">
+                <Label>Số cột desktop</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[3, 4].map((option) => {
+                    const selected = desktopColumns === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setDesktopColumns(option as 3 | 4)}
+                        className={cn(
+                          'h-10 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                        )}
+                      >
+                        {option} cột
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+        </HomeComponentDisplaySettingsSection>
+      </div>
 
       <ServicesForm
         items={servicesItems}
@@ -185,6 +194,8 @@ export default function ServicesCreatePage() {
         selectedStyle={style}
         onStyleChange={setStyle}
         title={title}
+        spacing={spacing}
+        cornerRadius={cornerRadius}
         fontStyle={fontStyle}
         fontClassName="font-active"
       />

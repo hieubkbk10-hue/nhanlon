@@ -6,11 +6,12 @@ import Link from 'next/link';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { ArrowLeft, CreditCard, Loader2, MapPin, Package, ShoppingBag, Truck, User } from 'lucide-react';
+import { ArrowLeft, Copy, CreditCard, ExternalLink, Loader2, MapPin, Package, ShoppingBag, Truck, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '../../../components/ui';
 import { useOrderStatuses } from '@/lib/experiences';
 import { DigitalCredentialsForm } from '@/components/orders/DigitalCredentialsForm';
+import { buildAbsoluteWebUrl, buildAdminOrderDetailPath, buildPublicOrderLookupPath } from '@/lib/orders/links';
 
 const MODULE_KEY = 'orders';
 
@@ -148,6 +149,24 @@ export default function EditOrderPage() {
     );
   }
 
+  const publicOrderLookupPath = buildPublicOrderLookupPath(orderData.orderNumber);
+  const adminOrderDetailPath = buildAdminOrderDetailPath(orderData._id);
+  const publicOrderLookupUrl = typeof window === 'undefined'
+    ? publicOrderLookupPath
+    : buildAbsoluteWebUrl(window.location.origin, publicOrderLookupPath);
+  const adminOrderDetailUrl = typeof window === 'undefined'
+    ? adminOrderDetailPath
+    : buildAbsoluteWebUrl(window.location.origin, adminOrderDetailPath);
+
+  const handleCopyUrl = async (url: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(`Đã copy ${label}.`);
+    } catch {
+      toast.error(`Không thể copy ${label}.`);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-4">
@@ -198,8 +217,12 @@ export default function EditOrderPage() {
                     <div key={index} className="py-3 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded flex items-center justify-center">
-                            <Package size={16} className="text-slate-400" />
+                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded flex items-center justify-center overflow-hidden shrink-0">
+                            {item.productImage ? (
+                              <img src={item.productImage} alt={item.productName} className="w-full h-full object-cover" />
+                            ) : (
+                              <Package size={16} className="text-slate-400" />
+                            )}
                           </div>
                           <div>
                             <p className="font-medium">{item.productName}</p>
@@ -365,6 +388,38 @@ export default function EditOrderPage() {
                 </CardContent>
               </Card>
             )}
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Liên kết nhanh</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Link khách tra cứu</Label>
+                  <div className="flex gap-2">
+                    <Input value={publicOrderLookupUrl} readOnly className="font-mono text-xs" />
+                    <Button type="button" variant="outline" size="icon" title="Copy link khách" onClick={async () => handleCopyUrl(publicOrderLookupUrl, 'link khách')}>
+                      <Copy size={16} />
+                    </Button>
+                    <Button type="button" variant="outline" size="icon" title="Mở link khách" onClick={() => window.open(publicOrderLookupUrl, '_blank', 'noopener,noreferrer')}>
+                      <ExternalLink size={16} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Link admin đơn này</Label>
+                  <div className="flex gap-2">
+                    <Input value={adminOrderDetailUrl} readOnly className="font-mono text-xs" />
+                    <Button type="button" variant="outline" size="icon" title="Copy link admin" onClick={async () => handleCopyUrl(adminOrderDetailUrl, 'link admin')}>
+                      <Copy size={16} />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Dùng các link này để dán cho khách hoặc lưu nội bộ khi email hệ thống chưa sẵn sàng.
+                </p>
+              </CardContent>
+            </Card>
 
             {/* Actions */}
             <div className="flex flex-col gap-2">

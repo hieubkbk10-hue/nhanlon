@@ -1,50 +1,25 @@
 'use client';
 
 import React from 'react';
-import { ChevronDown, Database, Gift, icons, Search, Settings, Trash2 } from 'lucide-react';
+import { Database, Gift, icons, Search, Trash2 } from 'lucide-react';
 import { Button, Card, CardContent, Input, Label, cn } from '../../../components/ui';
 import { InputWithClear } from '../../stats/_components/InputWithClear';
 import { AVAILABLE_VOUCHER_PROMOTION_ICONS, DEFAULT_DEMO_VOUCHERS } from '../_lib/constants';
-import type { DemoVoucherPromotionItem, VoucherPromotionsCtaVariant, VoucherPromotionsDesktopColumns, VoucherPromotionsSelectionMode } from '../_types';
+import type { DemoVoucherPromotionItem, VoucherPromotionsCornerRadius, VoucherPromotionsCtaVariant, VoucherPromotionsDesktopColumns, VoucherPromotionsSelectionMode } from '../_types';
 import { AiDemoVouchersImport } from '../../product-list/_components/AiDemoProductsImport';
+import { CollapsibleSubSection as SubSection } from '../../_shared/components/CollapsibleSubSection';
+import { useFormSectionsState } from '../../_shared/hooks/useFormSectionsState';
+import { useDemoItemList } from '../../_shared/hooks/useDemoItemList';
+import { FormSectionsToggleAllButton } from '../../_shared/components/FormSectionsToggleAllButton';
+import { HomeComponentDisplaySettingsSection } from '../../_shared/components/HomeComponentDisplaySettingsSection';
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
+import { ToggleSwitch } from '@/components/modules/shared';
 
 const BadgePercentIcon = icons.BadgePercent;
 const getIconComponent = (iconName: string) => icons[iconName as keyof typeof icons] || BadgePercentIcon;
 const ICON_OPTIONS = AVAILABLE_VOUCHER_PROMOTION_ICONS
   .filter((icon) => icons[icon as keyof typeof icons])
   .map((icon) => ({ label: icon, value: icon }));
-
-function SubSection({
-  icon: Icon,
-  title,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:bg-slate-800/50 dark:text-slate-200 dark:hover:bg-slate-800"
-      >
-        <Icon size={15} className="shrink-0 text-slate-400" />
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          size={15}
-          className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')}
-        />
-      </button>
-      {open && <div className="space-y-3 bg-white p-3 dark:bg-slate-900">{children}</div>}
-    </div>
-  );
-}
 
 function IconCombobox({
   value,
@@ -80,7 +55,7 @@ function IconCombobox({
   const SelectedIcon = getIconComponent(selectedValue);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative z-30">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -94,7 +69,7 @@ function IconCombobox({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-[min(420px,calc(100vw-2rem))] rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-900">
+        <div className="absolute left-0 top-full z-[9999] mt-2 w-[min(420px,calc(100vw-2rem))] rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-900">
           <div className="border-b border-slate-200 p-2 dark:border-slate-800">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -158,12 +133,16 @@ export function VoucherPromotionsForm({
   onShowCtaChange,
   ctaVariant,
   onCtaVariantChange,
+  spacing,
+  onSpacingChange,
   demoVouchers,
   setDemoVouchers,
   canUseRealData,
   moduleLoaded,
   desktopColumns,
   onDesktopColumnsChange,
+  cornerRadius,
+  onCornerRadiusChange,
   iconName,
   onIconNameChange,
   brandColor,
@@ -181,103 +160,109 @@ export function VoucherPromotionsForm({
   onShowCtaChange: (value: boolean) => void;
   ctaVariant: VoucherPromotionsCtaVariant;
   onCtaVariantChange: (value: VoucherPromotionsCtaVariant) => void;
+  spacing: SectionSpacing;
+  onSpacingChange: (value: SectionSpacing) => void;
   demoVouchers: DemoVoucherPromotionItem[];
   setDemoVouchers: React.Dispatch<React.SetStateAction<DemoVoucherPromotionItem[]>>;
   canUseRealData: boolean;
   moduleLoaded: boolean;
   desktopColumns: VoucherPromotionsDesktopColumns;
   onDesktopColumnsChange: (value: VoucherPromotionsDesktopColumns) => void;
+  cornerRadius: VoucherPromotionsCornerRadius;
+  onCornerRadiusChange: (value: VoucherPromotionsCornerRadius) => void;
   iconName: string;
   onIconNameChange: (value: string) => void;
   brandColor: string;
   defaultExpanded?: boolean;
 }) {
-  const addDemoItem = () => {
-    setDemoVouchers((prev) => [
-      ...prev,
-      {
-        id: `demo-voucher-${Date.now()}`,
+  const { openSections, toggleSection, hasClosedSection, handleToggleAll } = useFormSectionsState(
+    ['settings', 'source', 'demo'],
+    defaultExpanded
+  );
+
+  const { add: addDemoItem, update: updateDemoItem, remove: removeDemoItem, loadDefault: loadDefaultDemo } = useDemoItemList(
+    demoVouchers,
+    setDemoVouchers,
+    {
+      createEmpty: () => ({
         code: '',
         name: '',
         description: '',
-        discountType: 'percent',
+        discountType: 'percent' as const,
         discountValue: 10,
-      },
-    ]);
-  };
-
-  const updateDemoItem = (id: string, patch: Partial<DemoVoucherPromotionItem>) => {
-    setDemoVouchers((prev) => prev.map((item) => item.id === id ? { ...item, ...patch } : item));
-  };
-
-  const removeDemoItem = (id: string) => {
-    if (demoVouchers.length <= 1) {return;}
-    setDemoVouchers((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const loadDefaultDemo = () => {
-    setDemoVouchers(DEFAULT_DEMO_VOUCHERS.map((item, index) => ({ ...item, id: `demo-voucher-${Date.now() + index}` })));
-  };
+      }),
+      defaults: DEFAULT_DEMO_VOUCHERS,
+      minItems: 1,
+    },
+  );
 
   return (
     <Card className="mb-6">
       <CardContent className="space-y-3 p-4">
-        <SubSection icon={Settings} title="Nội dung hiển thị" defaultOpen={defaultExpanded}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>CTA label</Label>
-              <InputWithClear value={ctaLabel} onChange={onCtaLabelChange} placeholder="Xem tất cả ưu đãi" />
+        <AiDemoVouchersImport onApply={setDemoVouchers} />
+        <FormSectionsToggleAllButton
+          hasClosedSection={hasClosedSection}
+          onToggleAll={handleToggleAll}
+        />
+        <HomeComponentDisplaySettingsSection
+          open={openSections.settings}
+          onOpenChange={(open) => toggleSection('settings', open)}
+          cornerRadius={cornerRadius}
+          onCornerRadiusChange={onCornerRadiusChange}
+          spacing={spacing}
+          onSpacingChange={onSpacingChange}
+          className="relative z-20 overflow-visible"
+          contentClassName="overflow-visible"
+        >
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 md:col-span-2">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Hiển thị nút xem tất cả ưu đãi</Label>
+              <p className="text-xs text-slate-500">Tắt nếu chỉ muốn hiển thị đúng số voucher đã chọn.</p>
             </div>
-            <div className="space-y-2">
-              <Label>CTA URL</Label>
-              <Input value={ctaUrl} onChange={(e) => onCtaUrlChange(e.target.value)} placeholder="/promotions" disabled={!showCta} />
-            </div>
+            <ToggleSwitch enabled={showCta} onChange={() => onShowCtaChange(!showCta)} />
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[160px,1fr]">
-            <div className="space-y-2">
-              <Label>Nút xem tất cả</Label>
-              <button
-                type="button"
-                onClick={() => onShowCtaChange(!showCta)}
-                className={cn(
-                  'h-9 w-full rounded-md border text-xs font-medium transition-colors',
-                  showCta
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                    : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
-                )}
-              >
-                {showCta ? 'Đang hiện' : 'Đang ẩn'}
-              </button>
-            </div>
-            <div className="space-y-2">
-              <Label>Kiểu hiển thị</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {([
-                  ['button', 'Nút giữa'],
-                  ['textRight', 'Chữ nhỏ góc phải'],
-                ] as const).map(([value, label]) => {
-                  const selected = ctaVariant === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => onCtaVariantChange(value)}
-                      disabled={!showCta}
-                      className={cn(
-                        'h-9 rounded-md border text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                        selected
-                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                          : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
-                      )}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+          {showCta && (
+            <>
+              <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>CTA label</Label>
+                  <InputWithClear value={ctaLabel} onChange={onCtaLabelChange} placeholder="Xem tất cả ưu đãi" />
+                </div>
+                <div className="space-y-2">
+                  <Label>CTA URL</Label>
+                  <Input value={ctaUrl} onChange={(e) => onCtaUrlChange(e.target.value)} placeholder="/promotions" />
+                </div>
               </div>
-            </div>
-          </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Kiểu hiển thị nút</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['button', 'Nút giữa'],
+                    ['textRight', 'Chữ nhỏ góc phải'],
+                  ] as const).map(([value, label]) => {
+                    const selected = ctaVariant === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => onCtaVariantChange(value)}
+                        className={cn(
+                          'h-9 rounded-md border text-xs transition-colors',
+                          selected
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                        )}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             <Label>Số cột desktop</Label>
@@ -292,7 +277,7 @@ export function VoucherPromotionsForm({
                     className={cn(
                       'h-9 rounded-md border text-xs transition-colors',
                       selected
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                        ? 'border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950'
                         : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
                     )}
                   >
@@ -307,9 +292,14 @@ export function VoucherPromotionsForm({
             <Label>Icon voucher</Label>
             <IconCombobox value={iconName} onChange={onIconNameChange} brandColor={brandColor} />
           </div>
-        </SubSection>
+        </HomeComponentDisplaySettingsSection>
 
-        <SubSection icon={Database} title="Nguồn dữ liệu" defaultOpen={defaultExpanded}>
+        <SubSection
+          icon={Database}
+          title="Nguồn dữ liệu"
+          open={openSections.source}
+          onOpenChange={(open) => toggleSection('source', open)}
+        >
           <div className="space-y-2">
             <Label>Chế độ dữ liệu</Label>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -361,7 +351,12 @@ export function VoucherPromotionsForm({
         </SubSection>
 
         {selectionMode === 'demo' && (
-          <SubSection icon={Gift} title="Dữ liệu demo" defaultOpen={defaultExpanded}>
+          <SubSection
+            icon={Gift}
+            title="Dữ liệu demo"
+            open={openSections.demo}
+            onOpenChange={(open) => toggleSection('demo', open)}
+          >
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={loadDefaultDemo}>
                 Nạp mẫu mặc định

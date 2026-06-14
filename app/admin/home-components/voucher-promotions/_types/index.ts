@@ -1,3 +1,4 @@
+import type { SectionSpacing } from '../../_shared/types/sectionSpacing';
 import type { VoucherPromotionsStyle } from '@/lib/home-components/voucher-promotions';
 
 export type { VoucherPromotionsStyle };
@@ -7,6 +8,7 @@ export type VoucherPromotionsHarmony = 'analogous' | 'complementary' | 'triadic'
 export type VoucherPromotionsSelectionMode = 'auto' | 'demo';
 export type VoucherPromotionsDesktopColumns = 3 | 4;
 export type VoucherPromotionsCtaVariant = 'button' | 'textRight';
+export type VoucherPromotionsCornerRadius = 'none' | 'sm' | 'lg';
 
 
 export interface VoucherPromotionsTexts {
@@ -48,7 +50,11 @@ export interface VoucherPromotionsConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
   desktopColumns?: VoucherPromotionsDesktopColumns;
+  cornerRadius?: VoucherPromotionsCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
   iconName?: string;
 }
 
@@ -83,6 +89,10 @@ export interface VoucherPromotionsConfigState extends VoucherPromotionsConfig {
   uppercaseText?: boolean;
   showBadge?: boolean;
   badgeText?: string;
+  spacing?: SectionSpacing;
   desktopColumns?: VoucherPromotionsDesktopColumns;
+  cornerRadius?: VoucherPromotionsCornerRadius;
+  noBorderRadius?: boolean;
+  noVerticalMargin?: boolean;
   iconName?: string;
 }

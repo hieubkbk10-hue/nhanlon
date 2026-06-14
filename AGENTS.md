@@ -5,11 +5,33 @@
 - Không mở rộng scope ngoài yêu cầu.
 - Ưu tiên thay đổi nhỏ, dễ rollback.
 
+# Workspace Hygiene & Cleanliness Guardrails (Quy tắc Giữ gìn Vệ sinh Workspace)
+- **Tuyệt đối không tạo file nháp vương vãi:** Nghiêm cấm tạo các file kịch bản tạm thời, file vá (patch), file test hoặc file nháp (ví dụ `.js`, `.ts`, `.py`, `.md`, `.json`...) trực tiếp ở thư mục gốc của dự án hoặc các thư mục module cốt lõi mà không có mục đích sử dụng lâu dài.
+- **Sử dụng thư mục nháp được chỉ định:** Mọi hoạt động chạy thử nghiệm, viết script test hoặc script bổ trợ tạm thời của Agent bắt buộc phải lưu trong thư mục `scratch/` hoặc thư mục nháp được cấu hình riêng trong sandbox.
+- **Dọn dẹp triệt để trước khi bàn giao:** Tất cả các file nháp, file trung gian hoặc file vá tạm thời được sinh ra trong quá trình code phải được xóa sạch hoàn toàn trước khi kết thúc tác vụ. Tuyệt đối không được commit bất kỳ file nháp/rác nào lên Git repository của dự án.
+
+# Large-scale System Design Guardrails
+- Không thể “test đến đúng”: test chỉ hỗ trợ; correctness phải đến từ thiết kế đơn giản, invariant rõ, data model chặt và edge case được nghĩ trước.
+- Chậm kéo dài có thể tệ hơn lỗi rõ ràng: với hot path/user-facing, ưu tiên timeout, fail-fast, backpressure, load shedding hoặc degrade có kiểm soát thay vì treo âm thầm.
+- Steady state nên là worst state: thiết kế sao cho trạng thái bình thường đã chịu được tải/queue/data thường trực; không phụ thuộc cleanup thủ công, job phục hồi nặng hoặc “sau này xử lý”.
+- Simple beats clever: chọn giải pháp dễ đọc, dễ suy luận, dễ rollback và dễ vận hành trước khi dùng abstraction/magic/công nghệ phức tạp.
+- Architecture > raw performance: ưu tiên boundary, ownership, data flow, cache strategy và failure mode đúng; chỉ tối ưu micro khi có evidence đo được.
+- Queue không phải mặc định tốt: chỉ thêm queue khi cần tách tải/độ trễ rõ ràng và đã có idempotency, retry policy, dead-letter/monitoring; tránh dùng queue để che thiết kế đồng bộ sai.
+
 # Clean-by-construction
 - Ưu tiên đọc code kỹ, bám pattern sẵn có để giảm lỗi ngay từ lúc viết.
 - Cấm tuyệt đối tự chạy lint/unit test.
 - Verification runtime/integration do tester phụ trách.
 - Tự review tĩnh trước khi bàn giao: typing, null-safety, edge cases, tương thích dữ liệu cũ.
+
+# Data Contract & Migration Discipline
+- Khi nâng schema/data model hoặc phát hiện data cũ thiếu field, mặc định dùng pattern **Expand → Migrate → Contract**.
+- **Expand:** mở rộng code/schema để ghi field chuẩn mới và cho phép chuyển tiếp an toàn; chỉ dùng fallback tạm thời nếu cần giữ hệ thống sống trong cửa sổ migration.
+- **Migrate:** chạy migration/backfill có đọc trước, patch tối thiểu, verify sau ghi; ưu tiên đưa data thật về contract mới thay vì chôn logic legacy trong runtime.
+- **Contract:** sau khi verify data đã đạt chuẩn, bỏ fallback legacy, code chỉ đọc source-of-truth mới; cập nhật data contract/audit để lần sau phát hiện thiếu/dư field sớm.
+- Không biến fallback legacy thành thiết kế lâu dài. Nếu phải thêm fallback, phải ghi rõ điều kiện gỡ bỏ và migration/backfill đi kèm.
+- Khi nâng code cho dự án cũ hoặc nghi ngờ nợ dữ liệu, dùng `/system/data` → **Data Contract Check** hoặc Convex CLI tương ứng để quét missing/recommended/extra/deprecated fields trước khi fix chắp vá.
+- Khi thêm field/table mới có ý nghĩa runtime, phải cập nhật contract scan tương ứng để AI agents/dev nhận ra data cũ cần migrate.
 
 # Sub-agent Delegation (Speed-first)
 - Với task từ mức trung bình trở lên, ưu tiên dùng sub-agent (Task) trước khi tự xử lý tuần tự.
@@ -128,8 +150,12 @@
 - Khi user đưa URL localhost, đọc route Next.js tương ứng, không hỏi lại.
 - Mọi thay đổi code khi hoàn thành đều phải commit, không push.
 - Khi commit luôn add kèm `.factory/docs` (nếu có).
-- Trước commit chỉ chạy `bunx tsc --noEmit` khi có thay đổi code/TS; không chạy khi chỉ sửa docs/cấu hình không liên quan.
-- Khi chạy `bunx tsc --noEmit`, luôn pipe output qua `2>&1 | Select-Object -First 10` để giới hạn context (tsc luôn scan toàn bộ project bất kể pipe; pipe chỉ cắt hiển thị, không tăng tốc).
+- Trước khi commit KHÔNG cần chạy `bunx tsc --noEmit` thủ công nếu chuẩn bị thực hiện lệnh commit ngay, vì hệ thống Git Hook (Harness Engine) đã tự động tích hợp chạy `oxlint` trên các file staged (qua `lint-staged`) và chạy `tsc --noEmit` toàn dự án trước khi commit. Tuy nhiên, khuyến khích chạy thủ công trong quá trình coding nếu muốn kiểm tra nhanh lỗi và sửa lỗi type sớm.
+- Khi chạy `bunx tsc --noEmit` thủ công, luôn pipe output qua `2>&1 | Select-Object -First 10` để giới hạn context (tsc luôn scan toàn bộ project bất kể pipe; pipe chỉ cắt hiển thị, không tăng tốc).
+
+# Task Completion Notification (Âm báo hoàn thành Task)
+- Khi hoàn thành xong task và chuẩn bị phản hồi kết quả cuối cùng cho người dùng, Agent BẮT BUỘC phải chạy lệnh sau qua công cụ `run_command` với `WaitMsBeforeAsync: 5000`:
+  `powershell -c "(New-Object -ComObject SAPI.SpVoice).Speak('Done, Sir.')"`
 
 # Convex Real Data Ops (Best Practices)
 - Mặc định ưu tiên sửa dữ liệu thật qua query/mutation/action đã có sẵn; không tự ý thêm schema/table/function mới nếu yêu cầu chỉ là chỉnh data.
@@ -156,3 +182,17 @@
 - Chỉ lấy data cần thiết (projection, no select *).
 - Load song song bằng Promise.all cho query độc lập.
 - Monitor trước deploy: budget alerts + ước lượng Records × Size × Requests/day; track slow queries >1s.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->
