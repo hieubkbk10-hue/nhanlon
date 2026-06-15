@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 const EMPTY_COMPONENTS_COUNT = 0;
 const LOADING_DELAY_MS = 120;
 const LOADING_MIN_DISPLAY_MS = 320;
-const MAX_CRITICAL_COMPONENTS = 3;
+const CRITICAL_COMPONENTS_COUNT = 2;
 
 export default function HomePageClient({
   initialComponents,
@@ -31,7 +31,7 @@ export default function HomePageClient({
   const loadingStartRef = useRef<number | null>(null);
   const delayTimerRef = useRef<number | null>(null);
   const deferredTriggerRef = useRef<HTMLDivElement | null>(null);
-  const [criticalCount, setCriticalCount] = useState(MAX_CRITICAL_COMPONENTS);
+
 
   const isDataReady = typeof resolvedComponents !== 'undefined';
 
@@ -130,13 +130,7 @@ export default function HomePageClient({
     };
   }, [interactionReady, showDeferred]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const nextCount = window.innerWidth < 768 ? 1 : MAX_CRITICAL_COMPONENTS;
-    setCriticalCount(nextCount);
-  }, []);
+
 
   useEffect(() => {
     if (!isDataReady) {
@@ -225,8 +219,8 @@ export default function HomePageClient({
       return true;
     })
     .sort((firstComponent, secondComponent) => firstComponent.order - secondComponent.order);
-  const criticalComponents = sortedComponents.slice(0, criticalCount);
-  const deferredComponents = showDeferred ? sortedComponents.slice(criticalCount) : [];
+  const criticalComponents = sortedComponents.slice(0, CRITICAL_COMPONENTS_COUNT);
+  const deferredComponents = showDeferred ? sortedComponents.slice(CRITICAL_COMPONENTS_COUNT) : [];
   const popupComponents = resolvedComponents.filter((componentItem) => componentItem.type === 'Popup');
 
   const speedDialComponents = resolvedComponents.filter((componentItem) => {
