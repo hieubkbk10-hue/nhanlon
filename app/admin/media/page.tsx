@@ -11,7 +11,7 @@ import {
   FolderOpen, Grid, Image as ImageIcon, List, 
   Loader2, Plus, RefreshCw, Search, Trash2, Upload, X, Scissors, Zap
 } from 'lucide-react';
-import { ImageEditorDialog } from '@/app/admin/components/ImageEditorDialog';
+import { ImageEditorDialog, compressImageToWebP } from '@/app/admin/components/ImageEditorDialog';
 import { toast } from 'sonner';
 import { Badge, Button, Card, Input, cn } from '../components/ui';
 import { BulkActionBar, SelectCheckbox, generatePaginationItems } from '../components/TableUtilities';
@@ -428,7 +428,7 @@ function MediaContent() {
       return;
     }
 
-    if (!confirm(`Sẽ nén ${targets.length} ảnh sang WebP (quality 50%). Ảnh nào nén xong lớn hơn hoặc lỗi sẽ tự động bỏ qua. Tiếp tục?`)) {return;}
+    if (!confirm(`Sẽ nén ${targets.length} ảnh sang WebP (quality 90%). Ảnh nào nén xong lớn hơn hoặc lỗi sẽ tự động bỏ qua. Tiếp tục?`)) {return;}
 
     setIsBulkCompressing(true);
     setBulkCompressProgress({ current: 0, total: targets.length, saved: 0 });
@@ -442,28 +442,9 @@ function MediaContent() {
       setBulkCompressProgress({ current: i + 1, total: targets.length, saved: totalSaved });
 
       try {
-        // Tải ảnh gốc về
-        const fetchRes = await fetch(media.url!);
-        if (!fetchRes.ok) { skippedCount++; continue; }
-        const blob = await fetchRes.blob();
-        const originalFile = new File([blob], media.filename, { type: media.mimeType });
-
-        // Nén sang WebP với quality 0.5
-        const webpBlob = await new Promise<Blob | null>((resolve) => {
-          const img = document.createElement('img');
-          const objectUrl = URL.createObjectURL(originalFile);
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (!ctx) { URL.revokeObjectURL(objectUrl); resolve(null); return; }
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            ctx.drawImage(img, 0, 0);
-            canvas.toBlob((b) => { URL.revokeObjectURL(objectUrl); resolve(b); }, 'image/webp', 0.5);
-          };
-          img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); };
-          img.src = objectUrl;
-        });
+        // Nén sang WebP (quality 90%) - tái sử dụng logic từ ImageEditorDialog
+        const result = await compressImageToWebP(media.url!, 0.9).catch(() => null);
+        const webpBlob = result?.blob ?? null;
 
         // Bỏ qua nếu không nén được hoặc kết quả lớn hơn bản gốc
         if (!webpBlob || webpBlob.size >= media.size) {
@@ -600,7 +581,7 @@ function MediaContent() {
             className="gap-2"
             onClick={() => void handleBulkCompressToWebP()}
             disabled={isBulkCompressing || isUploading || isResyncing || isCheckingUsage}
-            title="Nén tất cả ảnh chưa phải WebP sang WebP (quality 50%). Ảnh nào nén xong lớn hơn hoặc lỗi sẽ bỏ qua tự động."
+            title="Nén tất cả ảnh chưa phải WebP sang WebP (quality 90%). Ảnh nào nén xong lớn hơn hoặc lỗi sẽ bỏ qua tự động."
           >
             <Zap size={16} className={isBulkCompressing ? 'animate-pulse text-amber-500' : 'text-amber-500'} />
             {isBulkCompressing
