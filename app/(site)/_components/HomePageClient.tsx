@@ -1,6 +1,7 @@
 'use client';
 
 import { HomeComponentRenderer } from '@/components/site/home/HomeComponentRenderer';
+import type { SharedSystemData } from '@/components/site/home/HomeComponentRenderer';
 import { HomePageLoading } from '@/components/site/loading/HomePageLoading';
 import { useBrandColors } from '@/components/site/hooks';
 import { useSiteSettings } from '@/components/site/hooks';
@@ -34,13 +35,20 @@ export default function HomePageClient({
 
   const isDataReady = typeof resolvedComponents !== 'undefined';
 
+  // --- Lift system queries lên đây: 1 lần thay vì N lần (một per HomeComponentRenderer) ---
   const systemConfig = useQuery(api.homeComponentSystemConfig.getConfig);
   const systemColors = useBrandColors();
   const { isDark } = useSiteSettings();
 
+  const sharedData: SharedSystemData = useMemo(() => ({
+    systemConfig: systemConfig ?? null,
+    systemColors,
+    isDark,
+  }), [systemConfig, systemColors, isDark]);
+
   const bgStyle = useMemo(() => {
     if (!systemConfig?.homePageBackground) {return {};}
-    const { enabled, type, customColor } = systemConfig.homePageBackground;
+    const { enabled, type, customColor } = systemConfig.homePageBackground as { enabled?: boolean; type?: string; customColor?: string };
     if (!enabled || isDark) {return {};}
     let color = '';
     switch (type) {
@@ -240,6 +248,7 @@ export default function HomePageClient({
             title: component.title,
             type: component.type,
           }}
+          sharedData={sharedData}
         />
       ))}
       {!showDeferred && <div ref={deferredTriggerRef} className="h-px w-px" aria-hidden={true} />}
@@ -254,6 +263,7 @@ export default function HomePageClient({
               title: component.title,
               type: component.type,
             }}
+            sharedData={sharedData}
           />
         </div>
       ))}
@@ -268,6 +278,7 @@ export default function HomePageClient({
             title: component.title,
             type: component.type,
           }}
+          sharedData={sharedData}
         />
       ))}
       {speedDialComponents.map((component) => (
@@ -281,6 +292,7 @@ export default function HomePageClient({
             title: component.title,
             type: component.type,
           }}
+          sharedData={sharedData}
         />
       ))}
     </div>

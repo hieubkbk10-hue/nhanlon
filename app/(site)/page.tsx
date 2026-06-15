@@ -12,6 +12,14 @@ function extractHeroImageUrl(
   return slides?.[0]?.image || null;
 }
 
+/**
+ * Build optimized preload URL thông qua Next.js image optimizer.
+ * Dùng width=828 (breakpoint mobile phổ biến) và quality=75 (default next/image).
+ */
+function buildOptimizedPreloadUrl(rawUrl: string): string {
+  return `/_next/image?url=${encodeURIComponent(rawUrl)}&w=828&q=75`;
+}
+
 export default async function HomePage(): Promise<React.ReactElement> {
   const client = getConvexClient();
   const initialComponents = await client.query(api.homeComponents.listActive);
@@ -29,8 +37,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         <link
           rel="preload"
           as="image"
-          href={heroImageUrl}
-
+          href={buildOptimizedPreloadUrl(heroImageUrl)}
           fetchPriority={'high' as any}
         />
       )}
