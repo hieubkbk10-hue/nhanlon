@@ -51,6 +51,11 @@ const isLikelyVisibleSlide = (index: number, currentIndex: number, total: number
   return index === (currentIndex - 1 + total) % total;
 };
 
+const getBlurImageUrl = (imageUrl?: string | null): string => {
+  if (!imageUrl) {return '';}
+  return `/_next/image?url=${encodeURIComponent(imageUrl)}&w=16&q=10`;
+};
+
 const HeroRuntimeVideo = ({ src, className }: { src: string; className: string }) => {
   const embedUrl = getVideoEmbedUrl(src, { autoplay: true, muted: true, loop: true });
   const thumbnailUrl = getVideoThumbnail(src);
@@ -216,13 +221,9 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
     }
     return (
       <a href={slide.link || '#'} className="block w-full h-full relative">
-        <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(30px)' }} />
+        <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(slide.image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(30px)' }} />
         <div className="absolute inset-0 bg-black/20" />
         <SiteImage src={slide.image} alt="" className="relative w-full h-full object-contain z-10" priority={options?.priority} loading={options?.loading} sizes="100vw" />
-        {options?.priority && (
-
-          <img src={slide.image} alt="" fetchPriority="high" decoding="async" className="absolute w-0 h-0 opacity-0" aria-hidden />
-        )}
       </a>
     );
   };
@@ -337,7 +338,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                                   <HeroRuntimeVideo src={slide.image} className="h-[250px] md:h-[400px] lg:h-[500px] w-full object-contain" />
                                 ) : (
                                   <div className="relative h-[250px] md:h-[400px] lg:h-[500px] w-full overflow-hidden">
-                                    <div className="absolute inset-0 scale-125" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(45px)' }} />
+                                    <div className="absolute inset-0 scale-125" style={{ backgroundImage: `url(${getBlurImageUrl(slide.image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(45px)' }} />
                                     <div className={cn("absolute inset-0 z-0", isDark ? "bg-gradient-to-r from-slate-900/90 via-transparent to-slate-900/90" : "bg-gradient-to-r from-white/40 via-transparent to-white/40")} />
                                     <div className={cn("absolute inset-0 z-0", isDark ? "bg-black/35" : "bg-black/10")} />
                                     <SiteImage src={slide.image} alt="Sản phẩm nổi bật" className="relative z-10 mx-auto h-full w-full max-w-full object-contain align-middle" width={1500} height={560} priority={idx === 0} loading={shouldLoad ? 'eager' : 'lazy'} sizes="100vw" />
@@ -465,7 +466,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                   <HeroRuntimeVideo src={bentoSlides[0].image} className="w-full h-full object-cover" />
                 ) : (
                 <div className="w-full h-full relative">
-                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
+                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(bentoSlides[0].image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
                   <SiteImage src={bentoSlides[0].image} alt="" className="relative w-full h-full object-cover z-10" priority sizes="50vw" />
                 </div>
@@ -478,7 +479,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                   <HeroRuntimeVideo src={bentoSlides[1].image} className="w-full h-full object-cover" />
                 ) : (
                 <div className="w-full h-full relative">
-                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[1].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
+                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(bentoSlides[1].image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(20px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
                   <SiteImage src={bentoSlides[1].image} alt="" className="relative w-full h-full object-cover z-10" loading="lazy" sizes="25vw" />
                 </div>
@@ -491,7 +492,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                   <HeroRuntimeVideo src={bentoSlides[2].image} className="w-full h-full object-cover" />
                 ) : (
                 <div className="w-full h-full relative">
-                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[2].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
+                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(bentoSlides[2].image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
                   <SiteImage src={bentoSlides[2].image} alt="" className="relative w-full h-full object-cover z-10" loading="lazy" sizes="25vw" />
                 </div>
@@ -504,7 +505,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                   <HeroRuntimeVideo src={bentoSlides[3].image} className="w-full h-full object-cover" />
                 ) : (
                 <div className="w-full h-full relative">
-                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${bentoSlides[3].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
+                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(bentoSlides[3].image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(15px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
                   <SiteImage src={bentoSlides[3].image} alt="" className="relative w-full h-full object-cover z-10" loading="lazy" sizes="25vw" />
                 </div>
@@ -565,7 +566,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                     <HeroRuntimeVideo src={slide.image} className="w-full h-full object-cover" />
                   ) : (
                   <div className="w-full h-full relative">
-                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${25 - idx * 5}px)` }} />
+                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(slide.image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${25 - idx * 5}px)` }} />
                     <div className="absolute inset-0 bg-black/20" />
                     <SiteImage src={slide.image} alt="" className="relative w-full h-full object-cover z-10" priority={idx === 0} loading={idx === 0 ? undefined : 'lazy'} sizes="33vw" />
                   </div>
@@ -626,7 +627,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                   <HeroRuntimeVideo src={tripleSlides[0].image} className="w-full h-full object-cover" />
                 ) : (
                 <div className="w-full h-full relative">
-                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${tripleSlides[0].image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
+                  <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(tripleSlides[0].image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: 'blur(25px)' }} />
                   <div className="absolute inset-0 bg-black/20" />
                   <SiteImage src={tripleSlides[0].image} alt="" className="relative w-full h-full object-cover z-10" priority sizes="66vw" />
                 </div>
@@ -640,7 +641,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
                     <HeroRuntimeVideo src={slide.image} className="w-full h-full object-cover" />
                   ) : (
                   <div className="w-full h-full relative">
-                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${20 - idx * 5}px)` }} />
+                    <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(slide.image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${20 - idx * 5}px)` }} />
                     <div className="absolute inset-0 bg-black/20" />
                     <SiteImage src={slide.image} alt="" className="relative w-full h-full object-cover z-10" loading="lazy" sizes="33vw" />
                   </div>
@@ -668,7 +669,7 @@ export function HeroRuntimeSection({ config, brandColor, secondary, mode, isDark
     }
     return (
       <div className="w-full h-full relative">
-        <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${slide.image})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${options?.blur ?? 25}px)` }} />
+        <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${getBlurImageUrl(slide.image)})`, backgroundPosition: 'center', backgroundSize: 'cover', filter: `blur(${options?.blur ?? 25}px)` }} />
         <SiteImage src={slide.image ?? ''} alt="" className={cn('relative w-full h-full z-10', options?.fit === 'cover' ? 'object-cover' : 'object-contain')} priority={options?.priority} loading={options?.loading} sizes="100vw" />
         {options?.overlay}
       </div>
