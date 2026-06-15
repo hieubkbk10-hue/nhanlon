@@ -9,7 +9,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { 
   Check, ChevronDown, ClipboardPaste, Copy, Edit, Eye, FileText, FileVideo, 
   FolderOpen, Grid, Image as ImageIcon, List, 
-  Loader2, Plus, RefreshCw, Search, Trash2, Upload, X, Scissors
+  Loader2, Plus, RefreshCw, Search, Trash2, Upload, X, Scissors, Zap
 } from 'lucide-react';
 import { ImageEditorDialog } from '@/app/admin/components/ImageEditorDialog';
 import { toast } from 'sonner';
@@ -127,6 +127,8 @@ function MediaContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
   const [isCheckingUsage, setIsCheckingUsage] = useState(false);
+  const [isBulkCompressing, setIsBulkCompressing] = useState(false);
+  const [bulkCompressProgress, setBulkCompressProgress] = useState({ current: 0, total: 0, saved: 0 });
   const [usageOverrides, setUsageOverrides] = useState<Record<string, UsageCheckResult>>({});
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
@@ -410,6 +412,102 @@ function MediaContent() {
     }
   };
 
+  // Nén hàng loạt sang WebP
+  const handleBulkCompressToWebP = async () => {
+    // Chỉ lấy ảnh không phải webp, gif, svg (những loại không thể/không nên nén WebP)
+    const targets = mediaItems.filter(m =>
+      m.mimeType.startsWith('image/')
+      && m.mimeType !== 'image/webp'
+      && m.mimeType !== 'image/gif'
+      && m.mimeType !== 'image/svg+xml'
+      && m.url
+    );
+
+    if (targets.length === 0) {
+      toast.info('Không có ảnh nào cần nén (tất cả đã là WebP, GIF hoặc SVG)');
+      return;
+    }
+
+    if (!confirm(`Sẽ nén ${targets.length} ảnh sang WebP (quality 50%). Ảnh nào nén xong lớn hơn hoặc lỗi sẽ tự động bỏ qua. Tiếp tục?`)) {return;}
+
+    setIsBulkCompressing(true);
+    setBulkCompressProgress({ current: 0, total: targets.length, saved: 0 });
+
+    let compressedCount = 0;
+    let skippedCount = 0;
+    let totalSaved = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      const media = targets[i];
+      setBulkCompressProgress({ current: i + 1, total: targets.length, saved: totalSaved });
+
+      try {
+        // Tải ảnh gốc về
+        const fetchRes = await fetch(media.url!);
+        if (!fetchRes.ok) { skippedCount++; continue; }
+        const blob = await fetchRes.blob();
+        const originalFile = new File([blob], media.filename, { type: media.mimeType });
+
+        // Nén sang WebP với quality 0.5
+        const webpBlob = await new Promise<Blob | null>((resolve) => {
+          const img = document.createElement('img');
+          const objectUrl = URL.createObjectURL(originalFile);
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { URL.revokeObjectURL(objectUrl); resolve(null); return; }
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob((b) => { URL.revokeObjectURL(objectUrl); resolve(b); }, 'image/webp', 0.5);
+          };
+          img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); };
+          img.src = objectUrl;
+        });
+
+        // Bỏ qua nếu không nén được hoặc kết quả lớn hơn bản gốc
+        if (!webpBlob || webpBlob.size >= media.size) {
+          skippedCount++;
+          continue;
+        }
+
+        // Upload WebP mới
+        const uploadUrl = await generateUploadUrl();
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'image/webp' },
+          body: webpBlob,
+        });
+        if (!uploadRes.ok) { skippedCount++; continue; }
+        const { storageId } = await uploadRes.json();
+
+        // Thay thế bản ghi
+        await replaceMediaFile({
+          id: media._id,
+          storageId,
+          size: webpBlob.size,
+          mimeType: 'image/webp',
+          width: media.width,
+          height: media.height,
+        });
+
+        totalSaved += media.size - webpBlob.size;
+        compressedCount++;
+      } catch {
+        skippedCount++;
+      }
+    }
+
+    setBulkCompressProgress({ current: targets.length, total: targets.length, saved: totalSaved });
+    setIsBulkCompressing(false);
+
+    if (compressedCount > 0) {
+      toast.success(`Đã nén ${compressedCount} ảnh · Tiết kiệm ${formatBytes(totalSaved)}${skippedCount > 0 ? ` · Bỏ qua ${skippedCount} ảnh` : ''}`);
+    } else {
+      toast.info(`Không có ảnh nào được nén (${skippedCount} ảnh đã bỏ qua)`);
+    }
+  };
+
     const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
       return new Promise((resolve) => {
         const img = document.createElement('img');
@@ -497,6 +595,18 @@ function MediaContent() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => void handleBulkCompressToWebP()}
+            disabled={isBulkCompressing || isUploading || isResyncing || isCheckingUsage}
+            title="Nén tất cả ảnh chưa phải WebP sang WebP (quality 50%). Ảnh nào nén xong lớn hơn hoặc lỗi sẽ bỏ qua tự động."
+          >
+            <Zap size={16} className={isBulkCompressing ? 'animate-pulse text-amber-500' : 'text-amber-500'} />
+            {isBulkCompressing
+              ? `Nén ${bulkCompressProgress.current}/${bulkCompressProgress.total} · Tiết kiệm ${formatBytes(bulkCompressProgress.saved)}`
+              : 'Nén WebP hàng loạt'}
+          </Button>
           <Button
             variant="outline"
             className="gap-2"
