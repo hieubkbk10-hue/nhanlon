@@ -213,15 +213,19 @@ export default function HomePageClient({
     .filter((componentItem) => {
       if (componentItem.type === 'Footer') {return false;}
       if (componentItem.type === 'Popup') {return false;}
-      if (componentItem.type !== 'SpeedDial') {return true;}
-
-      const config = componentItem.config as Record<string, unknown>;
-      return config.showOnAllPages !== true;
+      if (componentItem.type === 'SpeedDial') {return false;}
+      return true;
     })
     .sort((firstComponent, secondComponent) => firstComponent.order - secondComponent.order);
   const criticalComponents = sortedComponents.slice(0, criticalCount);
   const deferredComponents = showDeferred ? sortedComponents.slice(criticalCount) : [];
   const popupComponents = resolvedComponents.filter((componentItem) => componentItem.type === 'Popup');
+
+  const speedDialComponents = resolvedComponents.filter((componentItem) => {
+    if (componentItem.type !== 'SpeedDial' || !componentItem.active) {return false;}
+    const config = componentItem.config as Record<string, unknown>;
+    return config.showOnAllPages !== true;
+  });
 
   return (
     <div style={bgStyle} className="min-h-screen transition-colors duration-300">
@@ -254,6 +258,19 @@ export default function HomePageClient({
         </div>
       ))}
       {popupComponents.map((component) => (
+        <HomeComponentRenderer
+          key={component._id}
+          component={{
+            _id: component._id,
+            active: component.active,
+            config: component.config as Record<string, unknown>,
+            order: component.order,
+            title: component.title,
+            type: component.type,
+          }}
+        />
+      ))}
+      {speedDialComponents.map((component) => (
         <HomeComponentRenderer
           key={component._id}
           component={{
